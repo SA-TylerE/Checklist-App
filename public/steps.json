@@ -1,0 +1,599 @@
+{
+  "phases": [
+    {
+      "id": "syncro-org",
+      "title": "Syncro — RMM",
+      "badge": "ORG SETUP",
+      "product": "syncro",
+      "steps": [
+        {
+          "id": "s1",
+          "title": "Verify client exists in Syncro portal",
+          "detail": "Confirm the client organization exists with correct business name and contact info.",
+          "tags": [
+            "required"
+          ],
+          "substeps": []
+        },
+        {
+          "id": "s2",
+          "title": "Create asset folders and clone policies",
+          "detail": "Create Workstations and Servers folders. Clone SA template policies, rename for this client, and assign to the respective folders.",
+          "tags": [
+            "required"
+          ],
+          "guide": "syncro-folders"
+        },
+        {
+          "id": "s3",
+          "title": "Configure deployment scripts in cloned policies",
+          "detail": "Add required product deployment scripts for this client's products. Verify run order and conditions.",
+          "tags": [
+            "required"
+          ],
+          "guide": "syncro-folders"
+        },
+        {
+          "id": "s4",
+          "title": "Confirm RMM agent properties are populated",
+          "detail": "Navigate to client record → Properties. Confirm RMM Agent (Workstation) and/or RMM Agent (Server) fields are populated.",
+          "tags": [
+            "required"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tl-org",
+      "title": "Threatlocker — App Control",
+      "badge": "VERIFY AFTER FIRST DEVICE",
+      "product": "threatlocker",
+      "steps": [
+        {
+          "id": "tl1",
+          "title": "Verify org auto-created in Threatlocker portal",
+          "detail": "After the first device enrolls, confirm the client org appears under your parent account with the correct name.",
+          "tags": [
+            "verify"
+          ],
+          "guide": "threatlocker-verify"
+        },
+        {
+          "id": "tl2",
+          "title": "Rename org if needed to match naming convention",
+          "detail": "If the auto-created org name does not match your standard format, rename it before more devices enroll."
+        },
+        {
+          "id": "tl3",
+          "title": "Note learning mode start and expected end date",
+          "detail": "Learning mode begins on first enrollment (~2 weeks). Document the end date and set a calendar reminder."
+        },
+        {
+          "id": "tl4",
+          "title": "Document known LOB applications for post-learning allowances",
+          "detail": "Record any critical apps or tools that will need to be explicitly allowed after learning mode ends."
+        }
+      ]
+    },
+    {
+      "id": "huntress-org",
+      "title": "Huntress — EDR / ITDR / SIEM",
+      "badge": "ORG SETUP",
+      "product": "huntress",
+      "steps": [
+        {
+          "id": "hu1",
+          "title": "Verify org auto-created in Huntress portal after first device",
+          "detail": "After the first agent enrolls, confirm the client organization appears in the Huntress partner portal.",
+          "tags": [
+            "verify"
+          ]
+        },
+        {
+          "id": "hu2",
+          "title": "Configure ITDR — connect Entra ID / M365 tenant",
+          "detail": "ITDR requires Global Admin consent for the client tenant. Configure via the Integrations section at account level, not the client org level.",
+          "tags": [
+            "required"
+          ],
+          "guide": "huntress-itdr"
+        },
+        {
+          "id": "hu3",
+          "title": "Configure SIEM log forwarding",
+          "detail": "If the client has a SIEM subscription, configure log forwarding destination.",
+          "tags": [
+            "optional"
+          ],
+          "guide": "huntress-itdr"
+        },
+        {
+          "id": "hu4",
+          "title": "Review initial dashboard after first device enrollment",
+          "detail": "Check the Huntress dashboard for any immediate detections or flagged items. Investigate before proceeding.",
+          "tags": [
+            "verify"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "duo-org",
+      "title": "Duo — MFA",
+      "badge": "ORG SETUP",
+      "product": "duo",
+      "steps": [
+        {
+          "id": "duo1",
+          "title": "Create client organization in Duo Admin Panel",
+          "detail": "Log into the Duo Admin Panel. Create a new account/organization for this client.",
+          "tags": [
+            "required"
+          ]
+        },
+        {
+          "id": "duo2",
+          "title": "Configure Duo with Entra ID — EAM method (recommended)",
+          "detail": "The preferred method. Requires Entra ID P1/P2 licensing. Satisfies Microsoft mandatory MFA requirements.",
+          "tags": [
+            "required"
+          ],
+          "guide": "duo-eam",
+          "substeps": [
+            {
+              "id": "duo-eam1",
+              "title": "Verify Entra ID P1/P2 licensing is assigned to all users",
+              "detail": "Included in M365 E3, E5, F3, Business Premium. Must be added separately for lower-tier plans.",
+              "tags": [
+                "required"
+              ]
+            },
+            {
+              "id": "duo-eam2",
+              "title": "Create break-glass admin account excluded from Duo CA policies",
+              "detail": "Create before making any CA changes. Store credentials securely in the client record.",
+              "tags": [
+                "required"
+              ]
+            },
+            {
+              "id": "duo-eam3",
+              "title": "Register Duo EAM application in Duo Admin Panel",
+              "detail": "Applications → Protect an Application → Microsoft Entra ID: External Authentication Methods.",
+              "tags": [
+                "required"
+              ]
+            },
+            {
+              "id": "duo-eam4",
+              "title": "Authorize Duo Enterprise App in the client M365 tenant",
+              "detail": "Click Authorize in Duo setup. Sign in as Global Admin to grant consent.",
+              "tags": [
+                "required"
+              ]
+            },
+            {
+              "id": "duo-eam5",
+              "title": "Register EAM in Entra ID Authentication Methods",
+              "detail": "entra.microsoft.com → Security → Authentication Methods → Policies → External (Preview). Add Duo.",
+              "tags": [
+                "required"
+              ]
+            },
+            {
+              "id": "duo-eam6",
+              "title": "Create Conditional Access policy — Report-Only mode first",
+              "detail": "Assign to pilot group. Target Office 365. Grant: Require MFA. Start in Report-Only.",
+              "tags": [
+                "required"
+              ]
+            },
+            {
+              "id": "duo-eam7",
+              "title": "Test with pilot user and switch CA policy to enforced",
+              "detail": "Verify Duo prompt fires correctly, then expand to all users and switch to On.",
+              "tags": [
+                "verify"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "duo3",
+          "title": "Fallback: Configure Duo with custom controls (legacy)",
+          "detail": "Use only if EAM fails or P1 licensing is unavailable. Does NOT satisfy Microsoft's mandatory MFA for Azure portals.",
+          "tags": [
+            "optional"
+          ],
+          "guide": "duo-custom"
+        },
+        {
+          "id": "duo4",
+          "title": "Sync or import users into Duo",
+          "detail": "Configure Entra ID directory sync in the Duo Admin Panel, or perform a CSV import of user accounts.",
+          "tags": [
+            "required"
+          ]
+        },
+        {
+          "id": "duo5",
+          "title": "User enrollment tracking",
+          "detail": "Track which users have completed Duo enrollment.",
+          "freetext": {
+            "id": "duo-users",
+            "label": "Enrolled users (name / email — one per line)",
+            "placeholder": "John Smith — jsmith@client.com\nJane Doe — jdoe@client.com"
+          }
+        }
+      ]
+    },
+    {
+      "id": "keeper-org",
+      "title": "Keeper — Password Management",
+      "badge": "ORG SETUP",
+      "product": "keeper",
+      "steps": [
+        {
+          "id": "kp1",
+          "title": "Create client enterprise node in Keeper Admin Console",
+          "detail": "Provision a new enterprise node. Set admin contact and SA delegate access.",
+          "tags": [
+            "required"
+          ]
+        },
+        {
+          "id": "kp2",
+          "title": "Configure SSO integration with Entra ID",
+          "detail": "Enables unified login — users authenticate through Entra ID (with Duo MFA) and access Keeper without a separate prompt.",
+          "tags": [
+            "optional"
+          ],
+          "guide": "keeper-sso",
+          "substeps": [
+            {
+              "id": "kp-sso1",
+              "title": "Create Keeper Enterprise Application in Entra ID",
+              "detail": "Entra admin center → Enterprise Applications → Create your own → Non-gallery. Name it Keeper Password Manager.",
+              "tags": [
+                "required"
+              ]
+            },
+            {
+              "id": "kp-sso2",
+              "title": "Configure SAML in Entra ID",
+              "detail": "Open app → Single sign-on → SAML. You will need ACS URL and Entity ID from Keeper SSO Connect.",
+              "tags": [
+                "required"
+              ]
+            },
+            {
+              "id": "kp-sso3",
+              "title": "Configure SSO Connect in Keeper Admin Console",
+              "detail": "Admin Console → SSO Connect → Add New. Select SAML 2.0. Copy ACS URL and Entity ID into Entra ID.",
+              "tags": [
+                "required"
+              ]
+            },
+            {
+              "id": "kp-sso4",
+              "title": "Upload Entra ID metadata to Keeper",
+              "detail": "Download Federation Metadata XML from Entra ID. Upload into Keeper SSO Connect.",
+              "tags": [
+                "required"
+              ]
+            },
+            {
+              "id": "kp-sso5",
+              "title": "Test SSO login end-to-end — verify Duo fires in unified flow",
+              "detail": "Log out of Keeper and log in via SSO. Confirm Duo MFA fires during Entra ID auth (unified flow).",
+              "tags": [
+                "verify"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "kp3",
+          "title": "Configure AD sync (if applicable)",
+          "detail": "If the client has on-premises AD, install Keeper AD Bridge on a domain-joined server for user provisioning.",
+          "tags": [
+            "optional"
+          ]
+        },
+        {
+          "id": "kp4",
+          "title": "Configure role-based access and shared folder structure",
+          "detail": "Set up Keeper roles, teams, and shared folder hierarchy. Apply least-privilege access controls."
+        },
+        {
+          "id": "kp5",
+          "title": "Set master password and security policy requirements",
+          "detail": "Configure password strength, 2FA enforcement, session timeout, and device approval in Keeper Admin Console → Policies.",
+          "tags": [
+            "required"
+          ]
+        },
+        {
+          "id": "kp6",
+          "title": "Invite and onboard primary admin user",
+          "detail": "Send Keeper invitation to the designated admin user. Walk them through vault setup.",
+          "tags": [
+            "required"
+          ]
+        },
+        {
+          "id": "kp7",
+          "title": "Verify SA admin delegate access to enterprise node",
+          "detail": "Confirm the SA admin account has visibility into the client node and shared folders.",
+          "tags": [
+            "verify"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "easydmarc-org",
+      "title": "EasyDMARC — Email Authentication",
+      "badge": "ORG SETUP",
+      "product": "easydmarc",
+      "steps": [
+        {
+          "id": "dm1",
+          "title": "Add client domain to EasyDMARC",
+          "detail": "Log into EasyDMARC. Add the client domain and follow the DNS wizard to generate SPF, DKIM, and DMARC records.",
+          "tags": [
+            "required"
+          ]
+        },
+        {
+          "id": "dm2",
+          "title": "Publish SPF, DKIM, and DMARC records at client DNS host",
+          "detail": "Add TXT records at the client's registrar or DNS host. Document existing records first. Allow 24-48h propagation.",
+          "tags": [
+            "required"
+          ]
+        },
+        {
+          "id": "dm3",
+          "title": "Verify DNS propagation in EasyDMARC dashboard",
+          "detail": "Confirm all records show valid status in EasyDMARC after propagation.",
+          "tags": [
+            "verify"
+          ]
+        },
+        {
+          "id": "dm4",
+          "title": "Set initial DMARC policy to monitoring (p=none)",
+          "detail": "Start with p=none. Review report data for 1-2 weeks before tightening to p=quarantine or p=reject."
+        }
+      ]
+    },
+    {
+      "id": "mailprotect-org",
+      "title": "Mail Protect — Email Filtering",
+      "badge": "ORG SETUP",
+      "product": "mailprotect",
+      "steps": [
+        {
+          "id": "mp1",
+          "title": "Provision client domain in Mail Protect portal",
+          "detail": "Log into emailservice.io admin portal. Add the client domain and configure inbound filtering.",
+          "tags": [
+            "required"
+          ]
+        },
+        {
+          "id": "mp2",
+          "title": "Update MX records to point to Mail Protect",
+          "detail": "Update MX records at the client DNS host to emailservice.io values. Document old MX records first.",
+          "tags": [
+            "required"
+          ]
+        },
+        {
+          "id": "mp3",
+          "title": "Verify mail flow through Mail Protect",
+          "detail": "Send a test email. Confirm it appears in Mail Protect logs and delivers correctly.",
+          "tags": [
+            "verify"
+          ]
+        },
+        {
+          "id": "mp4",
+          "title": "Configure spam and content filter policies",
+          "detail": "Set up quarantine notifications, allow/block lists, and content filtering rules."
+        },
+        {
+          "id": "mp5",
+          "title": "Enable Bracket — link rewriting",
+          "detail": "If the client is opting into Bracket, enable link rewriting in the Mail Protect portal settings for the domain.",
+          "tags": [
+            "optional"
+          ]
+        },
+        {
+          "id": "mp6",
+          "title": "Enable CloudFilter — cloud app filtering",
+          "detail": "If the client is opting into CloudFilter, configure and enable cloud application filtering in the portal.",
+          "tags": [
+            "optional"
+          ]
+        },
+        {
+          "id": "mp7",
+          "title": "Enable SafeSend — outbound DLP",
+          "detail": "If the client is opting into SafeSend, enable and configure outbound mail policy rules in the portal.",
+          "tags": [
+            "optional"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c1-org",
+      "title": "ControlOne — Remote Access & Firewall",
+      "badge": "ORG SETUP",
+      "product": "controlone",
+      "steps": [
+        {
+          "id": "c1-1",
+          "title": "Create client child tenant in ControlOne portal",
+          "detail": "Log into the ControlOne partner portal under the SA parent account. Create a new child tenant for the client.",
+          "tags": [
+            "required"
+          ],
+          "guide": "controlone-firewall"
+        },
+        {
+          "id": "c1-2",
+          "title": "Configure cloud firewall policies for the tenant",
+          "detail": "Apply the SA baseline firewall policy to the new tenant. Adjust for client-specific requirements.",
+          "tags": [
+            "required"
+          ],
+          "guide": "controlone-firewall"
+        },
+        {
+          "id": "c1-3",
+          "title": "Set up hardware gateway (if client has physical device)",
+          "detail": "If the client has a ControlOne hardware gateway, claim and configure it in the portal.",
+          "tags": [
+            "optional"
+          ],
+          "guide": "controlone-hw"
+        },
+        {
+          "id": "c1-4",
+          "title": "Configure access groups and user permissions",
+          "detail": "Set up user groups and remote access policies for the client's user base and SA tech access."
+        }
+      ]
+    },
+    {
+      "id": "syncrify-org",
+      "title": "Syncrify — Backup",
+      "badge": "ORG SETUP",
+      "product": "syncrify",
+      "steps": [
+        {
+          "id": "sy1",
+          "title": "Create client account in Syncrify server",
+          "detail": "Log into the Syncrify admin console. Create a new user account for the client. Set storage quota per agreement.",
+          "tags": [
+            "required"
+          ]
+        },
+        {
+          "id": "sy2",
+          "title": "Define backup retention and quota policy",
+          "detail": "Document the agreed retention period and storage quota. Configure in Syncrify admin and note in the client record."
+        },
+        {
+          "id": "sy3",
+          "title": "Plan and configure VPN for backup connectivity",
+          "detail": "Syncrify backups require a site-to-site VPN between the client network and the SA backup network. Select the client's VPN type below.",
+          "tags": [
+            "required"
+          ],
+          "vpn_selector": true
+        }
+      ]
+    },
+    {
+      "id": "final",
+      "title": "Final — Verification & Handoff",
+      "badge": "ALWAYS LAST",
+      "product": "final",
+      "steps": [
+        {
+          "id": "fin1",
+          "title": "Confirm all org-level configurations are complete",
+          "detail": "Review each product's portal. Confirm all org-level steps are complete before beginning device deployments.",
+          "tags": [
+            "verify"
+          ]
+        },
+        {
+          "id": "fin2",
+          "title": "Document all credentials and account details",
+          "detail": "Store all API keys, passwords, bypass codes, break-glass accounts, and portal login details securely in the client record.",
+          "tags": [
+            "required"
+          ]
+        },
+        {
+          "id": "fin3",
+          "title": "Set calendar reminders for deferred follow-up tasks",
+          "detail": "Threatlocker learning mode review, DMARC tightening, Huntress initial report review, Duo CA policy expansion."
+        },
+        {
+          "id": "fin4",
+          "title": "Brief account manager on onboarding status",
+          "detail": "Notify the assigned account manager that org-level onboarding is complete and device deployment is ready to begin."
+        }
+      ]
+    }
+  ],
+  "device_steps": [
+    {
+      "id": "dv-syncro",
+      "title": "Install Syncro RMM agent",
+      "detail": "Use the installer URL stored for this client if available, otherwise obtain from Syncro portal or flash drive script. Run as Administrator.",
+      "installer_url": true
+    },
+    {
+      "id": "dv-syncro-v",
+      "title": "Verify agent check-in and assign to correct folder",
+      "detail": "Confirm device appears in Syncro under the correct client. Move it to the Workstations or Servers folder so it inherits the correct policy."
+    },
+    {
+      "id": "dv-tl",
+      "title": "Deploy Threatlocker agent via Syncro policy",
+      "detail": "The Syncro policy script should trigger Threatlocker install automatically on enrollment. Verify the device appears in the Threatlocker portal in learning mode.",
+      "product_filter": "threatlocker"
+    },
+    {
+      "id": "dv-huntress",
+      "title": "Deploy Huntress EDR agent via Syncro policy",
+      "detail": "Verify the host appears in the Huntress partner portal under the client org with Active status after the policy script runs.",
+      "product_filter": "huntress"
+    },
+    {
+      "id": "dv-c1",
+      "title": "Deploy ControlOne agent via Syncro policy",
+      "detail": "Verify the device appears online in the ControlOne management portal after the policy script runs.",
+      "product_filter": "controlone"
+    },
+    {
+      "id": "dv-keeper",
+      "title": "Deploy Keeper desktop application via Syncro policy",
+      "detail": "Verify install on endpoint. Confirm browser extension enforcement policies are applied (HKLM\\Software\\Policies). Check Chrome/Edge for managed extension indicator.",
+      "product_filter": "keeper"
+    },
+    {
+      "id": "dv-duo",
+      "title": "Deploy Duo Windows Logon agent (if required for this device)",
+      "detail": "Only if local Windows login protection is required. Run the Duo Windows Logon script from Syncro with ikey, skey, and api_hostname. Test Windows login to verify Duo prompt appears.",
+      "product_filter": "duo"
+    },
+    {
+      "id": "dv-syncrify",
+      "title": "Install and configure Syncrify client (servers only)",
+      "detail": "Install the Syncrify client as Administrator. Connect to the SA Syncrify server using the client account credentials. Configure backup paths, schedule, and retention.",
+      "product_filter": "syncrify"
+    },
+    {
+      "id": "dv-syncrify-vpn",
+      "title": "Verify VPN connectivity to SA backup network",
+      "detail": "Confirm the site-to-site VPN tunnel is active and the SA backup server is reachable from the server.",
+      "product_filter": "syncrify",
+      "vpn_selector": true
+    },
+    {
+      "id": "dv-syncrify-v",
+      "title": "Run initial backup — verify completion — perform test restore",
+      "detail": "Trigger first backup manually. Monitor to completion. Verify success in Syncrify dashboard. Restore a sample file to confirm integrity.",
+      "product_filter": "syncrify"
+    }
+  ]
+}

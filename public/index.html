@@ -1,0 +1,2472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SA Onboarding Checklist</title>
+<style>
+:root{
+  --bg:#0e1117;--bg2:#161b25;--bg3:#1e2535;--bg4:#242d3d;
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.15);
+  --text:#e8eaf0;--text2:#8b92a5;--text3:#555e72;
+  --accent:#3b82f6;--accent2:#1d4ed8;
+  --success:#22c55e;--warn:#f59e0b;--danger:#ef4444;
+  --mono:'JetBrains Mono','Fira Code',monospace;
+  --sans:'Inter',system-ui,sans-serif;
+  --sidebar-w:220px;--guide-w:380px;--header-h:48px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.6;min-height:100vh;overflow:hidden;}
+#app{display:flex;height:100vh;overflow:hidden;flex-direction:column;}
+
+/* Mobile header */
+#mobile-header{display:none;height:var(--header-h);background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;padding:0 12px;gap:10px;z-index:10;}
+.mh-menu{width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:18px;border-radius:6px;flex-shrink:0;}
+.mh-menu:hover{color:var(--text);background:var(--bg3);}
+.mh-title{font-size:13px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mh-brand{font-size:11px;color:var(--text3);white-space:nowrap;}
+
+#body-row{display:flex;flex:1;overflow:hidden;}
+
+/* Sidebar */
+#sidebar{width:var(--sidebar-w);min-width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:width 0.2s,min-width 0.2s;flex-shrink:0;}
+#sidebar.collapsed{width:36px;min-width:36px;}
+#sidebar.collapsed .sidebar-inner{display:none;}
+.sidebar-top{display:flex;align-items:center;height:40px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.sidebar-toggle{width:36px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:16px;flex-shrink:0;transition:color 0.15s;}
+.sidebar-toggle:hover{color:var(--text);}
+.sidebar-top-brand{font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:10px;flex:1;}
+.sidebar-inner{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+.sidebar-sub{font-size:10px;color:var(--text3);letter-spacing:0.06em;text-transform:uppercase;padding:10px 14px 4px;}
+.sidebar-search{padding:4px 12px 8px;}
+.sidebar-search input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 9px;color:var(--text);font-size:12px;outline:none;}
+.sidebar-search input:focus{border-color:var(--accent);}
+.sidebar-search input::placeholder{color:var(--text3);}
+#client-list{flex:1;overflow-y:auto;padding:4px 0;}
+.client-item{padding:7px 14px;cursor:pointer;border-left:2px solid transparent;transition:all 0.1s;}
+.client-item:hover{background:var(--bg3);}
+.client-item.active{border-left-color:var(--accent);background:rgba(59,130,246,0.08);}
+.client-item .cn{font-size:12px;font-weight:500;}
+.client-item .cm{font-size:10px;color:var(--text3);margin-top:1px;}
+.client-item .cpbar{height:2px;background:var(--bg3);border-radius:2px;margin-top:4px;overflow:hidden;}
+.client-item .cpbar-fill{height:100%;background:var(--accent);border-radius:2px;}
+.sidebar-footer{padding:10px 12px;padding-bottom:max(12px, env(safe-area-inset-bottom, 12px));border-top:1px solid var(--border);flex-shrink:0;}
+.btn-new{width:100%;padding:8px;background:var(--accent);color:white;border:none;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;}
+.btn-new:hover{background:var(--accent2);}
+
+/* Main area */
+#main-area{flex:1;display:flex;overflow:hidden;min-width:0;}
+#checklist-pane{flex:1;overflow-y:auto;padding:24px 28px;min-width:0;}
+
+/* Guide panel \u2014 desktop */
+#guide-panel{width:0;min-width:0;overflow:hidden;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;transition:width 0.25s;flex-shrink:0;position:relative;z-index:20;}
+#guide-panel.open{width:var(--guide-w);min-width:var(--guide-w);}
+.guide-drag-handle{display:none;width:100%;padding:8px 0 4px;cursor:ns-resize;flex-shrink:0;touch-action:none;}
+.guide-drag-handle .bar{width:36px;height:3px;background:var(--border2);border-radius:2px;margin:0 auto;}
+.guide-header{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.guide-header h3{font-size:13px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.guide-close{width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);border-radius:5px;font-size:14px;flex-shrink:0;}
+.guide-close:hover{background:var(--bg3);color:var(--text);}
+#guide-content{flex:1;overflow-y:auto;padding:12px;}
+.guide-section{margin-bottom:6px;border:1px solid var(--border);border-radius:7px;overflow:hidden;}
+.guide-section-header{display:flex;align-items:center;gap:7px;padding:9px 12px;cursor:pointer;background:var(--bg3);transition:background 0.1s;user-select:none;}
+.guide-section-header:hover{background:var(--bg4);}
+.guide-section-header h4{font-size:11px;font-weight:600;flex:1;}
+.guide-section-icon{font-size:9px;color:var(--text3);transition:transform 0.15s;}
+.guide-section.open .guide-section-icon{transform:rotate(90deg);}
+.guide-section-body{display:none;padding:10px 12px;}
+.guide-section.open .guide-section-body{display:block;}
+.guide-step{display:flex;gap:9px;margin-bottom:10px;}
+.guide-step:last-child{margin-bottom:0;}
+.guide-step-num{width:18px;height:18px;border-radius:50%;background:var(--accent);color:white;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.guide-step-body h5{font-size:11px;font-weight:600;margin-bottom:2px;}
+.guide-step-body p{font-size:11px;color:var(--text2);line-height:1.5;}
+.guide-step-body p code{font-family:var(--mono);font-size:10px;background:var(--bg3);padding:1px 5px;border-radius:3px;color:#93c5fd;}
+.guide-codeblock{background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:8px 10px;font-family:var(--mono);font-size:10px;color:#93c5fd;white-space:pre;overflow-x:auto;margin-top:6px;line-height:1.6;}
+.guide-link{display:inline-flex;align-items:center;gap:4px;margin-top:5px;font-size:10px;color:var(--accent);text-decoration:none;}
+.guide-link:hover{text-decoration:underline;}
+.guide-note{background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:5px;padding:7px 9px;font-size:10px;color:#93c5fd;margin-bottom:8px;line-height:1.5;}
+.guide-warn{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:5px;padding:7px 9px;font-size:10px;color:#fca5a5;margin-bottom:8px;line-height:1.5;}
+
+/* Overlay bg \u2014 sits BELOW guide panel z-index */
+#overlay-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:15;}
+#overlay-bg.show{display:block;}
+
+/* Views */
+.view{display:none;}.view.active{display:block;}
+
+/* Config */
+.config-card{max-width:440px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:22px;}
+.config-card h2{font-size:16px;font-weight:600;margin-bottom:4px;}
+.config-card p{color:var(--text2);font-size:12px;margin-bottom:18px;}
+
+/* Wizard */
+.wizard-card{max-width:580px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:22px;}
+.wizard-card h2{font-size:16px;font-weight:600;margin-bottom:4px;}
+.wizard-subtitle{color:var(--text2);font-size:12px;margin-bottom:18px;}
+
+/* Form */
+.field-group{margin-bottom:12px;}
+.field-group label{display:block;font-size:10px;font-weight:500;color:var(--text2);margin-bottom:3px;letter-spacing:0.04em;text-transform:uppercase;}
+.field-group input,.field-group select,.field-group textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;outline:none;font-family:var(--sans);}
+.field-group input:focus,.field-group textarea:focus,.field-group select:focus{border-color:var(--accent);}
+.field-group input::placeholder,.field-group textarea::placeholder{color:var(--text3);}
+.field-group textarea{resize:vertical;min-height:52px;}
+
+/* Buttons */
+.btn-primary{padding:7px 14px;background:var(--accent);color:white;border:none;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;transition:background 0.15s;}
+.btn-primary:hover{background:var(--accent2);}
+.btn-secondary{padding:7px 14px;background:transparent;color:var(--text2);border:1px solid var(--border2);border-radius:6px;font-size:12px;cursor:pointer;}
+.btn-secondary:hover{background:var(--bg3);color:var(--text);}
+.btn-danger{padding:5px 10px;background:transparent;color:#fca5a5;border:1px solid rgba(239,68,68,0.3);border-radius:5px;font-size:11px;cursor:pointer;}
+.btn-danger:hover{background:rgba(239,68,68,0.1);}
+.btn-sm{padding:4px 8px;font-size:11px;}
+.btn-guide{padding:2px 7px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.22);color:#93c5fd;border-radius:4px;font-size:10px;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.btn-guide:hover{background:rgba(59,130,246,0.2);}
+.btn-link-style{padding:2px 7px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.22);color:#fcd34d;border-radius:4px;font-size:10px;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.btn-link-style:hover{background:rgba(245,158,11,0.2);}
+
+/* Alerts */
+.alert{padding:8px 11px;border-radius:6px;font-size:11px;margin-bottom:12px;}
+.alert-error{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#fca5a5;}
+.alert-success{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:#86efac;}
+.alert-info{background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);color:#93c5fd;}
+
+/* Syncro lookup */
+.syncro-lookup{background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:11px;margin-bottom:12px;}
+.lookup-title{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:7px;}
+.lookup-row{display:flex;gap:6px;}
+.lookup-row input{flex:1;}
+.search-results{margin-top:7px;}
+.search-result-item{padding:6px 8px;border-radius:5px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:background 0.1s;}
+.search-result-item:hover{background:rgba(255,255,255,0.05);}
+.search-result-item.selected-customer{background:rgba(59,130,246,0.15);}
+.sri-name{font-size:12px;font-weight:500;}
+.sri-id{font-size:10px;color:var(--text3);font-family:var(--mono);}
+.device-options{display:flex;gap:6px;margin-top:7px;}
+.device-btn{flex:1;padding:5px;text-align:center;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text2);font-size:11px;cursor:pointer;transition:all 0.15s;}
+.device-btn.active{border-color:var(--accent);background:rgba(59,130,246,0.12);color:var(--accent);}
+.url-display{margin-top:7px;padding:6px 8px;background:var(--bg);border-radius:5px;border:1px solid var(--border);font-family:var(--mono);font-size:10px;color:var(--text2);word-break:break-all;display:flex;gap:6px;align-items:flex-start;}
+.copy-btn{flex-shrink:0;padding:2px 6px;background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text2);font-size:10px;cursor:pointer;}
+.copy-btn:hover{color:var(--text);}
+.manual-url-input{margin-top:7px;}
+.wizard-actions{display:flex;gap:7px;justify-content:flex-end;margin-top:18px;}
+
+/* Products grid */
+.products-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:18px;}
+.product-toggle{display:flex;align-items:center;gap:8px;padding:8px 11px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;cursor:pointer;transition:all 0.15s;user-select:none;}
+.product-toggle:hover{border-color:var(--border2);}
+.product-toggle.selected{border-color:var(--accent);background:rgba(59,130,246,0.1);}
+.product-toggle input[type=checkbox]{display:none;}
+.toggle-check{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s;}
+.product-toggle.selected .toggle-check{background:var(--accent);border-color:var(--accent);}
+.toggle-check svg{display:none;}
+.product-toggle.selected .toggle-check svg{display:block;}
+.product-label{font-size:11px;font-weight:500;}
+.product-desc{font-size:10px;color:var(--text3);}
+
+/* Edit products */
+.edit-products-block{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px;}
+.edit-products-block h4{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px;}
+
+/* Checklist header */
+.checklist-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;gap:10px;}
+.checklist-header h2{font-size:18px;font-weight:700;letter-spacing:-0.02em;}
+.checklist-header .meta{color:var(--text2);font-size:11px;margin-top:2px;}
+.header-actions{display:flex;gap:6px;align-items:center;flex-shrink:0;}
+.progress-bar-wrap{margin-bottom:14px;}
+.progress-stats{display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:4px;}
+.progress-bar{height:3px;background:var(--bg3);border-radius:3px;overflow:hidden;}
+.progress-bar-fill{height:100%;background:var(--accent);border-radius:3px;transition:width 0.4s;}
+.progress-bar-fill.complete{background:var(--success);}
+
+/* Phase */
+.phase-block{margin-bottom:5px;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.phase-block.collapsed .phase-body{display:none;}
+.phase-block.completed{opacity:0.6;}
+.phase-header{display:flex;align-items:center;gap:8px;padding:9px 13px;background:var(--bg2);cursor:pointer;user-select:none;transition:background 0.1s;}
+.phase-header:hover{background:var(--bg3);}
+.phase-num{width:19px;height:19px;border-radius:50%;background:var(--accent);color:white;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.phase-block.completed .phase-num{background:var(--success);}
+.phase-header h3{font-size:12px;font-weight:600;}
+.phase-badge{font-size:9px;padding:1px 6px;border-radius:20px;background:rgba(59,130,246,0.12);color:#93c5fd;font-weight:500;letter-spacing:0.03em;white-space:nowrap;}
+.phase-badge.gb{background:rgba(245,158,11,0.12);color:#fcd34d;}
+.phase-collapse-icon{margin-left:auto;color:var(--text3);font-size:9px;transition:transform 0.2s;flex-shrink:0;}
+.phase-block.collapsed .phase-collapse-icon{transform:rotate(-90deg);}
+.phase-progress-text{font-size:10px;color:var(--text3);flex-shrink:0;}
+.phase-body{padding:5px;}
+
+/* Step */
+.step-item{border-radius:6px;margin-bottom:2px;overflow:hidden;}
+.step-row{display:flex;gap:8px;padding:7px 8px;cursor:pointer;transition:background 0.1s;align-items:flex-start;border-radius:6px;}
+.step-row:hover{background:var(--bg3);}
+.step-item.done>.step-row{opacity:0.5;}
+.step-item.done>.step-row .step-title{text-decoration:line-through;color:var(--text3);}
+.step-item.partial>.step-row .step-title{color:var(--warn);}
+.step-check{width:15px;height:15px;border-radius:3px;border:1.5px solid var(--border2);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;}
+.step-item.done .step-check{background:var(--success);border-color:var(--success);}
+.step-item.partial .step-check{border-color:var(--warn);}
+.step-partial-dash{width:6px;height:2px;background:var(--warn);border-radius:1px;}
+.step-body{flex:1;min-width:0;}
+.step-title{font-size:12px;font-weight:500;color:var(--text);}
+.step-detail{font-size:11px;color:var(--text2);margin-top:2px;line-height:1.5;}
+.step-tags{display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;}
+.step-tag{font-size:9px;padding:1px 5px;border-radius:20px;background:var(--bg3);color:var(--text3);border:1px solid var(--border);}
+.step-tag.required{color:#fca5a5;border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);}
+.step-tag.verify{color:#86efac;border-color:rgba(34,197,94,0.3);background:rgba(34,197,94,0.08);}
+.step-tag.optional{color:#fcd34d;border-color:rgba(245,158,11,0.3);background:rgba(245,158,11,0.08);}
+.step-actions{display:flex;align-items:center;gap:4px;flex-shrink:0;margin-top:1px;}
+.step-expand-icon{font-size:9px;color:var(--text3);transition:transform 0.15s;flex-shrink:0;}
+.step-item.expanded>.step-row .step-expand-icon{transform:rotate(90deg);}
+.installer-link{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);border-radius:4px;color:#93c5fd;font-family:var(--mono);font-size:10px;margin-top:4px;word-break:break-all;cursor:pointer;}
+.installer-link:hover{background:rgba(59,130,246,0.18);}
+
+/* Substeps */
+.substeps{padding:2px 0 2px 23px;display:none;}
+.step-item.expanded .substeps{display:block;}
+.substep-item{display:flex;gap:8px;padding:5px 8px;border-radius:5px;cursor:pointer;transition:background 0.1s;align-items:flex-start;}
+.substep-item:hover{background:var(--bg4);}
+.substep-item.done{opacity:0.5;}
+.substep-item.done .substep-title{text-decoration:line-through;color:var(--text3);}
+.substep-check{width:12px;height:12px;border-radius:2px;border:1.5px solid var(--border2);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;}
+.substep-item.done .substep-check{background:var(--success);border-color:var(--success);}
+.substep-title{font-size:11px;font-weight:500;color:var(--text);}
+.substep-detail{font-size:10px;color:var(--text2);margin-top:2px;line-height:1.5;}
+
+/* Freetext */
+.freetext-block{margin:3px 0 3px 23px;border:1px solid var(--border);border-radius:6px;overflow:hidden;}
+.freetext-header{display:flex;align-items:center;gap:6px;padding:6px 9px;cursor:pointer;background:var(--bg3);user-select:none;}
+.freetext-header:hover{background:var(--bg4);}
+.freetext-header span{font-size:10px;font-weight:500;color:var(--text2);flex:1;}
+.freetext-icon{font-size:9px;color:var(--text3);transition:transform 0.15s;}
+.freetext-block.open .freetext-icon{transform:rotate(90deg);}
+.freetext-body{display:none;padding:7px;}
+.freetext-block.open .freetext-body{display:block;}
+.freetext-body textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:6px;color:var(--text);font-size:11px;font-family:var(--sans);resize:vertical;min-height:64px;outline:none;}
+.freetext-body textarea:focus{border-color:var(--accent);}
+
+/* VPN selector */
+.vpn-selector{margin:5px 0 3px 23px;display:flex;gap:6px;flex-wrap:wrap;}
+.vpn-btn{padding:4px 10px;border-radius:5px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-size:10px;cursor:pointer;transition:all 0.15s;}
+.vpn-btn:hover{border-color:var(--border2);color:var(--text);}
+
+/* Device guide */
+.device-add-btn-wrap{padding:5px 3px 9px;}
+.device-entry{background:var(--bg3);border:1px solid var(--border);border-radius:7px;margin-bottom:5px;overflow:hidden;}
+.device-entry-header{display:flex;align-items:center;gap:8px;padding:8px 11px;cursor:pointer;transition:background 0.1s;}
+.device-entry-header:hover{background:var(--bg4);}
+.device-entry-name{font-size:12px;font-weight:500;flex:1;}
+.device-entry-meta{font-size:10px;color:var(--text3);}
+.dev-status{font-size:9px;padding:2px 6px;border-radius:20px;font-weight:500;}
+.dev-status.not-started{background:var(--bg4);color:var(--text3);}
+.dev-status.in-progress{background:rgba(245,158,11,0.15);color:#fcd34d;}
+.dev-status.complete{background:rgba(34,197,94,0.12);color:#86efac;}
+.device-entry-del{font-size:10px;color:var(--text3);cursor:pointer;padding:2px 4px;border-radius:3px;}
+.device-entry-del:hover{color:#fca5a5;background:rgba(239,68,68,0.1);}
+.device-entry-body{display:none;padding:9px 11px;border-top:1px solid var(--border);}
+.device-entry.expanded .device-entry-body{display:block;}
+.device-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:9px;}
+.device-info-item{font-size:11px;color:var(--text2);}
+.device-info-item strong{color:var(--text);display:block;font-size:9px;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:1px;}
+.device-steps{margin-bottom:9px;}
+.device-step-item{display:flex;gap:6px;padding:5px 6px;border-radius:4px;cursor:pointer;transition:background 0.1s;align-items:flex-start;}
+.device-step-item:hover{background:var(--bg4);}
+.device-step-item.done{opacity:0.5;}
+.device-step-item.done .device-step-title{text-decoration:line-through;color:var(--text3);}
+.device-step-check{width:12px;height:12px;border-radius:2px;border:1.5px solid var(--border2);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;}
+.device-step-item.done .device-step-check{background:var(--success);border-color:var(--success);}
+.device-step-title{font-size:11px;font-weight:500;}
+.device-step-detail{font-size:10px;color:var(--text2);margin-top:1px;}
+.device-notes-label{font-size:9px;color:var(--text2);margin-bottom:3px;font-weight:500;text-transform:uppercase;letter-spacing:0.04em;}
+.device-notes{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px;color:var(--text);font-size:11px;font-family:var(--sans);resize:vertical;min-height:48px;outline:none;}
+.device-notes:focus{border-color:var(--accent);}
+
+/* Completed divider */
+.completed-divider{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;padding:12px 0 5px;border-top:1px solid var(--border);margin-top:12px;}
+
+/* Add device modal */
+#add-device-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:300;align-items:center;justify-content:center;}
+#add-device-modal.show{display:flex;}
+.modal-card{background:var(--bg2);border:1px solid var(--border2);border-radius:9px;padding:20px;width:min(400px,90vw);}
+.modal-card h3{font-size:14px;font-weight:600;margin-bottom:3px;}
+.modal-card p{font-size:11px;color:var(--text2);margin-bottom:14px;}
+.modal-actions{display:flex;gap:7px;justify-content:flex-end;margin-top:14px;}
+
+/* Empty */
+.empty-state{text-align:center;padding:60px 20px;}
+.empty-state .icon{font-size:32px;margin-bottom:12px;opacity:0.2;}
+.empty-state h3{font-size:14px;font-weight:500;color:var(--text2);margin-bottom:5px;}
+.empty-state p{font-size:11px;color:var(--text3);}
+
+.spinner{width:13px;height:13px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* Sidebar nav tabs */
+.sidebar-nav{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
+.sidebar-nav-btn{flex:1;padding:8px 4px;font-size:11px;font-weight:500;color:var(--text3);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all 0.15s;letter-spacing:0.02em;}
+.sidebar-nav-btn:hover{color:var(--text2);}
+.sidebar-nav-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+.sidebar-section{display:none;flex:1;flex-direction:column;overflow:hidden;min-width:0;}
+.sidebar-section.active{display:flex;}
+
+/* Reference sidebar */
+.ref-search{padding:6px 12px 8px;}
+.ref-search input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 9px;color:var(--text);font-size:12px;outline:none;}
+.ref-search input:focus{border-color:var(--accent);}
+.ref-search input::placeholder{color:var(--text3);}
+#ref-list{flex:1;overflow-y:auto;padding:4px 0;}
+.ref-group{border-bottom:1px solid var(--border);}
+.ref-group-header{display:flex;align-items:center;gap:7px;padding:7px 14px;cursor:pointer;user-select:none;transition:background 0.1s;}
+.ref-group-header:hover{background:var(--bg3);}
+.ref-group-header span{font-size:11px;font-weight:600;flex:1;}
+.ref-group-icon{font-size:9px;color:var(--text3);transition:transform 0.15s;}
+.ref-group.open .ref-group-icon{transform:rotate(90deg);}
+.ref-group-items{display:none;}
+.ref-group.open .ref-group-items{display:block;}
+.ref-item{display:flex;align-items:center;gap:7px;padding:5px 14px 5px 22px;cursor:pointer;font-size:11px;color:var(--text2);transition:background 0.1s;}
+.ref-item:hover{background:var(--bg3);color:var(--text);}
+.ref-item.active{color:var(--accent);}
+
+/* Sidebar footer with gear + theme */
+.sidebar-bottom-bar{display:flex;align-items:center;gap:4px;padding:8px 10px;border-top:1px solid var(--border);flex-shrink:0;}
+.sidebar-icon-btn{width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);border-radius:5px;font-size:14px;transition:all 0.15s;background:none;border:none;}
+.sidebar-icon-btn:hover{color:var(--text);background:var(--bg3);}
+.theme-pill{display:flex;background:var(--bg3);border:1px solid var(--border);border-radius:20px;overflow:hidden;margin-left:auto;}
+.theme-btn{padding:3px 8px;font-size:10px;color:var(--text3);cursor:pointer;background:none;border:none;border-radius:20px;transition:all 0.15s;}
+.theme-btn.active{background:var(--accent);color:white;}
+
+/* Toast */
+#toast-container{position:fixed;bottom:20px;right:20px;z-index:500;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
+.toast{padding:9px 14px;border-radius:7px;font-size:12px;font-weight:500;opacity:0;transform:translateY(8px);transition:all 0.25s;pointer-events:none;}
+.toast.show{opacity:1;transform:translateY(0);}
+.toast.success{background:#166534;color:#86efac;border:1px solid rgba(34,197,94,0.3);}
+.toast.error{background:#7f1d1d;color:#fca5a5;border:1px solid rgba(239,68,68,0.3);}
+.toast.info{background:#1e3a5f;color:#93c5fd;border:1px solid rgba(59,130,246,0.3);}
+
+/* Styled confirm dialog */
+#confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;align-items:center;justify-content:center;}
+#confirm-overlay.show{display:flex;}
+.confirm-card{background:var(--bg2);border:1px solid var(--border2);border-radius:9px;padding:20px;width:min(380px,90vw);}
+.confirm-card p{font-size:13px;color:var(--text);margin-bottom:16px;line-height:1.5;}
+.confirm-actions{display:flex;gap:8px;justify-content:flex-end;}
+
+/* Checklist tabs */
+.tab-bar{display:flex;border-bottom:1px solid var(--border);margin-bottom:14px;gap:0;}
+.tab-btn{padding:7px 16px;font-size:12px;font-weight:500;color:var(--text3);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all 0.15s;}
+.tab-btn:hover{color:var(--text2);}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
+
+/* Who's working banner */
+.who-working{display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:7px;margin-bottom:12px;font-size:11px;color:#93c5fd;}
+.who-working input{background:none;border:none;color:#93c5fd;font-size:11px;outline:none;flex:1;min-width:80px;}
+.who-working input::placeholder{color:rgba(147,197,253,0.5);}
+
+/* Client notes */
+.client-notes-block{margin-bottom:14px;}
+.client-notes-header{display:flex;align-items:center;gap:7px;padding:7px 10px;cursor:pointer;background:var(--bg3);border:1px solid var(--border);border-radius:6px 6px 0 0;user-select:none;}
+.client-notes-header:hover{background:var(--bg4);}
+.client-notes-header span{font-size:11px;font-weight:500;color:var(--text2);flex:1;}
+.client-notes-header .notes-icon{font-size:9px;color:var(--text3);transition:transform 0.15s;}
+.client-notes-block.open .notes-icon{transform:rotate(90deg);}
+.client-notes-body{display:none;border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;padding:8px;}
+.client-notes-block.open .client-notes-body{display:block;}
+.client-notes-body textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:7px;color:var(--text);font-size:11px;font-family:var(--sans);resize:vertical;min-height:70px;outline:none;}
+.client-notes-body textarea:focus{border-color:var(--accent);}
+.notes-dot{width:6px;height:6px;border-radius:50%;background:var(--warn);flex-shrink:0;display:none;}
+.client-notes-block.has-notes .notes-dot{display:block;}
+
+/* Step notes */
+.step-note-btn{width:18px;height:18px;border-radius:3px;background:none;border:1px solid var(--border);color:var(--text3);font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s;}
+.step-note-btn:hover{border-color:var(--accent);color:var(--accent);}
+.step-note-btn.has-note{border-color:var(--warn);color:var(--warn);background:rgba(245,158,11,0.1);}
+.step-note-area{display:none;padding:6px 8px 6px 31px;}
+.step-item.note-open .step-note-area{display:block;}
+.step-note-area textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:6px;color:var(--text);font-size:11px;font-family:var(--sans);resize:vertical;min-height:52px;outline:none;}
+.step-note-area textarea:focus{border-color:var(--accent);}
+
+/* Due date */
+.due-date-row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text2);margin-top:4px;}
+.due-date-row input[type=date]{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:3px 7px;color:var(--text);font-size:11px;outline:none;cursor:pointer;}
+.due-date-row input[type=date]:focus{border-color:var(--accent);}
+.due-badge{padding:2px 7px;border-radius:20px;font-size:10px;font-weight:500;}
+.due-badge.ok{background:rgba(34,197,94,0.1);color:#86efac;}
+.due-badge.warn{background:rgba(245,158,11,0.1);color:#fcd34d;}
+.due-badge.overdue{background:rgba(239,68,68,0.1);color:#fca5a5;}
+
+/* Summary modal */
+#summary-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;align-items:center;justify-content:center;}
+#summary-modal.show{display:flex;}
+.summary-card{background:var(--bg2);border:1px solid var(--border2);border-radius:9px;padding:22px;width:min(520px,92vw);max-height:80vh;overflow-y:auto;}
+.summary-card h3{font-size:15px;font-weight:600;margin-bottom:14px;}
+.summary-section{margin-bottom:12px;}
+.summary-section h4{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;}
+.summary-row{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--border);}
+.summary-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;}
+
+/* Installer block */
+.installer-block{margin-top:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px;overflow:hidden;}
+.installer-url-row{display:flex;align-items:center;gap:6px;padding:6px 8px;}
+.installer-url-row .url-text{flex:1;font-family:var(--mono);font-size:10px;color:var(--text2);word-break:break-all;}
+.installer-actions{display:flex;gap:4px;flex-shrink:0;}
+.installer-short-badge{font-size:10px;padding:2px 6px;border-radius:3px;background:rgba(34,197,94,0.1);color:#86efac;border:1px solid rgba(34,197,94,0.2);font-family:var(--mono);}
+.installer-short-badge.pending{background:var(--bg3);color:var(--text3);border-color:var(--border);}
+.qr-panel{display:none;padding:8px;border-top:1px solid var(--border);text-align:center;}
+.qr-panel.open{display:block;}
+.qr-panel canvas{border-radius:4px;}
+
+/* Settings page */
+.settings-section{margin-bottom:18px;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.settings-section-header{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:var(--bg3);cursor:pointer;user-select:none;}
+.settings-section-header:hover{background:var(--bg4);}
+.settings-section-title{font-size:13px;font-weight:600;}
+.settings-section-body{display:none;padding:14px;}
+.settings-section.open .settings-section-body{display:block;}
+.settings-section-icon{font-size:9px;color:var(--text3);transition:transform 0.15s;}
+.settings-section.open .settings-section-icon{transform:rotate(90deg);}
+
+/* Editor rows */
+.editor-list{display:flex;flex-direction:column;gap:6px;}
+.editor-item{border:1px solid var(--border);border-radius:6px;overflow:hidden;}
+.editor-item-header{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg3);cursor:pointer;}
+.editor-item-header:hover{background:var(--bg4);}
+.editor-item-label{flex:1;font-size:12px;font-weight:500;}
+.editor-item-body{display:none;padding:10px;border-top:1px solid var(--border);}
+.editor-item.open .editor-item-body{display:block;}
+.editor-field{margin-bottom:8px;}
+.editor-field label{display:block;font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px;}
+.editor-field input,.editor-field textarea,.editor-field select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text);font-size:12px;font-family:var(--sans);outline:none;}
+.editor-field input:focus,.editor-field textarea:focus,.editor-field select:focus{border-color:var(--accent);}
+.editor-field textarea{resize:vertical;min-height:52px;}
+.editor-sub-list{margin-top:8px;display:flex;flex-direction:column;gap:4px;}
+.editor-sub-item{border:1px solid var(--border);border-radius:4px;overflow:hidden;}
+.editor-sub-header{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--bg4);cursor:pointer;font-size:11px;}
+.editor-sub-header:hover{background:var(--bg3);}
+.editor-sub-label{flex:1;font-weight:500;}
+.editor-sub-body{display:none;padding:8px;border-top:1px solid var(--border);}
+.editor-sub-item.open .editor-sub-body{display:block;}
+.editor-row-actions{display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap;}
+.editor-drag-btn{font-size:12px;color:var(--text3);cursor:grab;padding:2px 4px;background:var(--bg3);border:1px solid var(--border);border-radius:3px;}
+.editor-del-btn{font-size:10px;color:var(--danger);cursor:pointer;padding:2px 7px;background:none;border:1px solid var(--danger);border-radius:3px;opacity:0.7;}
+.editor-del-btn:hover{opacity:1;}
+.editor-add-btn{font-size:11px;padding:4px 10px;background:none;border:1px solid var(--accent);color:var(--accent);border-radius:4px;cursor:pointer;}
+.editor-add-btn:hover{background:rgba(59,130,246,0.1);}
+.editor-save-btn{padding:5px 14px;background:var(--accent);color:white;border:none;border-radius:5px;font-size:12px;cursor:pointer;font-weight:500;}
+.editor-save-btn:hover{opacity:0.85;}
+.editor-tag-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+.editor-tag-check{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text2);cursor:pointer;}
+.config-field-row{display:flex;gap:8px;align-items:flex-end;margin-bottom:10px;}
+.config-field-row .editor-field{flex:1;margin-bottom:0;}
+
+/* Stale dot */
+.stale-dot{color:var(--warn);font-size:7px;vertical-align:middle;opacity:0.8;}
+
+/* SSE change pulse */
+@keyframes changePulse{0%{background:rgba(59,130,246,0.25);}100%{background:transparent;}}
+.sse-pulse{animation:changePulse 1.5s ease-out;}
+
+/* Add me button */
+.add-me-btn{padding:2px 7px;font-size:10px;background:rgba(147,197,253,0.15);border:1px solid rgba(147,197,253,0.3);border-radius:4px;color:#93c5fd;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.add-me-btn:hover{background:rgba(147,197,253,0.25);}
+
+/* ... client menu */
+.client-menu-wrap{position:relative;display:inline-block;}
+.client-menu-btn{background:none;border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:14px;cursor:pointer;padding:2px 8px;line-height:1;transition:all 0.15s;}
+.client-menu-btn:hover{background:var(--bg3);color:var(--text);}
+.client-menu-dropdown{display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--bg2);border:1px solid var(--border2);border-radius:7px;min-width:130px;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,0.3);overflow:hidden;}
+.client-menu-dropdown.open{display:block;}
+.client-menu-item{display:block;width:100%;padding:9px 14px;font-size:12px;color:var(--text);background:none;border:none;text-align:left;cursor:pointer;transition:background 0.1s;}
+.client-menu-item:hover{background:var(--bg3);}
+.client-menu-item.danger{color:var(--danger);}
+
+/* Edit client modal */
+#edit-client-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;align-items:center;justify-content:center;}
+#edit-client-modal.show{display:flex;}
+.edit-client-card{background:var(--bg2);border:1px solid var(--border2);border-radius:9px;padding:22px;width:min(500px,92vw);max-height:85vh;overflow-y:auto;}
+.edit-client-card h3{font-size:15px;font-weight:600;margin-bottom:16px;}
+
+/* Theme pill — modern 3-segment style */
+.theme-pill{display:flex;background:var(--bg4);border:1px solid var(--border);border-radius:7px;overflow:hidden;padding:2px;gap:2px;}
+.theme-btn{display:flex;align-items:center;justify-content:center;gap:5px;padding:5px 10px;font-size:11px;color:var(--text3);cursor:pointer;background:none;border:none;border-radius:5px;transition:all 0.15s;white-space:nowrap;}
+.theme-btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.theme-btn.active{background:var(--bg2);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,0.25);}
+body.light .theme-btn.active{background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.12);}
+
+/* Light mode text/badge fixes */
+body.light .phase-badge{color:#1a1d23;}
+body.light .step-tag{color:#1a1d23;}
+body.light .dev-status{color:#1a1d23;}
+body.light .meta{color:#5a6074;}
+body.light .sidebar-nav-btn{color:#5a6074;}
+body.light .sidebar-nav-btn.active{color:var(--accent);}
+body.light .who-working{background:rgba(59,130,246,0.06);border-color:rgba(59,130,246,0.15);}
+body.light .who-working,body.light .who-working input{color:#1e40af;}
+body.light .add-me-btn{color:#1e40af;border-color:rgba(30,64,175,0.3);background:rgba(30,64,175,0.05);}
+body.light .stale-dot{color:#d97706;}
+body.light .due-badge.ok{background:rgba(22,163,74,0.1);color:#166534;}
+body.light .due-badge.warn{background:rgba(217,119,6,0.1);color:#92400e;}
+body.light .due-badge.overdue{background:rgba(220,38,38,0.1);color:#991b1b;}
+body.light .installer-short-badge{background:rgba(22,163,74,0.1);color:#166534;}
+body.light .client-menu-btn{color:#5a6074;}
+body.light .client-menu-dropdown{box-shadow:0 4px 16px rgba(0,0,0,0.12);}
+
+/* Light mode overrides */
+body.light{
+  --bg:#f4f5f7;--bg2:#ffffff;--bg3:#eef0f3;--bg4:#e4e6ea;
+  --border:rgba(0,0,0,0.1);--border2:rgba(0,0,0,0.18);
+  --text:#1a1d23;--text2:#5a6074;--text3:#9099ad;
+}
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+
+/* Responsive */
+@media(max-width:768px){
+  #mobile-header{display:flex;}
+  #sidebar{display:none;}
+  #sidebar.mobile-overlay{
+    display:flex !important;
+    position:fixed;left:0;top:0;height:100vh;
+    width:var(--sidebar-w) !important;min-width:var(--sidebar-w) !important;
+    z-index:200;
+  }
+  #guide-panel{
+    position:fixed;left:0;right:0;bottom:0;
+    width:100% !important;min-width:0 !important;
+    height:0;border-left:none;border-top:1px solid var(--border);
+    transition:height 0.25s;border-radius:12px 12px 0 0;
+    z-index:200;
+  }
+  #guide-panel.open{height:65vh;width:100% !important;}
+  .guide-drag-handle{display:block;}
+  #checklist-pane{padding:14px;}
+  #overlay-bg{z-index:199;}
+}
+@media(max-width:480px){
+  .products-grid{grid-template-columns:1fr;}
+  .checklist-header{flex-direction:column;gap:6px;}
+  .header-actions{align-self:flex-end;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="mobile-header">
+    <div class="mh-menu" onclick="toggleMobileSidebar()">&#9776;</div>
+    <div class="mh-title" id="mobile-title">System Alternatives</div>
+    <div class="mh-brand">Onboarding SOP</div>
+  </div>
+  <div id="body-row">
+    <div id="sidebar">
+      <div class="sidebar-top">
+        <div class="sidebar-toggle" onclick="toggleSidebar()">&#9776;</div>
+        <div class="sidebar-inner" style="flex-direction:row;align-items:center;padding-right:8px;overflow:visible;flex:1;min-width:0;">
+          <div class="sidebar-top-brand">System Alternatives</div>
+        </div>
+      </div>
+      <div class="sidebar-inner">
+        <div class="sidebar-nav">
+          <button class="sidebar-nav-btn active" id="nav-clients" onclick="switchSidebarNav('clients')">Clients</button>
+          <button class="sidebar-nav-btn" id="nav-reference" onclick="switchSidebarNav('reference')">Reference</button>
+        </div>
+        <!-- Clients section -->
+        <div class="sidebar-section active" id="ss-clients">
+          <div class="sidebar-search">
+            <input type="text" id="client-search" placeholder="Search clients..." oninput="filterClients(this.value)">
+          </div>
+          <div id="client-list"></div>
+          <div class="sidebar-footer">
+            <button class="btn-new" onclick="newClientFromSidebar()">+ New Client</button>
+          </div>
+        </div>
+        <!-- Reference section -->
+        <div class="sidebar-section" id="ss-reference">
+          <div class="ref-search">
+            <input type="text" id="ref-search-input" placeholder="Search procedures..." oninput="filterRefList(this.value)">
+          </div>
+          <div id="ref-list"></div>
+        </div>
+
+        <!-- Bottom bar: gear + theme toggle -->
+        <div class="sidebar-bottom-bar">
+          <div class="theme-pill">
+            <button class="theme-btn" id="theme-light" onclick="applyTheme('light')" title="Light">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/><line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/><line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/></svg>
+              Light
+            </button>
+            <button class="theme-btn active" id="theme-system" onclick="applyTheme('system')" title="System">
+              <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              System
+            </button>
+            <button class="theme-btn" id="theme-dark" onclick="applyTheme('dark')" title="Dark">
+              <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+              Dark
+            </button>
+          </div>
+          <button class="sidebar-icon-btn" onclick="openSettings()" title="Settings">&#9881;</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="main-area">
+      <div id="checklist-pane">
+
+        <div id="view-config" class="view active">
+          <div class="config-card">
+            <h2>Loading...</h2>
+            <p>Fetching configuration from server.</p>
+            <div id="config-alert"></div>
+          </div>
+        </div>
+
+        <div id="view-new-client" class="view">
+          <div class="wizard-card">
+            <h2>New Client Onboarding</h2>
+            <div class="wizard-subtitle">Select products and configure Syncro installer.</div>
+            <div id="wizard-alert"></div>
+            <div class="field-group"><label>Client Name</label><input type="text" id="wiz-clientname" placeholder="e.g. Acme Corporation"></div>
+            <div class="field-group"><label>Tech Assigned</label><input type="text" id="wiz-tech" placeholder="Your name"></div>
+            <div class="syncro-lookup">
+              <div class="lookup-title">Syncro &#8212; Customer Lookup</div>
+              <div class="lookup-row">
+                <input type="text" id="syncro-search-input" placeholder="Search Syncro customer..." onkeydown="if(event.key==='Enter')searchSyncroCustomers()">
+                <button class="btn-primary btn-sm" onclick="searchSyncroCustomers()">Search</button>
+              </div>
+              <div id="syncro-search-results" class="search-results"></div>
+              <div id="syncro-customer-badge" style="display:none;font-size:11px;color:var(--accent);margin-top:6px;padding:4px 8px;background:rgba(59,130,246,0.08);border-radius:4px;border:1px solid rgba(59,130,246,0.2);"></div>
+            </div>
+            <div class="field-group">
+              <label>Due Date</label>
+              <input type="date" id="wiz-duedate">
+            </div>
+            <div style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:7px;">Products to install</div>
+            <div class="products-grid" id="products-grid"></div>
+            <div class="wizard-actions">
+              <button class="btn-secondary" onclick="showView('empty')">Cancel</button>
+              <button class="btn-primary" onclick="createClientChecklist()">Create Checklist</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="view-empty" class="view">
+          <div class="empty-state">
+            <div class="icon">\ud83d\udccb</div>
+            <h3>No client selected</h3>
+            <p>Select a client from the sidebar or create a new onboarding checklist.</p>
+          </div>
+        </div>
+
+        <div id="view-checklist" class="view">
+          <div id="checklist-content"></div>
+        </div>
+
+        <!-- Reference view -->
+        <div id="view-reference" class="view">
+          <div id="reference-content"></div>
+        </div>
+
+        <!-- Settings view -->
+        <div id="view-settings" class="view">
+          <div id="settings-content"></div>
+        </div>
+
+      </div>
+
+      <div id="guide-panel">
+        <div class="guide-drag-handle" id="guide-drag-handle"><div class="bar"></div></div>
+        <div class="guide-header">
+          <h3 id="guide-title">Guide</h3>
+          <div class="guide-close" onclick="closeGuide()">&#10005;</div>
+        </div>
+        <div id="guide-content"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="overlay-bg" onclick="closeOverlays()"></div>
+<div id="toast-container"></div>
+<div id="summary-modal">
+  <div class="summary-card">
+    <h3>Onboarding Summary</h3>
+    <div id="summary-body"></div>
+    <div class="summary-actions">
+      <button class="btn-secondary" onclick="document.getElementById('summary-modal').classList.remove('show')">Close</button>
+      <button class="btn-primary" onclick="printSummary()">Print</button>
+    </div>
+  </div>
+</div>
+<div id="edit-client-modal">
+  <div class="edit-client-card">
+    <h3>Edit Client</h3>
+    <div id="edit-client-body"></div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn-secondary" onclick="closeEditClientModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveEditClient()">Save</button>
+    </div>
+  </div>
+</div>
+<div id="confirm-overlay"><div class="confirm-card"><p id="confirm-msg"></p><div class="confirm-actions"><button class="btn-secondary" id="confirm-cancel">Cancel</button><button class="btn-danger" id="confirm-ok">Confirm</button></div></div></div>
+
+<div id="add-device-modal">
+  <div class="modal-card">
+    <h3>Add Device</h3>
+    <p>Enter basic device info. More notes can be added after deployment begins.</p>
+    <div class="field-group"><label>Hostname / Device Name</label><input type="text" id="modal-hostname" placeholder="e.g. ACME-WS-01"></div>
+    <div class="field-group"><label>Primary User(s)</label><input type="text" id="modal-users" placeholder="e.g. John Smith"></div>
+    <div class="field-group"><label>Device Type</label>
+      <select id="modal-devtype" onchange="onModalDevTypeChange()">
+        <option value="Workstation">Workstation</option>
+        <option value="Server">Server</option>
+        <option value="Mac">Mac</option>
+        <option value="Linux">Linux</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="field-group" id="modal-manual-url-wrap" style="display:none;">
+      <label id="modal-manual-url-label">RMM Installer URL</label>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input type="text" id="modal-manual-url" placeholder="https://...">
+        <button class="btn-secondary btn-sm" onclick="shortenModalUrl()">Shorten</button>
+      </div>
+      <div id="modal-short-url" style="font-size:10px;color:var(--accent);margin-top:3px;display:none;"></div>
+    </div>
+    <div class="field-group"><label>OS</label><input type="text" id="modal-os" placeholder="e.g. Windows 11 Pro"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeAddDeviceModal()">Cancel</button>
+      <button class="btn-primary" onclick="confirmAddDevice()">Add Device</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// \u2500\u2500\u2500 State \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+const SESSION_ID='sess-'+Math.random().toString(36).slice(2);
+let config=null,clients={},guides={},stepsData={},activeClientId=null;
+let syncroCustomer=null,syncroDeviceType='Workstation',syncroAgentUrl=null;
+let addDeviceTargetClient=null;
+let activeSidebarNav='clients';
+let activeRefPhaseId=null;
+let activeChecklistTab='org';
+let sseSource=null;
+let appSettings={
+  staleDays:30,
+  dueDays:3,
+  defaultDueOffset:90,
+  urlTemplates:{
+    Workstation:'https://rmm.syncromsp.com/dl/rs/',
+    Server:'https://rmm.syncromsp.com/dl/rs/',
+    Mac:'https://production.kabutoservices.com/desktop/macos/setup?token=',
+    Linux:'https://systemalternatives.syncromsp.com/download_linux_agent_installers?token='
+  }
+};
+let currentTheme=localStorage.getItem('theme')||'system';
+const isMobile=()=>window.innerWidth<=768;
+
+// ─── Theme ────────────────────────────────────────────────────────────────────
+function applyTheme(theme){
+  currentTheme=theme;
+  localStorage.setItem('theme',theme);
+  const dark=theme==='dark'||(theme==='system'&&window.matchMedia('(prefers-color-scheme:dark)').matches);
+  document.body.classList.toggle('light',!dark);
+  ['light','system','dark'].forEach(t=>{
+    const btn=document.getElementById('theme-'+t);
+    if(btn) btn.classList.toggle('active',t===theme);
+  });
+}
+window.matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{
+  if(currentTheme==='system') applyTheme('system');
+});
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+function showToast(msg,type='success'){
+  const c=document.getElementById('toast-container');
+  const t=document.createElement('div');
+  t.className='toast '+type;t.textContent=msg;
+  c.appendChild(t);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>t.classList.add('show')));
+  setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.remove(),300);},2800);
+}
+
+// ─── Styled confirm ───────────────────────────────────────────────────────────
+function styledConfirm(msg,onOk){
+  document.getElementById('confirm-msg').textContent=msg;
+  const overlay=document.getElementById('confirm-overlay');
+  overlay.classList.add('show');
+  const ok=document.getElementById('confirm-ok');
+  const cancel=document.getElementById('confirm-cancel');
+  const cleanup=()=>overlay.classList.remove('show');
+  ok.onclick=()=>{cleanup();onOk();};
+  cancel.onclick=cleanup;
+}
+
+const PRODUCTS=[
+  {id:'syncro',label:'Syncro RMM',desc:'RMM agent & ticketing'},
+  {id:'threatlocker',label:'Threatlocker',desc:'Application control'},
+  {id:'huntress',label:'Huntress',desc:'EDR / ITDR / SIEM'},
+  {id:'mailprotect',label:'Mail Protect',desc:'emailservice.io filtering'},
+  {id:'controlone',label:'ControlOne',desc:'Remote access & VPN'},
+  {id:'keeper',label:'Keeper',desc:'Password manager'},
+  {id:'duo',label:'Duo',desc:'MFA / 2FA'},
+  {id:'easydmarc',label:'EasyDMARC',desc:'Email authentication'},
+  {id:'syncrify',label:'Syncrify Backup',desc:'Endpoint backup'},
+];
+
+const VPN_OPTIONS=[
+  {id:'syncrify-vpn-unifi',label:'Unifi'},
+  {id:'syncrify-vpn-controlone',label:'ControlOne'},
+  {id:'syncrify-vpn-zywall',label:'Zywall'},
+];
+
+// \u2500\u2500\u2500 Steps from JSON \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+function buildPhases(client){
+  if(!stepsData.phases) return [];
+  return stepsData.phases.filter(p=>{
+    if(!p.product||p.product==='final') return true;
+    return client.products.includes(p.product);
+  });
+}
+
+function buildDeviceSteps(client){
+  if(!stepsData.device_steps) return [];
+  return stepsData.device_steps.filter(s=>{
+    if(!s.product_filter) return true;
+    return client.products.includes(s.product_filter);
+  });
+}
+
+// \u2500\u2500\u2500 Guide panel \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function renderInline(s){return s.replace(/`([^`]+)`/g,'<code>$1</code>');}
+
+function renderGuideBody(guide){
+  return guide.sections.map((sec,si)=>{
+    const noteHtml=sec.note?`<div class="guide-note">${escHtml(sec.note)}</div>`:'';
+    const warnHtml=sec.warn?`<div class="guide-warn">${escHtml(sec.warn)}</div>`:'';
+    const stepsHtml=sec.steps.map(s=>`
+      <div class="guide-step">
+        <div class="guide-step-num">${s.n}</div>
+        <div class="guide-step-body">
+          <h5>${escHtml(s.h)}</h5>
+          <p>${renderInline(escHtml(s.b))}</p>
+          ${s.code?`<div class="guide-codeblock">${escHtml(s.code)}</div>`:''}
+          ${s.link?`<a class="guide-link" href="${escHtml(s.link.url)}" target="_blank">&#x2197; ${escHtml(s.link.text)}</a>`:''}
+        </div>
+      </div>`).join('');
+    const sid=`gsec-${si}`;
+    return `<div class="guide-section open" id="${sid}">
+      <div class="guide-section-header" onclick="toggleGuideSection('${sid}')">
+        <h4>${escHtml(sec.title)}</h4><span class="guide-section-icon">&#9654;</span>
+      </div>
+      <div class="guide-section-body">${noteHtml}${warnHtml}${stepsHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+let activeGuideId=null;
+function openGuide(guideId){
+  const panel=document.getElementById('guide-panel');
+  if(activeGuideId===guideId&&panel.classList.contains('open')){
+    closeGuide();return;
+  }
+  const guide=guides[guideId];if(!guide)return;
+  activeGuideId=guideId;
+  document.getElementById('guide-title').textContent=guide.title;
+  document.getElementById('guide-content').innerHTML=renderGuideBody(guide);
+  panel.classList.add('open');
+  if(isMobile()) document.getElementById('overlay-bg').classList.add('show');
+}
+function closeGuide(){
+  activeGuideId=null;
+  document.getElementById('guide-panel').classList.remove('open');
+  if(isMobile()) document.getElementById('overlay-bg').classList.remove('show');
+}
+function toggleGuideSection(id){document.getElementById(id)?.classList.toggle('open');}
+
+// Mobile drag (drags bottom edge from handle position)
+(function(){
+  let startY=0,startH=0,dragging=false;
+  const handle=document.getElementById('guide-drag-handle');
+  if(!handle)return;
+  handle.addEventListener('touchstart',e=>{
+    const panel=document.getElementById('guide-panel');
+    startY=e.touches[0].clientY;startH=panel.offsetHeight;dragging=true;
+    e.stopPropagation();
+  },{passive:true});
+  document.addEventListener('touchmove',e=>{
+    if(!dragging)return;
+    const panel=document.getElementById('guide-panel');
+    const dy=startY-e.touches[0].clientY;
+    panel.style.height=Math.min(window.innerHeight*0.92,Math.max(80,startH+dy))+'px';
+  },{passive:true});
+  document.addEventListener('touchend',()=>{ dragging=false; });
+})();
+
+// \u2500\u2500\u2500 Sidebar \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('collapsed');}
+function toggleMobileSidebar(){
+  const sb=document.getElementById('sidebar');
+  const ob=document.getElementById('overlay-bg');
+  const opening=sb.style.display!=='flex'&&!sb.classList.contains('mobile-overlay');
+  if(opening){sb.classList.add('mobile-overlay');ob.classList.add('show');}
+  else{sb.classList.remove('mobile-overlay');ob.classList.remove('show');}
+}
+function closeOverlays(){
+  closeGuide();
+  const sb=document.getElementById('sidebar');
+  sb.classList.remove('mobile-overlay');
+  document.getElementById('overlay-bg').classList.remove('show');
+}
+function newClientFromSidebar(){
+  if(isMobile()) closeOverlays();
+  showView('new-client');
+}
+
+// ─── Sidebar nav ─────────────────────────────────────────────────────────────
+function switchSidebarNav(tab){
+  activeSidebarNav=tab;
+  document.querySelectorAll('.sidebar-nav-btn').forEach(b=>{
+    b.classList.toggle('active',b.id==='nav-'+tab);
+  });
+  document.querySelectorAll('.sidebar-section').forEach(s=>s.classList.remove('active'));
+  const sec=document.getElementById('ss-'+tab);
+  if(sec) sec.classList.add('active');
+  if(tab==='reference'){
+    showView('reference');
+    renderRefList();
+  } else {
+    if(activeClientId) showView('checklist');
+    else showView('empty');
+  }
+}
+
+function openSettings(){
+  showView('settings');
+  renderSettingsView();
+}
+
+// ─── Reference list ───────────────────────────────────────────────────────────
+function renderRefList(filter){
+  const container=document.getElementById('ref-list');
+  if(!stepsData.phases) return;
+  const phases=stepsData.phases;
+  const q=(filter||'').toLowerCase();
+  container.innerHTML=phases.map(phase=>{
+    const matches=!q||phase.title.toLowerCase().includes(q)||
+      phase.steps.some(s=>s.title.toLowerCase().includes(q));
+    if(!matches) return '';
+    return `<div class="ref-item ${activeRefPhaseId===phase.id?'active':''}"
+      onclick="openRefPhase('${phase.id}')">${phase.title}</div>`;
+  }).join('');
+}
+
+function filterRefList(q){ renderRefList(q); }
+
+function openRefPhase(phaseId){
+  activeRefPhaseId=phaseId;
+  renderRefList(document.getElementById('ref-search-input')?.value||'');
+  const phase=stepsData.phases.find(p=>p.id===phaseId);
+  if(phase) renderReferenceView(phase,null);
+}
+
+function renderReferenceView(phase,highlightStepId){
+  const content=document.getElementById('reference-content');
+  const steps=phase.steps;
+  content.innerHTML=`
+    <div style="margin-bottom:20px;">
+      <h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">${phase.title}</h2>
+      ${phase.badge?`<span class="phase-badge" style="font-size:10px;">${phase.badge}</span>`:''}
+    </div>
+    ${steps.map((s,i)=>`
+      <div style="margin-bottom:14px;padding:12px 14px;border:1px solid var(--border);border-radius:8px;${s.id===highlightStepId?'border-color:var(--accent);background:rgba(59,130,246,0.05);':''}">
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:8px;">
+          <span style="width:20px;height:20px;border-radius:50%;background:var(--bg3);color:var(--text2);font-size:10px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">${i+1}</span>
+          ${s.title}
+          ${s.guide?`<button class="btn-guide" onclick="openGuide('${s.guide}')">Guide &#x2197;</button>`:''}
+        </div>
+        ${s.detail?`<div style="font-size:11px;color:var(--text2);margin-left:28px;line-height:1.5;">${s.detail}</div>`:''}
+        ${s.tags?.length?`<div class="step-tags" style="margin-left:28px;margin-top:6px;">${s.tags.map(t=>`<span class="step-tag ${t}">${t}</span>`).join('')}</div>`:''}
+        ${s.substeps?.length?`<div style="margin-left:28px;margin-top:8px;">`+s.substeps.map((sub,si)=>`
+          <div style="margin-bottom:6px;padding:8px 10px;background:var(--bg3);border-radius:6px;">
+            <div style="font-size:11px;font-weight:500;margin-bottom:2px;">${si+1}. ${sub.title}</div>
+            ${sub.detail?`<div style="font-size:10px;color:var(--text2);">${sub.detail}</div>`:''}
+          </div>`).join('')+'</div>':''}
+      </div>`).join('')}`;
+  showView('reference');
+}
+
+// ─── Editor helpers ───────────────────────────────────────────────────────────
+function editorSaveOpen(container){
+  const open=[];
+  container.querySelectorAll('.editor-item.open,.editor-sub-item.open').forEach(el=>{
+    if(el.id) open.push(el.id);
+  });
+  return open;
+}
+function editorRestoreOpen(container,open){
+  open.forEach(id=>{
+    const el=container.querySelector('#'+id);
+    if(el) el.classList.add('open');
+  });
+}
+function editorToggle(id){
+  const el=document.getElementById(id);
+  if(el) el.classList.toggle('open');
+}
+function settingsToggle(id){
+  const el=document.getElementById(id);
+  if(el) el.classList.toggle('open');
+}
+
+// ─── Procedure editor ─────────────────────────────────────────────────────────
+function renderProcedureEditor(){
+  const container=document.getElementById('procedure-editor-body');
+  const open=editorSaveOpen(container);
+  const phases=stepsData.phases||[];
+  const devSteps=stepsData.device_steps||[];
+
+  let html=`<div class="editor-list" id="phases-list">`;
+  phases.forEach((phase,pi)=>{
+    html+=`<div class="editor-item" id="pe-phase-${phase.id}">
+      <div class="editor-item-header" onclick="editorToggle('pe-phase-${phase.id}')">
+        <span class="editor-item-label">${phase.title}</span>
+        <button class="editor-del-btn" onclick="event.stopPropagation();deletePhase(${pi})">Remove</button>
+        <span style="font-size:9px;color:var(--text3);">&#9654;</span>
+      </div>
+      <div class="editor-item-body">
+        <div class="editor-field"><label>Phase Title</label>
+          <input value="${phase.title}" onchange="stepsData.phases[${pi}].title=this.value;autoSaveSteps()">
+        </div>
+        <div class="editor-field"><label>Badge</label>
+          <input value="${phase.badge||''}" onchange="stepsData.phases[${pi}].badge=this.value;autoSaveSteps()">
+        </div>
+        <div class="editor-field"><label>Product ID (leave blank = always shown)</label>
+          <input value="${phase.product||''}" onchange="stepsData.phases[${pi}].product=this.value||undefined;autoSaveSteps()">
+        </div>
+        <div style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;margin:10px 0 6px;">Steps</div>
+        <div class="editor-sub-list" id="pe-steps-${phase.id}">
+          ${phase.steps.map((s,si)=>renderStepEditorRow(pi,si,s)).join('')}
+        </div>
+        <div class="editor-row-actions">
+          <button class="editor-add-btn" onclick="addStep(${pi})">+ Add Step</button>
+        </div>
+      </div>
+    </div>`;
+  });
+  html+=`</div>
+  <div class="editor-row-actions" style="margin-top:10px;">
+    <button class="editor-add-btn" onclick="addPhase()">+ Add Phase</button>
+  </div>
+  <div style="margin-top:14px;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">Device Steps</div>
+  <div class="editor-list" id="dev-steps-list">
+    ${devSteps.map((s,i)=>renderDevStepEditorRow(i,s)).join('')}
+  </div>
+  <div class="editor-row-actions" style="margin-top:8px;">
+    <button class="editor-add-btn" onclick="addDevStep()">+ Add Device Step</button>
+  </div>`;
+
+  container.innerHTML=html;
+  editorRestoreOpen(container,open);
+}
+
+function renderStepEditorRow(pi,si,s){
+  const tags=['required','verify','optional'];
+  const tagChecks=tags.map(t=>`<label class="editor-tag-check">
+    <input type="checkbox" ${(s.tags||[]).includes(t)?'checked':''} onchange="toggleStepTag(${pi},${si},'${t}',this.checked)"> ${t}
+  </label>`).join('');
+  return `<div class="editor-sub-item" id="pe-step-${s.id}">
+    <div class="editor-sub-header" onclick="editorToggle('pe-step-${s.id}')">
+      <span class="editor-sub-label">${s.title}</span>
+      <button class="editor-del-btn" onclick="event.stopPropagation();deleteStep(${pi},${si})">Remove</button>
+      <span style="font-size:9px;color:var(--text3);">&#9654;</span>
+    </div>
+    <div class="editor-sub-body">
+      <div class="editor-field"><label>Title</label>
+        <input value="${s.title.replace(/"/g,'&quot;')}" onchange="stepsData.phases[${pi}].steps[${si}].title=this.value;autoSaveSteps();document.querySelector('#pe-step-${s.id} .editor-sub-label').textContent=this.value">
+      </div>
+      <div class="editor-field"><label>Detail</label>
+        <textarea onchange="stepsData.phases[${pi}].steps[${si}].detail=this.value;autoSaveSteps()">${s.detail||''}</textarea>
+      </div>
+      <div class="editor-field"><label>Guide ID</label>
+        <input value="${s.guide||''}" onchange="stepsData.phases[${pi}].steps[${si}].guide=this.value||undefined;autoSaveSteps()">
+      </div>
+      <div class="editor-field"><label>Tags</label>
+        <div class="editor-tag-row">${tagChecks}</div>
+      </div>
+      ${s.substeps?`<div style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 4px;">Substeps</div>
+      <div class="editor-sub-list">
+        ${s.substeps.map((sub,subi)=>renderSubstepEditorRow(pi,si,subi,sub)).join('')}
+      </div>
+      <div class="editor-row-actions"><button class="editor-add-btn" onclick="addSubstep(${pi},${si})">+ Add Substep</button></div>`
+      :`<div class="editor-row-actions"><button class="editor-add-btn" onclick="addSubstep(${pi},${si})">+ Add Substep</button></div>`}
+    </div>
+  </div>`;
+}
+
+function renderSubstepEditorRow(pi,si,subi,sub){
+  return `<div class="editor-sub-item" id="pe-sub-${sub.id}">
+    <div class="editor-sub-header" onclick="editorToggle('pe-sub-${sub.id}')">
+      <span class="editor-sub-label">${sub.title}</span>
+      <button class="editor-del-btn" onclick="event.stopPropagation();deleteSubstep(${pi},${si},${subi})">Remove</button>
+      <span style="font-size:9px;color:var(--text3);">&#9654;</span>
+    </div>
+    <div class="editor-sub-body">
+      <div class="editor-field"><label>Title</label>
+        <input value="${sub.title.replace(/"/g,'&quot;')}" onchange="stepsData.phases[${pi}].steps[${si}].substeps[${subi}].title=this.value;autoSaveSteps();document.querySelector('#pe-sub-${sub.id} .editor-sub-label').textContent=this.value">
+      </div>
+      <div class="editor-field"><label>Detail</label>
+        <textarea onchange="stepsData.phases[${pi}].steps[${si}].substeps[${subi}].detail=this.value;autoSaveSteps()">${sub.detail||''}</textarea>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderDevStepEditorRow(i,s){
+  return `<div class="editor-sub-item" id="pe-devstep-${s.id}">
+    <div class="editor-sub-header" onclick="editorToggle('pe-devstep-${s.id}')">
+      <span class="editor-sub-label">${s.title}</span>
+      <button class="editor-del-btn" onclick="event.stopPropagation();deleteDevStep(${i})">Remove</button>
+      <span style="font-size:9px;color:var(--text3);">&#9654;</span>
+    </div>
+    <div class="editor-sub-body">
+      <div class="editor-field"><label>Title</label>
+        <input value="${s.title.replace(/"/g,'&quot;')}" onchange="stepsData.device_steps[${i}].title=this.value;autoSaveSteps();document.querySelector('#pe-devstep-${s.id} .editor-sub-label').textContent=this.value">
+      </div>
+      <div class="editor-field"><label>Detail</label>
+        <textarea onchange="stepsData.device_steps[${i}].detail=this.value;autoSaveSteps()">${s.detail||''}</textarea>
+      </div>
+      <div class="editor-field"><label>Options</label>
+        <div class="editor-tag-row">
+          <label class="editor-tag-check"><input type="checkbox" ${s.installer_url?'checked':''} onchange="stepsData.device_steps[${i}].installer_url=this.checked||undefined;autoSaveSteps()"> Show installer URL</label>
+          <label class="editor-tag-check"><input type="checkbox" ${s.vpn_selector?'checked':''} onchange="stepsData.device_steps[${i}].vpn_selector=this.checked||undefined;autoSaveSteps()"> VPN selector</label>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Procedure editor mutations
+let autoSaveStepsTimer=null;
+function autoSaveSteps(){
+  clearTimeout(autoSaveStepsTimer);
+  autoSaveStepsTimer=setTimeout(saveStepsJson,800);
+}
+async function saveStepsJson(){
+  const r=await fetch('/api/steps',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(stepsData)});
+  if(r.ok) showToast('Procedures saved');
+  else showToast('Save failed','error');
+}
+function addPhase(){
+  const id='phase-'+Date.now();
+  stepsData.phases.push({id,title:'New Phase',badge:'',steps:[]});
+  renderProcedureEditor();
+  showToast('Phase added');
+}
+function deletePhase(pi){
+  styledConfirm(`Delete phase "${stepsData.phases[pi].title}"?`,()=>{
+    stepsData.phases.splice(pi,1);
+    saveStepsJson();
+    renderProcedureEditor();
+  });
+}
+function addStep(pi){
+  const id='s-'+Date.now();
+  stepsData.phases[pi].steps.push({id,title:'New Step',detail:'',tags:[]});
+  saveStepsJson();
+  renderProcedureEditor();
+}
+function deleteStep(pi,si){
+  styledConfirm(`Delete step "${stepsData.phases[pi].steps[si].title}"?`,()=>{
+    stepsData.phases[pi].steps.splice(si,1);
+    saveStepsJson();
+    renderProcedureEditor();
+  });
+}
+function addSubstep(pi,si){
+  const id='sub-'+Date.now();
+  if(!stepsData.phases[pi].steps[si].substeps) stepsData.phases[pi].steps[si].substeps=[];
+  stepsData.phases[pi].steps[si].substeps.push({id,title:'New Substep',detail:''});
+  saveStepsJson();
+  renderProcedureEditor();
+}
+function deleteSubstep(pi,si,subi){
+  stepsData.phases[pi].steps[si].substeps.splice(subi,1);
+  saveStepsJson();
+  renderProcedureEditor();
+}
+function toggleStepTag(pi,si,tag,checked){
+  const tags=stepsData.phases[pi].steps[si].tags||[];
+  if(checked&&!tags.includes(tag)) tags.push(tag);
+  else if(!checked) tags.splice(tags.indexOf(tag),1);
+  stepsData.phases[pi].steps[si].tags=tags;
+  autoSaveSteps();
+}
+function addDevStep(){
+  const id='dv-'+Date.now();
+  stepsData.device_steps.push({id,title:'New Device Step',detail:''});
+  saveStepsJson();
+  renderProcedureEditor();
+}
+function deleteDevStep(i){
+  styledConfirm(`Delete device step "${stepsData.device_steps[i].title}"?`,()=>{
+    stepsData.device_steps.splice(i,1);
+    saveStepsJson();
+    renderProcedureEditor();
+  });
+}
+
+// ─── Guide editor ─────────────────────────────────────────────────────────────
+function renderGuideEditor(){
+  const container=document.getElementById('guide-editor-body');
+  const open=editorSaveOpen(container);
+  const guideIds=Object.keys(guides);
+
+  let html=`<div class="editor-list">`;
+  guideIds.forEach(gid=>{
+    const g=guides[gid];
+    html+=`<div class="editor-item" id="ge-guide-${gid}">
+      <div class="editor-item-header" onclick="editorToggle('ge-guide-${gid}')">
+        <span class="editor-item-label">${g.title}</span>
+        <button class="editor-del-btn" onclick="event.stopPropagation();deleteGuide('${gid}')">Remove</button>
+        <span style="font-size:9px;color:var(--text3);">&#9654;</span>
+      </div>
+      <div class="editor-item-body">
+        <div class="editor-field"><label>Guide ID (key)</label>
+          <input value="${gid}" disabled style="opacity:0.5;cursor:not-allowed;">
+        </div>
+        <div class="editor-field"><label>Title</label>
+          <input value="${g.title.replace(/"/g,'&quot;')}" onchange="guides['${gid}'].title=this.value;autoSaveGuides();document.querySelector('#ge-guide-${gid} .editor-item-label').textContent=this.value">
+        </div>
+        <div style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;margin:10px 0 6px;">Sections</div>
+        <div class="editor-sub-list" id="ge-sections-${gid}">
+          ${(g.sections||[]).map((sec,si)=>renderSectionEditorRow(gid,si,sec)).join('')}
+        </div>
+        <div class="editor-row-actions">
+          <button class="editor-add-btn" onclick="addGuideSection('${gid}')">+ Add Section</button>
+        </div>
+      </div>
+    </div>`;
+  });
+  html+=`</div>
+  <div class="editor-row-actions" style="margin-top:10px;">
+    <button class="editor-add-btn" onclick="addGuide()">+ Add Guide</button>
+  </div>`;
+
+  container.innerHTML=html;
+  editorRestoreOpen(container,open);
+}
+
+function renderSectionEditorRow(gid,si,sec){
+  return `<div class="editor-sub-item" id="ge-sec-${gid}-${si}">
+    <div class="editor-sub-header" onclick="editorToggle('ge-sec-${gid}-${si}')">
+      <span class="editor-sub-label">${sec.title}</span>
+      <button class="editor-del-btn" onclick="event.stopPropagation();deleteGuideSection('${gid}',${si})">Remove</button>
+      <span style="font-size:9px;color:var(--text3);">&#9654;</span>
+    </div>
+    <div class="editor-sub-body">
+      <div class="editor-field"><label>Section Title</label>
+        <input value="${sec.title.replace(/"/g,'&quot;')}" onchange="guides['${gid}'].sections[${si}].title=this.value;autoSaveGuides();document.querySelector('#ge-sec-${gid}-${si} .editor-sub-label').textContent=this.value">
+      </div>
+      <div style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 4px;">Steps</div>
+      <div class="editor-sub-list">
+        ${(sec.steps||[]).map((gs,gsi)=>renderGuideStepEditorRow(gid,si,gsi,gs)).join('')}
+      </div>
+      <div class="editor-row-actions">
+        <button class="editor-add-btn" onclick="addGuideStep('${gid}',${si})">+ Add Step</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderGuideStepEditorRow(gid,si,gsi,gs){
+  return `<div class="editor-sub-item" id="ge-gs-${gid}-${si}-${gsi}">
+    <div class="editor-sub-header" onclick="editorToggle('ge-gs-${gid}-${si}-${gsi}')">
+      <span class="editor-sub-label">${gs.h||gs.n||'Step'}</span>
+      <button class="editor-del-btn" onclick="event.stopPropagation();deleteGuideStep('${gid}',${si},${gsi})">Remove</button>
+      <span style="font-size:9px;color:var(--text3);">&#9654;</span>
+    </div>
+    <div class="editor-sub-body">
+      <div class="editor-field"><label>Heading</label>
+        <input value="${(gs.h||'').replace(/"/g,'&quot;')}" onchange="guides['${gid}'].sections[${si}].steps[${gsi}].h=this.value;autoSaveGuides();document.querySelector('#ge-gs-${gid}-${si}-${gsi} .editor-sub-label').textContent=this.value">
+      </div>
+      <div class="editor-field"><label>Body</label>
+        <textarea onchange="guides['${gid}'].sections[${si}].steps[${gsi}].b=this.value;autoSaveGuides()">${gs.b||''}</textarea>
+      </div>
+    </div>
+  </div>`;
+}
+
+let autoSaveGuidesTimer=null;
+function autoSaveGuides(){
+  clearTimeout(autoSaveGuidesTimer);
+  autoSaveGuidesTimer=setTimeout(saveGuidesJson,800);
+}
+async function saveGuidesJson(){
+  const r=await fetch('/api/guides',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(guides)});
+  if(r.ok) showToast('Guides saved');
+  else showToast('Save failed','error');
+}
+function addGuide(){
+  const id='guide-'+Date.now();
+  guides[id]={title:'New Guide',sections:[]};
+  saveGuidesJson();
+  renderGuideEditor();
+}
+function deleteGuide(gid){
+  styledConfirm(`Delete guide "${guides[gid].title}"?`,()=>{
+    delete guides[gid];
+    saveGuidesJson();
+    renderGuideEditor();
+  });
+}
+function addGuideSection(gid){
+  if(!guides[gid].sections) guides[gid].sections=[];
+  guides[gid].sections.push({title:'New Section',steps:[]});
+  saveGuidesJson();
+  renderGuideEditor();
+}
+function deleteGuideSection(gid,si){
+  guides[gid].sections.splice(si,1);
+  saveGuidesJson();
+  renderGuideEditor();
+}
+function addGuideStep(gid,si){
+  const n=(guides[gid].sections[si].steps||[]).length+1;
+  if(!guides[gid].sections[si].steps) guides[gid].sections[si].steps=[];
+  guides[gid].sections[si].steps.push({n,h:'New Step',b:''});
+  saveGuidesJson();
+  renderGuideEditor();
+}
+function deleteGuideStep(gid,si,gsi){
+  guides[gid].sections[si].steps.splice(gsi,1);
+  saveGuidesJson();
+  renderGuideEditor();
+}
+
+// ─── Config editor ────────────────────────────────────────────────────────────
+function renderAppSettings(){
+  const body=document.getElementById('app-settings-body');
+  const t=appSettings.urlTemplates||{};
+  body.innerHTML=`
+    <div class="config-field-row">
+      <div class="editor-field">
+        <label>Stale Checklist Threshold (days)</label>
+        <input type="number" id="cfg-stale" value="${appSettings.staleDays||30}" min="0" placeholder="e.g. 30" style="width:120px;">
+        <div style="font-size:10px;color:var(--text2);margin-top:3px;">Clients with no activity beyond this threshold are flagged in the sidebar. 0 = disabled.</div>
+      </div>
+      <div class="editor-field">
+        <label>Due Date Warning (days before)</label>
+        <input type="number" id="cfg-due" value="${appSettings.dueDays||3}" min="1" placeholder="e.g. 3" style="width:120px;">
+        <div style="font-size:10px;color:var(--text2);margin-top:3px;">Warn badge this many days before due date.</div>
+      </div>
+    </div>
+    <div class="config-field-row">
+      <div class="editor-field">
+        <label>Default Due Date Offset (days from today)</label>
+        <input type="number" id="cfg-offset" value="${appSettings.defaultDueOffset||90}" min="1" style="width:120px;">
+        <div style="font-size:10px;color:var(--text2);margin-top:3px;">Pre-fills due date when creating a new client.</div>
+      </div>
+    </div>
+    <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;margin:14px 0 8px;">RMM URL Templates</div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:10px;">The token/key from Syncro is appended to the end of each template.</div>
+    ${['Workstation','Server','Mac','Linux'].map(type=>`
+      <div class="editor-field">
+        <label>${type}</label>
+        <input type="text" id="cfg-url-${type.toLowerCase()}" value="${(t[type]||'').replace(/"/g,'&quot;')}" placeholder="URL prefix...">
+      </div>`).join('')}
+    <button class="editor-save-btn" onclick="saveAppSettings()">Save</button>`;
+}
+async function saveAppSettings(){
+  const staleDays=parseInt(document.getElementById('cfg-stale').value)||0;
+  const dueDays=parseInt(document.getElementById('cfg-due').value)||3;
+  const defaultDueOffset=parseInt(document.getElementById('cfg-offset').value)||90;
+  const urlTemplates={
+    Workstation:document.getElementById('cfg-url-workstation').value.trim(),
+    Server:document.getElementById('cfg-url-server').value.trim(),
+    Mac:document.getElementById('cfg-url-mac').value.trim(),
+    Linux:document.getElementById('cfg-url-linux').value.trim()
+  };
+  appSettings={staleDays,dueDays,defaultDueOffset,urlTemplates};
+  const r=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
+  if(r.ok) showToast('Settings saved');
+  else showToast('Save failed','error');
+  renderSidebar();
+}
+
+function renderConfigEditor(){
+  const body=document.getElementById('config-editor-body');
+  body.innerHTML=`
+    <div class="config-field-row">
+      <div class="editor-field"><label>Syncro Subdomain</label>
+        <input id="cfg-subdomain" value="${config?.syncroSubdomain||''}" placeholder="yourcompany">
+      </div>
+      <div class="editor-field"><label>Syncro API Token</label>
+        <input id="cfg-token" type="password" value="${config?.syncroToken||''}" placeholder="••••••••">
+      </div>
+    </div>
+    <button class="editor-save-btn" onclick="saveConfig()">Save Config</button>`;
+}
+async function saveConfig(){
+  const subdomain=document.getElementById('cfg-subdomain').value.trim();
+  const token=document.getElementById('cfg-token').value.trim();
+  if(!subdomain||!token){showToast('Both fields required','error');return;}
+  const r=await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({syncroSubdomain:subdomain,syncroToken:token})});
+  if(r.ok){config={syncroSubdomain:subdomain,syncroToken:token};showToast('Config saved');}
+  else showToast('Save failed','error');
+}
+
+// ─── Main settings renderer ───────────────────────────────────────────────────
+function renderSettingsView(){
+  document.getElementById('settings-content').innerHTML=`
+    <div style="max-width:760px;">
+      <h2 style="font-size:18px;font-weight:700;margin-bottom:18px;">Settings</h2>
+
+      <div class="settings-section" id="ss-config">
+        <div class="settings-section-header" onclick="settingsToggle('ss-config');renderConfigEditor()">
+          <span class="settings-section-title">&#9881; Syncro Configuration</span>
+          <span class="settings-section-icon">&#9654;</span>
+        </div>
+        <div class="settings-section-body">
+          <div id="config-editor-body"></div>
+        </div>
+      </div>
+
+      <div class="settings-section" id="ss-app-settings">
+        <div class="settings-section-header" onclick="settingsToggle('ss-app-settings');renderAppSettings()">
+          <span class="settings-section-title">&#128337; Checklist Behaviour</span>
+          <span class="settings-section-icon">&#9654;</span>
+        </div>
+        <div class="settings-section-body">
+          <div id="app-settings-body"></div>
+        </div>
+      </div>
+
+      <div class="settings-section" id="ss-procedures">
+        <div class="settings-section-header" onclick="settingsToggle('ss-procedures');if(document.getElementById('ss-procedures').classList.contains('open'))renderProcedureEditor()">
+          <span class="settings-section-title">&#128221; Procedure Editor</span>
+          <span class="settings-section-icon">&#9654;</span>
+        </div>
+        <div class="settings-section-body">
+          <div id="procedure-editor-body"></div>
+        </div>
+      </div>
+
+      <div class="settings-section" id="ss-guides">
+        <div class="settings-section-header" onclick="settingsToggle('ss-guides');if(document.getElementById('ss-guides').classList.contains('open'))renderGuideEditor()">
+          <span class="settings-section-title">&#128196; Guide Editor</span>
+          <span class="settings-section-icon">&#9654;</span>
+        </div>
+        <div class="settings-section-body">
+          <div id="guide-editor-body"></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderSidebar(filter){
+  const list=document.getElementById('client-list');
+  const entries=Object.values(clients).filter(c=>!filter||c.name.toLowerCase().includes(filter.toLowerCase()));
+  if(!entries.length){list.innerHTML=`<div style="padding:10px;font-size:10px;color:var(--text3);text-align:center;">No clients yet</div>`;return;}
+  const now=Date.now();
+  list.innerHTML=entries.map(c=>{
+    const prog=overallProgress(c);
+    const pct=prog.total?Math.round((prog.done/prog.total)*100):0;
+    const lastMod=c.lastModified||c.createdAt||0;
+    const staleDays=appSettings.staleDays||0;
+    const stale=staleDays&&((now-new Date(lastMod).getTime())/(1000*60*60*24))>staleDays;
+    const staleBadge=stale?`<span class="stale-dot" title="Inactive ${staleDays}+ days">\u25cf</span>`:'';
+    return `<div class="client-item ${c.id===activeClientId?'active':''}" onclick="selectClient('${c.id}')">
+      <div class="cn">${c.name} ${staleBadge}</div>
+      <div class="cm">${c.tech} \u00b7 ${pct}% org</div>
+      <div class="cpbar"><div class="cpbar-fill" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('');
+}
+function selectClient(id){
+  if(isMobile()) closeOverlays();
+  loadClientChecklist(id);
+}
+function filterClients(val){renderSidebar(val);}
+
+// \u2500\u2500\u2500 State helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+function chk(){return`<svg width="9" height="7" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;}
+function getStepState(client,step){
+  if(!step.substeps||!step.substeps.length) return client.steps[step.id]?'done':'none';
+  const allDone=step.substeps.every(s=>client.steps[s.id]);
+  const anyDone=step.substeps.some(s=>client.steps[s.id]);
+  if(allDone)return'done';if(anyDone)return'partial';return'none';
+}
+function isPhaseComplete(c,p){return p.steps.every(s=>getStepState(c,s)==='done');}
+function phaseProgress(c,p){const done=p.steps.filter(s=>getStepState(c,s)==='done').length;return{done,total:p.steps.length};}
+function overallProgress(c){
+  const phases=buildPhases(c);
+  const all=phases.flatMap(p=>p.steps);
+  const done=all.filter(s=>getStepState(c,s)==='done').length;
+  return{done,total:all.length};
+}
+function devStatus(dev,steps){
+  const done=steps.filter(s=>dev.steps&&dev.steps[s.id]).length;
+  if(!done)return'not-started';if(done===steps.length)return'complete';return'in-progress';
+}
+
+// \u2500\u2500\u2500 Rendering \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+function renderStep(clientId,step){
+  const client=clients[clientId];
+  const state=getStepState(client,step);
+  const hasSubs=!!(step.substeps&&step.substeps.length);
+  const hasFt=!!step.freetext;
+  const hasVpn=!!step.vpn_selector;
+  const hasGuide=!!step.guide;
+  let checkHtml='';
+  if(state==='done')checkHtml=chk();
+  else if(state==='partial')checkHtml=`<div class="step-partial-dash"></div>`;
+  const expandIcon=hasSubs?`<span class="step-expand-icon">&#9654;</span>`:'';
+  const guideBtn=hasGuide?`<button class="btn-guide" onclick="event.stopPropagation();openGuide('${step.guide}')">Guide &#x2197;</button>`:'';
+  const stepNote=client.stepNotes&&client.stepNotes[step.id]||'';
+  const noteBtn=`<button class="step-note-btn ${stepNote?'has-note':''}" title="Note" onclick="event.stopPropagation();toggleStepNote('${step.id}')">&#9998;</button>`;
+  const tags=step.tags?.length?`<div class="step-tags">${step.tags.map(t=>`<span class="step-tag ${t}">${t}</span>`).join('')}</div>`:'';
+  const installerUrl=step.installer_url&&clients[clientId].syncroInstallerUrl;
+  const extra=installerUrl?`<div class="installer-link" onclick="event.stopPropagation();copyText('${installerUrl}',this)">&#128279; ${installerUrl} <span style="opacity:0.5;font-size:9px;">(copy)</span></div>`:'';
+  let subsHtml='';
+  if(hasSubs){
+    subsHtml=`<div class="substeps">`+step.substeps.map(sub=>{
+      const done=!!client.steps[sub.id];
+      const subTags=sub.tags?.length?`<div class="step-tags">${sub.tags.map(t=>`<span class="step-tag ${t}">${t}</span>`).join('')}</div>`:'';
+      return `<div class="substep-item ${done?'done':''}" onclick="event.stopPropagation();toggleSubstep('${clientId}','${step.id}','${sub.id}')">
+        <div class="substep-check">${done?chk():''}</div>
+        <div><div class="substep-title">${sub.title}</div>${sub.detail?`<div class="substep-detail">${sub.detail}</div>`:''}${subTags}</div>
+      </div>`;
+    }).join('')+`</div>`;
+  }
+  let ftHtml='';
+  if(hasFt){
+    const ft=step.freetext;
+    const saved=client.freetexts&&client.freetexts[ft.id]||'';
+    ftHtml=`<div class="freetext-block" id="ft-${ft.id}">
+      <div class="freetext-header" onclick="event.stopPropagation();toggleFreetext('ft-${ft.id}')">
+        <span>${ft.label}</span><span class="freetext-icon">&#9654;</span>
+      </div>
+      <div class="freetext-body">
+        <textarea placeholder="${ft.placeholder}" onblur="saveFreetext('${clientId}','${ft.id}',this.value)">${saved}</textarea>
+      </div>
+    </div>`;
+  }
+  let vpnHtml='';
+  if(hasVpn){
+    vpnHtml=`<div class="vpn-selector">${VPN_OPTIONS.map(v=>`<button class="vpn-btn" onclick="event.stopPropagation();openGuide('${v.id}')">${v.label} VPN Guide &#x2197;</button>`).join('')}</div>`;
+  }
+  const clickAction=hasSubs?`toggleStepExpand('${step.id}')`:`toggleStep('${clientId}','${step.id}')`;
+  return `<div class="step-item ${state}" id="step-${step.id}">
+    <div class="step-row" onclick="${clickAction}">
+      <div class="step-check">${checkHtml}</div>
+      <div class="step-body">
+        <div class="step-title">${step.title}</div>
+        ${step.detail?`<div class="step-detail">${step.detail}</div>`:''}
+        ${extra}${tags}
+      </div>
+      <div class="step-actions">${noteBtn}${guideBtn}${expandIcon}</div>
+    </div>
+    ${subsHtml}${ftHtml}${vpnHtml}
+    <div class="step-note-area">
+      <textarea placeholder="Step note..." onblur="saveStepNote('${clientId}','${step.id}',this.value)">${stepNote}</textarea>
+    </div>
+  </div>`;
+}
+
+function renderPhase(clientId,phase,phaseNum,forceCollapsed){
+  const client=clients[clientId];
+  const complete=isPhaseComplete(client,phase);
+  const prog=phaseProgress(client,phase);
+  const collapsed=forceCollapsed||complete;
+  return `<div class="phase-block ${complete?'completed':''} ${collapsed?'collapsed':''}" id="phase-${phase.id}">
+    <div class="phase-header" onclick="togglePhase('${phase.id}')">
+      <div class="phase-num">${complete?chk():phaseNum}</div>
+      <h3>${phase.title}</h3>
+      ${phase.badge?`<span class="phase-badge">${phase.badge}</span>`:''}
+      <span class="phase-progress-text">${prog.done}/${prog.total}</span>
+      <span class="phase-collapse-icon">&#9660;</span>
+    </div>
+    <div class="phase-body">${phase.steps.map(s=>renderStep(clientId,s)).join('')}</div>
+  </div>`;
+}
+
+function renderInstallerBlock(rawUrl, containerId, storedShort, onShortened){
+  const el=document.getElementById(containerId);
+  if(!el) return;
+  const displayUrl=storedShort||rawUrl;
+  el.innerHTML=`<div class="installer-block" onclick="event.stopPropagation()">
+    <div class="installer-url-row">
+      <span class="url-text" id="${containerId}-url">${displayUrl}</span>
+      <div class="installer-actions">
+        <button class="copy-btn" id="${containerId}-copy" onclick="event.stopPropagation();copyText(document.getElementById('${containerId}-url').textContent,this)">Copy</button>
+        <button class="copy-btn" id="${containerId}-qr-btn" onclick="event.stopPropagation();toggleQR('${containerId}-qr',document.getElementById('${containerId}-url').textContent)">QR</button>
+      </div>
+    </div>
+    <div class="qr-panel" id="${containerId}-qr"></div>
+  </div>`;
+  // Auto-shorten if no cached short URL
+  if(!storedShort){
+    shortenUrl(rawUrl, containerId, onShortened);
+  }
+}
+
+async function shortenUrl(rawUrl, containerId, onShortened){
+  const urlEl=document.getElementById(`${containerId}-url`);
+  try{
+    const r=await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(rawUrl)}`);
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const short=(await r.text()).trim();
+    if(urlEl) urlEl.textContent=short;
+    if(onShortened) onShortened(short);
+  }catch(e){
+    // Leave raw URL displayed — silent fail, no need to alarm the user
+    console.warn('TinyURL failed:', e.message);
+  }
+}
+
+function toggleQR(panelId, url){
+  const panel=document.getElementById(panelId);
+  if(!panel) return;
+  const opening=!panel.classList.contains('open');
+  panel.classList.toggle('open',opening);
+  if(opening&&!panel.dataset.rendered){
+    panel.dataset.rendered='1';
+    // Simple QR using a free API
+    panel.innerHTML=`<img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(url)}" width="160" height="160" style="border-radius:4px;">`;
+  }
+}
+
+function renderDeviceGuide(clientId){
+  const client=clients[clientId];
+  const devSteps=buildDeviceSteps(client);
+  const devices=client.devices||{};
+  const devList=Object.values(devices);
+  const doneCount=devList.filter(d=>devStatus(d,devSteps)==='complete').length;
+  const rows=devList.map(dev=>{
+    const status=devStatus(dev,devSteps);
+    const lmap={'not-started':'Not Started','in-progress':'In Progress','complete':'Complete'};
+    const stepsHtml=devSteps.map(s=>{
+      const done=!!(dev.steps&&dev.steps[s.id]);
+      const gb=s.vpn_selector?`<div class="vpn-selector">${VPN_OPTIONS.map(v=>`<button class="vpn-btn" onclick="event.stopPropagation();openGuide('${v.id}')">${v.label} VPN Guide &#x2197;</button>`).join('')}</div>`:'';
+      const installerContainerId=`inst-${clientId}-${dev.id}`;
+      const rawInstUrl=dev.rawInstallerUrl||(client.syncroInstallerMap?.[dev.type])||client.syncroInstallerUrl||null;
+      const installerHtml=s.installer_url
+        ?(rawInstUrl
+          ?`<div id="${installerContainerId}"></div>`
+          :`<div style="font-size:10px;color:var(--text3);margin-top:4px;">No installer URL stored for this client. Add one via the wizard.</div>`)
+        :'';
+      return `<div class="device-step-item ${done?'done':''}" onclick="toggleDeviceStep('${clientId}','${dev.id}','${s.id}')">
+        <div class="device-step-check">${done?chk():''}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="device-step-title">${s.title}</div>
+          ${s.detail?`<div class="device-step-detail">${s.detail}</div>`:''}
+          ${installerHtml}
+          ${gb}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="device-entry ${dev.expanded?'expanded':''}" id="dev-${dev.id}">
+      <div class="device-entry-header" onclick="toggleDeviceEntry('${clientId}','${dev.id}')">
+        <span class="device-entry-name">${dev.name}</span>
+        <span class="device-entry-meta">${dev.type||''}</span>
+        <span class="dev-status ${status}">${lmap[status]}</span>
+        <span class="device-entry-del" onclick="event.stopPropagation();deleteDevice('${clientId}','${dev.id}')" title="Remove">&#10005;</span>
+      </div>
+      <div class="device-entry-body">
+        <div class="device-info-grid">
+          <div class="device-info-item"><strong>Hostname</strong>${dev.name}</div>
+          <div class="device-info-item"><strong>Type</strong>${dev.type||'\u2014'}</div>
+          <div class="device-info-item"><strong>User(s)</strong>${dev.users||'\u2014'}</div>
+          <div class="device-info-item"><strong>OS</strong>${dev.os||'\u2014'}</div>
+        </div>
+        <div class="device-steps">${stepsHtml}</div>
+        <div class="device-notes-label">Notes</div>
+        <textarea class="device-notes" placeholder="Device-specific notes, issues, config details..." onblur="saveDeviceNotes('${clientId}','${dev.id}',this.value)">${dev.notes||''}</textarea>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="phase-block" id="phase-device-guide">
+    <div class="phase-header" onclick="togglePhase('device-guide')">
+      <div class="phase-num" style="background:var(--warn);">&#9654;</div>
+      <h3>Device Deployment Guide</h3>
+      <span class="phase-badge gb">PER DEVICE</span>
+      <span class="phase-progress-text">${doneCount}/${devList.length} complete</span>
+      <span class="phase-collapse-icon">&#9660;</span>
+    </div>
+    <div class="phase-body">
+      <div class="device-add-btn-wrap">
+        <button class="btn-primary btn-sm" onclick="showAddDeviceModal('${clientId}')">+ Add Device</button>
+      </div>
+      ${devList.length===0?`<div style="padding:4px 3px 10px;font-size:11px;color:var(--text3);">No devices added yet. Click + Add Device to begin tracking deployment.</div>`:rows}
+    </div>
+  </div>`;
+}
+
+function loadClientChecklist(id){
+  activeClientId=id;
+  const client=clients[id];
+  const phases=buildPhases(client);
+  const prog=overallProgress(client);
+  const pct=prog.total?Math.round((prog.done/prog.total)*100):0;
+  const activePhases=phases.filter(p=>!isPhaseComplete(client,p));
+  const completedPhases=phases.filter(p=>isPhaseComplete(client,p));
+  const devSteps=buildDeviceSteps(client);
+  const devList=Object.values(client.devices||{});
+  const devDone=devList.filter(d=>devStatus(d,devSteps)==='complete').length;
+
+  document.getElementById('mobile-title').textContent=client.name;
+
+  // Who's working (session storage)
+  const whoKey='who-'+id;
+  const whoVal=sessionStorage.getItem(whoKey)||'';
+
+  // Due date badge
+  let dueBadge='';
+  if(client.dueDate){
+    const due=new Date(client.dueDate);
+    const now=new Date();
+    const diff=Math.ceil((due-now)/(1000*60*60*24));
+    const cls=diff<0?'overdue':diff<=appSettings.dueDays?'warn':'ok';
+    const label=diff<0?`${Math.abs(diff)}d overdue`:diff===0?'Due today':`${diff}d left`;
+    dueBadge=`<span class="due-badge ${cls}">${label}</span>`;
+  }
+
+  // Build header
+  let html=`<div class="checklist-header">
+    <div>
+      <h2>${client.name}</h2>
+      <div class="meta">Tech: ${client.tech} &nbsp;·&nbsp; Created: ${new Date(client.createdAt).toLocaleDateString()} &nbsp;·&nbsp; ${client.products.length} products</div>
+      ${client.syncroCustomerName?`<div class="meta" style="margin-top:1px;">Syncro: ${client.syncroCustomerName} (${client.syncroDeviceType||''})</div>`:''}
+    </div>
+    <div class="header-actions">
+      <div class="client-menu-wrap" id="cmenu-wrap-${id}">
+        <button class="client-menu-btn" onclick="toggleClientMenu('${id}')">&#8230;</button>
+        <div class="client-menu-dropdown" id="cmenu-${id}">
+          <button class="client-menu-item" onclick="closeClientMenu('${id}');showSummary('${id}')">Summary</button>
+          <button class="client-menu-item" onclick="closeClientMenu('${id}');openEditClientModal('${id}')">Edit</button>
+          <button class="client-menu-item danger" onclick="closeClientMenu('${id}');confirmDeleteClient('${id}')">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="who-working">
+    <span>&#128100;</span>
+    <input type="text" placeholder="Who's working on this?" value="${whoVal}"
+      oninput="sessionStorage.setItem('who-${id}',this.value)" id="who-input-${id}">
+    ${!whoVal?`<button class="add-me-btn" onclick="addMeToWorking('${id}')">+ Add me</button>`:''}
+  </div>
+
+  <div class="due-date-row">
+    <span>Due:</span>
+    <input type="date" value="${client.dueDate||''}" onchange="saveDueDate('${id}',this.value)">
+    ${dueBadge}
+  </div>
+
+  <div class="client-notes-block ${client.notes?'has-notes':''}" id="client-notes-block-${id}">
+    <div class="client-notes-header" onclick="toggleClientNotes('${id}')">
+      <span>&#128221; Client Notes</span>
+      <div class="notes-dot"></div>
+      <span class="notes-icon">&#9654;</span>
+    </div>
+    <div class="client-notes-body">
+      <textarea placeholder="Notes about this client, special requirements, key contacts..."
+        onblur="saveClientNotes('${id}',this.value)">${client.notes||''}</textarea>
+    </div>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tab-btn-org-${id}" onclick="switchChecklistTab('${id}','org')">Organization</button>
+    <button class="tab-btn" id="tab-btn-devices-${id}" onclick="switchChecklistTab('${id}','devices')">Devices (${devDone}/${devList.length})</button>
+  </div>
+
+  <div class="progress-bar-wrap">
+    <div class="progress-stats"><span>${prog.done} of ${prog.total} org steps complete</span><span>${pct}%</span></div>
+    <div class="progress-bar"><div class="progress-bar-fill ${pct===100?'complete':''}" style="width:${pct}%"></div></div>
+  </div>
+
+  <!-- Org tab -->
+  <div class="tab-panel active" id="tab-org-${id}">`;
+
+  activePhases.forEach((p,i)=>{ html+=renderPhase(id,p,i+1,i>0); });
+  if(completedPhases.length){
+    html+=`<div class="completed-divider">Completed sections</div>`;
+    completedPhases.forEach(p=>{ html+=renderPhase(id,p,'✓',true); });
+  }
+  html+=`</div>`;
+
+  // Devices tab
+  html+=`<div class="tab-panel" id="tab-devices-${id}">`;
+  html+=renderDeviceGuide(id);
+  html+=`</div>`;
+
+  document.getElementById('checklist-content').innerHTML=html;
+  // Restore active tab
+  if(activeChecklistTab==='devices'){
+    switchChecklistTab(id,'devices');
+  }
+  showView('checklist');
+  renderSidebar();
+  // Post-render: inject installer blocks for any devices
+  setTimeout(()=>{
+    const client=clients[id];
+    Object.values(client.devices||{}).forEach(dev=>{
+      const containerId=`inst-${id}-${dev.id}`;
+      const rawUrl=dev.rawInstallerUrl||(client.syncroInstallerMap?.[dev.type])||client.syncroInstallerUrl||null;
+      if(document.getElementById(containerId)&&rawUrl){
+        renderInstallerBlock(rawUrl,containerId,dev.shortUrl||null,(short)=>{
+          clients[id].devices[dev.id].shortUrl=short;
+          saveClients();
+        });
+      }
+    });
+  },50);
+}
+
+function switchChecklistTab(clientId,tab){
+  activeChecklistTab=tab;
+  ['org','devices'].forEach(t=>{
+    document.getElementById(`tab-btn-${t}-${clientId}`)?.classList.toggle('active',t===tab);
+    document.getElementById(`tab-${t}-${clientId}`)?.classList.toggle('active',t===tab);
+  });
+}
+
+function addMeToWorking(clientId){
+  const storedName=localStorage.getItem('myName')||'';
+  const name=storedName||prompt('Your name:');
+  if(!name) return;
+  if(!storedName) localStorage.setItem('myName',name);
+  sessionStorage.setItem('who-'+clientId,name);
+  const input=document.getElementById('who-input-'+clientId);
+  if(input){
+    input.value=name;
+    // Hide the add-me btn
+    input.parentElement.querySelector('.add-me-btn')?.remove();
+  }
+}
+
+function toggleClientNotes(clientId){
+  document.getElementById(`client-notes-block-${clientId}`)?.classList.toggle('open');
+}
+
+async function saveClientNotes(clientId,val){
+  clients[clientId].notes=val;
+  const block=document.getElementById(`client-notes-block-${clientId}`);
+  if(block) block.classList.toggle('has-notes',!!val);
+  await saveClients();
+}
+
+async function saveDueDate(clientId,val){
+  clients[clientId].dueDate=val||null;
+  await saveClients();
+  loadClientChecklist(clientId);
+}
+
+// \u2500\u2500\u2500 Edit products \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+function renderEditProducts(clientId){
+  const client=clients[clientId];
+  return `<div class="edit-products-block" id="edit-products-block">
+    <h4>Edit Products</h4>
+    <div class="products-grid">${PRODUCTS.map(p=>{
+      const checked=client.products.includes(p.id);
+      return `<label class="product-toggle ${checked?'selected':''}" id="ep-tog-${p.id}">
+        <input type="checkbox" id="ep-${p.id}" ${checked?'checked':''} onchange="toggleEditProduct('${p.id}')">
+        <div class="toggle-check"><svg width="9" height="7" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div><div class="product-label">${p.label}</div><div class="product-desc">${p.desc}</div></div>
+      </label>`;
+    }).join('')}</div>
+    <div style="display:flex;gap:7px;justify-content:flex-end;">
+      <button class="btn-secondary btn-sm" onclick="cancelEditProducts()">Cancel</button>
+      <button class="btn-primary btn-sm" onclick="saveEditProducts('${clientId}')">Save Changes</button>
+    </div>
+  </div>`;
+}
+function toggleEditProduct(id){const c=document.getElementById(`ep-${id}`);document.getElementById(`ep-tog-${id}`).classList.toggle('selected',c.checked);}
+async function saveEditProducts(clientId){
+  const newProds=PRODUCTS.filter(p=>document.getElementById(`ep-${p.id}`)?.checked).map(p=>p.id);
+  if(!newProds.length){alert('Select at least one product.');return;}
+  clients[clientId].products=newProds;
+  await saveClients();loadClientChecklist(clientId);
+}
+function cancelEditProducts(){loadClientChecklist(activeClientId);}
+function showEditProducts(clientId){
+  if(document.getElementById('edit-products-block')){cancelEditProducts();return;}
+  const header=document.querySelector('.checklist-header');
+  if(header) header.insertAdjacentHTML('afterend',renderEditProducts(clientId));
+}
+
+// \u2500\u2500\u2500 Toggles \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ─── Client ... menu ─────────────────────────────────────────────────────────
+function toggleClientMenu(clientId){
+  const menu=document.getElementById(`cmenu-${clientId}`);
+  if(!menu) return;
+  const isOpen=menu.classList.contains('open');
+  // Close all menus first
+  document.querySelectorAll('.client-menu-dropdown.open').forEach(m=>m.classList.remove('open'));
+  if(!isOpen) menu.classList.add('open');
+}
+function closeClientMenu(clientId){
+  document.getElementById(`cmenu-${clientId}`)?.classList.remove('open');
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.client-menu-wrap')){
+    document.querySelectorAll('.client-menu-dropdown.open').forEach(m=>m.classList.remove('open'));
+  }
+});
+
+// ─── Edit client modal ────────────────────────────────────────────────────────
+let editClientId=null;
+let editClientDirty=false;
+
+function openEditClientModal(clientId){
+  editClientId=clientId;
+  editClientDirty=false;
+  const client=clients[clientId];
+  const body=document.getElementById('edit-client-body');
+  const offset=appSettings.defaultDueOffset||90;
+
+  // Build products checklist
+  const prodHtml=PRODUCTS.map(p=>`
+    <label class="product-toggle ${client.products.includes(p.id)?'selected':''}" id="eptog-${p.id}">
+      <input type="checkbox" id="epcheck-${p.id}" ${client.products.includes(p.id)?'checked':''}
+        onchange="editClientMarkDirty();document.getElementById('eptog-${p.id}').classList.toggle('selected',this.checked)">
+      <div class="toggle-check"><svg width="9" height="7" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div><div class="product-label">${p.label}</div></div>
+    </label>`).join('');
+
+  body.innerHTML=`
+    <div class="field-group"><label>Client Name</label>
+      <input type="text" id="edit-name" value="${client.name.replace(/"/g,'&quot;')}" oninput="editClientMarkDirty()">
+    </div>
+    <div class="field-group"><label>Tech Assigned</label>
+      <input type="text" id="edit-tech" value="${(client.tech||'').replace(/"/g,'&quot;')}" oninput="editClientMarkDirty()">
+    </div>
+    <div class="field-group"><label>Due Date</label>
+      <input type="date" id="edit-duedate" value="${client.dueDate||''}" onchange="editClientMarkDirty()">
+    </div>
+    <div class="field-group"><label>Syncro Customer</label>
+      <input type="text" id="edit-syncro-name" value="${(client.syncroCustomerName||'').replace(/"/g,'&quot;')}" disabled style="opacity:0.6;cursor:not-allowed;">
+      <div style="font-size:10px;color:var(--text3);margin-top:2px;">Re-create checklist to change Syncro customer.</div>
+    </div>
+    <div style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;margin:12px 0 6px;">Products</div>
+    <div class="products-grid">${prodHtml}</div>`;
+
+  document.getElementById('edit-client-modal').classList.add('show');
+}
+
+function editClientMarkDirty(){editClientDirty=true;}
+
+function closeEditClientModal(){
+  if(editClientDirty){
+    styledConfirm('Discard unsaved changes?',()=>{
+      editClientDirty=false;editClientId=null;
+      document.getElementById('edit-client-modal').classList.remove('show');
+    });
+    return;
+  }
+  editClientId=null;
+  document.getElementById('edit-client-modal').classList.remove('show');
+}
+
+async function saveEditClient(){
+  if(!editClientId) return;
+  const client=clients[editClientId];
+  client.name=document.getElementById('edit-name').value.trim()||client.name;
+  client.tech=document.getElementById('edit-tech').value.trim()||'Unassigned';
+  client.dueDate=document.getElementById('edit-duedate').value||null;
+  client.products=PRODUCTS.filter(p=>document.getElementById(`epcheck-${p.id}`)?.checked).map(p=>p.id);
+  editClientDirty=false;
+  document.getElementById('edit-client-modal').classList.remove('show');
+  await saveClients();
+  loadClientChecklist(editClientId);
+  showToast('Client updated');
+}
+
+document.getElementById('edit-client-modal').addEventListener('click',e=>{
+  if(e.target===e.currentTarget) closeEditClientModal();
+});
+
+function showSummary(clientId){
+  const client=clients[clientId];
+  const phases=buildPhases(client);
+  const prog=overallProgress(client);
+  const devSteps=buildDeviceSteps(client);
+  const devList=Object.values(client.devices||{});
+
+  let body=`<div class="summary-section">
+    <h4>Organization Progress</h4>
+    ${phases.map(p=>{
+      const pr=phaseProgress(client,p);
+      return `<div class="summary-row"><span>${p.title}</span><span>${pr.done}/${pr.total}</span></div>`;
+    }).join('')}
+    <div class="summary-row" style="font-weight:600;margin-top:4px;"><span>Total</span><span>${prog.done}/${prog.total}</span></div>
+  </div>`;
+
+  if(devList.length){
+    body+=`<div class="summary-section">
+      <h4>Devices</h4>
+      ${devList.map(d=>{
+        const st=devStatus(d,devSteps);
+        const lm={'not-started':'Not Started','in-progress':'In Progress','complete':'Complete'};
+        return `<div class="summary-row"><span>${d.name} (${d.type||'?'})</span><span>${lm[st]}</span></div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  if(client.notes){
+    body+=`<div class="summary-section"><h4>Client Notes</h4><p style="font-size:12px;color:var(--text2);line-height:1.5;">${client.notes}</p></div>`;
+  }
+
+  if(client.dueDate){
+    body+=`<div class="summary-section"><h4>Due Date</h4><p style="font-size:12px;color:var(--text2);">${new Date(client.dueDate).toLocaleDateString()}</p></div>`;
+  }
+
+  document.getElementById('summary-body').innerHTML=body;
+  document.getElementById('summary-modal').classList.add('show');
+}
+
+function printSummary(){
+  const content=document.getElementById('summary-body').innerHTML;
+  const w=window.open('','_blank');
+  w.document.write(`<html><head><title>Summary</title><style>body{font-family:sans-serif;padding:20px;font-size:13px;}h3{margin-bottom:16px;}h4{font-size:11px;text-transform:uppercase;color:#666;margin:12px 0 6px;}div{display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:3px 0;}</style></head><body><h3>Onboarding Summary</h3>${content}</body></html>`);
+  w.document.close();w.print();
+}
+
+document.getElementById('summary-modal').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove('show');});
+
+function toggleStepNote(stepId){
+  document.getElementById(`step-${stepId}`)?.classList.toggle('note-open');
+}
+
+async function saveStepNote(clientId,stepId,val){
+  if(!clients[clientId].stepNotes) clients[clientId].stepNotes={};
+  clients[clientId].stepNotes[stepId]=val;
+  const btn=document.querySelector(`#step-${stepId} .step-note-btn`);
+  if(btn) btn.classList.toggle('has-note',!!val);
+  await saveClients();
+}
+
+function togglePhase(id){document.getElementById(`phase-${id}`)?.classList.toggle('collapsed');}
+function toggleStepExpand(id){document.getElementById(`step-${id}`)?.classList.toggle('expanded');}
+function toggleFreetext(id){document.getElementById(id)?.classList.toggle('open');}
+async function toggleStep(cid,sid){clients[cid].steps[sid]=!clients[cid].steps[sid];await saveClients();loadClientChecklist(cid);}
+async function toggleSubstep(cid,pid,sid){
+  clients[cid].steps[sid]=!clients[cid].steps[sid];
+  await saveClients();loadClientChecklist(cid);
+  document.getElementById(`step-${pid}`)?.classList.add('expanded');
+}
+async function toggleDeviceStep(cid,did,sid){
+  const c=clients[cid];if(!c.devices||!c.devices[did])return;
+  if(!c.devices[did].steps)c.devices[did].steps={};
+  c.devices[did].steps[sid]=!c.devices[did].steps[sid];
+  c.devices[did].expanded=true;
+  await saveClients();
+  refreshDeviceGuide(cid);
+}
+async function toggleDeviceEntry(cid,did){
+  const c=clients[cid];if(!c.devices||!c.devices[did])return;
+  c.devices[did].expanded=!c.devices[did].expanded;
+  await saveClients();
+  refreshDeviceGuide(cid);
+}
+function refreshDeviceGuide(clientId){
+  const guideEl=document.getElementById('phase-device-guide');
+  if(!guideEl){
+    // Not rendered yet (wrong tab) — just update the tab button count
+    const client=clients[clientId];
+    const devSteps=buildDeviceSteps(client);
+    const devList=Object.values(client.devices||{});
+    const devDone=devList.filter(d=>devStatus(d,devSteps)==='complete').length;
+    const tabBtn=document.getElementById(`tab-btn-devices-${clientId}`);
+    if(tabBtn) tabBtn.textContent=`Devices (${devDone}/${devList.length})`;
+    return;
+  }
+  // Re-render just the device guide's inner content
+  const client=clients[clientId];
+  const devSteps=buildDeviceSteps(client);
+  const devList=Object.values(client.devices||{});
+  const doneCount=devList.filter(d=>devStatus(d,devSteps)==='complete').length;
+
+  // Update progress text
+  const progText=guideEl.querySelector('.phase-progress-text');
+  if(progText) progText.textContent=`${doneCount}/${devList.length} complete`;
+
+  // Update tab button
+  const tabBtn=document.getElementById(`tab-btn-devices-${clientId}`);
+  if(tabBtn) tabBtn.textContent=`Devices (${doneCount}/${devList.length})`;
+
+  // Re-render device rows inside the phase body (preserve open state)
+  const body=guideEl.querySelector('.phase-body');
+  if(!body) return;
+
+  const rows=devList.map(dev=>{
+    const status=devStatus(dev,devSteps);
+    const lmap={'not-started':'Not Started','in-progress':'In Progress','complete':'Complete'};
+    const stepsHtml=devSteps.map(s=>{
+      const done=!!(dev.steps&&dev.steps[s.id]);
+      const installerContainerId=`inst-${clientId}-${dev.id}`;
+      const rawInstUrl=dev.rawInstallerUrl||(client.syncroInstallerMap?.[dev.type])||client.syncroInstallerUrl||null;
+      const installerHtml=s.installer_url
+        ?(rawInstUrl?`<div id="${installerContainerId}"></div>`
+          :`<div style="font-size:10px;color:var(--text3);margin-top:4px;">No installer URL for this device type — edit device to add manually.</div>`)
+        :'';
+      const gb=s.vpn_selector?`<div class="vpn-selector">${VPN_OPTIONS.map(v=>`<button class="vpn-btn" onclick="event.stopPropagation();openGuide('${v.id}')">${v.label} VPN Guide &#x2197;</button>`).join('')}</div>`:'';
+      return `<div class="device-step-item ${done?'done':''}" onclick="toggleDeviceStep('${clientId}','${dev.id}','${s.id}')">
+        <div class="device-step-check">${done?chk():''}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="device-step-title">${s.title}</div>
+          ${s.detail?`<div class="device-step-detail">${s.detail}</div>`:''}
+          ${installerHtml}${gb}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="device-entry ${dev.expanded?'expanded':''}" id="dev-${dev.id}">
+      <div class="device-entry-header" onclick="toggleDeviceEntry('${clientId}','${dev.id}')">
+        <span class="device-entry-name">${dev.name}</span>
+        <span class="device-entry-meta">${dev.type||''}</span>
+        <span class="dev-status ${status}">${lmap[status]}</span>
+        <span class="device-entry-del" onclick="event.stopPropagation();deleteDevice('${clientId}','${dev.id}')" title="Remove">&#10005;</span>
+      </div>
+      <div class="device-entry-body">
+        <div class="device-info-grid">
+          <div class="device-info-item"><strong>Hostname</strong>${dev.name}</div>
+          <div class="device-info-item"><strong>Type</strong>${dev.type||'—'}</div>
+          <div class="device-info-item"><strong>User(s)</strong>${dev.users||'—'}</div>
+          <div class="device-info-item"><strong>OS</strong>${dev.os||'—'}</div>
+        </div>
+        <div class="device-steps">${stepsHtml}</div>
+        <div class="device-notes-label">Notes</div>
+        <textarea class="device-notes" placeholder="Device-specific notes, issues, config details..."
+          onblur="saveDeviceNotes('${clientId}','${dev.id}',this.value)">${dev.notes||''}</textarea>
+      </div>
+    </div>`;
+  }).join('');
+
+  body.innerHTML=`<div class="device-add-btn-wrap">
+    <button class="btn-primary btn-sm" onclick="showAddDeviceModal('${clientId}')">+ Add Device</button>
+  </div>
+  ${devList.length===0?`<div style="padding:4px 3px 10px;font-size:11px;color:var(--text3);">No devices added yet. Click + Add Device to begin tracking deployment.</div>`:rows}`;
+
+  // Inject installer blocks per device
+  devList.forEach(dev=>{
+    const containerId=`inst-${clientId}-${dev.id}`;
+    const rawUrl=dev.rawInstallerUrl||(client.syncroInstallerMap?.(dev.type))||client.syncroInstallerUrl||null;
+    if(document.getElementById(containerId)&&rawUrl){
+      renderInstallerBlock(rawUrl,containerId,dev.shortUrl||null,(short)=>{
+        clients[clientId].devices[dev.id].shortUrl=short;
+        saveClients();
+      });
+    }
+  });
+}
+
+async function saveFreetext(cid,ftId,val){if(!clients[cid].freetexts)clients[cid].freetexts={};clients[cid].freetexts[ftId]=val;await saveClients();}
+async function saveDeviceNotes(cid,did,val){
+  if(clients[cid].devices&&clients[cid].devices[did])clients[cid].devices[did].notes=val;
+  await saveClients();
+}
+async function deleteDevice(cid,did){
+  styledConfirm('Remove this device record?',async()=>{
+    if(clients[cid].devices)delete clients[cid].devices[did];
+    await saveClients();refreshDeviceGuide(cid);
+  });
+}
+async function confirmDeleteClient(id){
+  styledConfirm(`Delete checklist for "${clients[id]?.name}"? This cannot be undone.`,async()=>{
+    delete clients[id];await saveClients();activeClientId=null;
+    document.getElementById('mobile-title').textContent='System Alternatives';
+    renderSidebar();showView('empty');
+  });
+}
+
+// Add device modal
+function showAddDeviceModal(cid){
+  addDeviceTargetClient=cid;
+  ['modal-hostname','modal-users','modal-os'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('modal-devtype').value='Workstation';
+  document.getElementById('add-device-modal').classList.add('show');
+  setTimeout(()=>document.getElementById('modal-hostname').focus(),100);
+}
+function closeAddDeviceModal(){document.getElementById('add-device-modal').classList.remove('show');}
+function onModalDevTypeChange(){
+  const type=document.getElementById('modal-devtype').value;
+  const cid=addDeviceTargetClient;
+  const map=(cid&&clients[cid]?.syncroInstallerMap)||{};
+  const hasUrl=type!=='Other'&&!!map[type];
+  const wrap=document.getElementById('modal-manual-url-wrap');
+  const lbl=document.getElementById('modal-manual-url-label');
+  if(wrap) wrap.style.display=hasUrl?'none':'block';
+  if(lbl) lbl.textContent=type==='Other'?'RMM Installer URL':`RMM URL — not in Syncro for ${type}, enter manually`;
+  document.getElementById('modal-manual-url').value='';
+  document.getElementById('modal-short-url').style.display='none';
+  modalShortUrl=null;
+}
+
+let modalShortUrl=null;
+async function shortenModalUrl(){
+  const raw=document.getElementById('modal-manual-url').value.trim();
+  if(!raw){showToast('Enter a URL first','error');return;}
+  const btn=event.target;btn.textContent='...';
+  try{
+    const r=await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(raw)}`);
+    const short=(await r.text()).trim();
+    modalShortUrl=short;
+    const el=document.getElementById('modal-short-url');
+    if(el){el.textContent=short;el.style.display='block';}
+    btn.textContent='Shorten';showToast('Shortened');
+  }catch(e){btn.textContent='Shorten';showToast('Failed','error');}
+}
+
+async function confirmAddDevice(){
+  const name=document.getElementById('modal-hostname').value.trim();
+  if(!name){document.getElementById('modal-hostname').focus();return;}
+  const cid=addDeviceTargetClient;
+  const c=clients[cid];
+  if(!c.devices)c.devices={};
+  const did='dev-'+Date.now();
+  const type=document.getElementById('modal-devtype').value;
+  const map=c.syncroInstallerMap||{};
+  let rawUrl=map[type]||c.syncroInstallerUrl||null;
+  let shortUrl=null;
+  if(type==='Other'||!rawUrl){
+    rawUrl=document.getElementById('modal-manual-url')?.value.trim()||null;
+    shortUrl=modalShortUrl||null;
+  }
+  c.devices[did]={id:did,name,type,
+    users:document.getElementById('modal-users').value.trim(),
+    os:document.getElementById('modal-os').value.trim(),
+    steps:{},notes:'',expanded:true,
+    rawInstallerUrl:rawUrl,shortUrl:shortUrl};
+  modalShortUrl=null;
+  await saveClients();closeAddDeviceModal();refreshDeviceGuide(cid);
+}
+document.getElementById('add-device-modal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeAddDeviceModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeGuide();closeAddDeviceModal();}});
+
+// \u2500\u2500\u2500 API \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ─── SSE live sync ────────────────────────────────────────────────────────────
+function detectChangedSteps(oldClient,newClient){
+  const changed=[];
+  const allIds=new Set([...Object.keys(oldClient.steps||{}),...Object.keys(newClient.steps||{})]);
+  allIds.forEach(id=>{
+    if((oldClient.steps||{})[id]!==(newClient.steps||{})[id]) changed.push(id);
+  });
+  // Device steps
+  Object.values(newClient.devices||{}).forEach(dev=>{
+    const oldDev=(oldClient.devices||{})[dev.id];
+    if(!oldDev) return;
+    Object.keys(dev.steps||{}).forEach(sid=>{
+      if((oldDev.steps||{})[sid]!==(dev.steps||{})[sid]) changed.push('dev-'+dev.id+'-'+sid);
+    });
+  });
+  return changed;
+}
+
+function pulseSteps(ids){
+  ids.forEach(id=>{
+    const el=document.getElementById('step-'+id)||document.querySelector(`[id$="-${id}"]`);
+    if(el){el.classList.remove('sse-pulse');void el.offsetWidth;el.classList.add('sse-pulse');}
+  });
+}
+
+function connectSSE(){
+  if(sseSource) sseSource.close();
+  sseSource=new EventSource('/api/events');
+  sseSource.addEventListener('clients-updated',e=>{
+    const payload=JSON.parse(e.data);
+    // lastEventId carries the session that made the change
+    if(payload.sessionId===SESSION_ID) return;
+    const updated=payload.clients||payload;
+    // Find what changed if we're viewing a client
+    const changedIds=activeClientId&&updated[activeClientId]?
+      detectChangedSteps(clients[activeClientId],updated[activeClientId]):[];
+    clients=updated;
+    renderSidebar();
+    if(activeClientId&&clients[activeClientId]){
+      loadClientChecklist(activeClientId);
+      // Pulse changed step elements after render
+      if(changedIds.length) setTimeout(()=>pulseSteps(changedIds),80);
+    }
+  });
+  sseSource.addEventListener('steps-updated',e=>{
+    stepsData=JSON.parse(e.data);
+    renderRefList();
+    if(activeClientId) loadClientChecklist(activeClientId);
+  });
+  sseSource.addEventListener('guides-updated',e=>{
+    guides=JSON.parse(e.data);
+  });
+  sseSource.addEventListener('config-updated',e=>{
+    const cfg=JSON.parse(e.data);
+    if(cfg.syncroToken) config={syncroToken:cfg.syncroToken,syncroSubdomain:cfg.syncroSubdomain};
+  });
+  sseSource.onerror=()=>{ sseSource.close(); setTimeout(connectSSE,5000); };
+}
+
+async function loadConfig(){
+  try{
+    const [cfgRes,guidesRes,stepsRes]=await Promise.all([
+      fetch('/api/config'),fetch('/guides.json'),fetch('/steps.json')
+    ]);
+    if(!cfgRes.ok) throw new Error(`Config HTTP ${cfgRes.status}`);
+    const cfg=await cfgRes.json();
+    if(!cfg.syncroToken||!cfg.syncroSubdomain) throw new Error('config.json missing required fields');
+    config={syncroToken:cfg.syncroToken,syncroSubdomain:cfg.syncroSubdomain};
+    if(guidesRes.ok) guides=await guidesRes.json();
+    else console.warn('guides.json not found');
+    if(stepsRes.ok) stepsData=await stepsRes.json();
+    else console.warn('steps.json not found');
+    const settingsRes=await fetch('/api/settings').catch(()=>null);
+    if(settingsRes&&settingsRes.ok) appSettings={...appSettings,...(await settingsRes.json())};
+    await loadClients();renderSidebar();buildProductsGrid();showView('empty');
+  }catch(e){showAlert('config-alert','error',`Failed to load: ${e.message}`);}
+}
+async function loadClients(){try{const r=await fetch('/api/clients');if(!r.ok)throw new Error();clients=await r.json();}catch(e){clients={};}}
+async function saveClients(){
+  if(activeClientId&&clients[activeClientId]) clients[activeClientId].lastModified=new Date().toISOString();
+  try{await fetch('/api/clients',{method:'PUT',headers:{'Content-Type':'application/json','X-Session-Id':SESSION_ID},body:JSON.stringify(clients)});}catch(e){console.error(e);}
+}
+
+// \u2500\u2500\u2500 Syncro \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+async function searchSyncroCustomers(){
+  if(!config)return;
+  const q=document.getElementById('syncro-search-input').value.trim();if(!q)return;
+  const el=document.getElementById('syncro-search-results');
+  el.innerHTML='<span class="spinner"></span>';
+  try{
+    const r=await fetch(`https://${config.syncroSubdomain}.syncromsp.com/api/v1/customers?business_name=${encodeURIComponent(q)}`,{headers:{'accept':'application/json','Authorization':config.syncroToken}});
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    const data=await r.json();const list=data.customers||[];
+    if(!list.length){el.innerHTML='<div style="color:var(--text3);font-size:10px;padding:4px 0;">No customers found.</div>';return;}
+    el.innerHTML=list.map((c,i)=>`<div class="search-result-item" onclick="selectSyncroCustomer(${i})" id="sri-${i}"><span class="sri-name">${c.business_name}</span><span class="sri-id">ID: ${c.id}</span></div>`).join('');
+    el._customers=list;
+  }catch(e){el.innerHTML=`<div style="color:#fca5a5;font-size:10px;padding:4px 0;">Error: ${e.message}</div>`;}
+}
+// Build installer URL map from Syncro customer properties
+function buildInstallerMap(customer){
+  const p=customer.properties||{};
+  const t=appSettings.urlTemplates||{};
+  const map={};
+  const types={
+    Workstation:{field:'RMM Agent (Workstation)',template:t.Workstation||'https://rmm.syncromsp.com/dl/rs/'},
+    Server:{field:'RMM Agent (Server)',template:t.Server||'https://rmm.syncromsp.com/dl/rs/'},
+    Mac:{field:'RMM Agent (Mac)',template:t.Mac||'https://production.kabutoservices.com/desktop/macos/setup?token='},
+    Linux:{field:'RMM Agent (Linux)',template:t.Linux||'https://systemalternatives.syncromsp.com/download_linux_agent_installers?token='}
+  };
+  Object.entries(types).forEach(([type,{field,template}])=>{
+    const val=p[field]?.toString().trim();
+    if(val) map[type]=template+val;
+  });
+  return map;
+}
+
+function selectSyncroCustomer(idx){
+  const el=document.getElementById('syncro-search-results');
+  const list=el._customers;if(!list)return;
+  syncroCustomer=list[idx];
+  document.querySelectorAll('.search-result-item').forEach(e=>e.classList.remove('selected-customer'));
+  document.getElementById(`sri-${idx}`).classList.add('selected-customer');
+  // Store full URL map on syncroCustomer
+  syncroCustomer._installerMap=buildInstallerMap(syncroCustomer);
+  const badge=document.getElementById('syncro-customer-badge');
+  if(badge){
+    badge.style.display='block';
+    const types=Object.keys(syncroCustomer._installerMap);
+    badge.textContent=`${syncroCustomer.business_name} — RMM links found: ${types.length?types.join(', '):'none (manual entry required per device)'}`;
+  }
+}
+
+function selectDevice(type){
+  // Legacy — no-op in new flow, device type set at Add Device time
+  syncroDeviceType=type;
+}
+
+// Get installer URL for a specific device type from stored client data
+function getInstallerUrlForType(client, deviceType){
+  if(!client.syncroInstallerMap) return client.syncroInstallerUrl||null;
+  return client.syncroInstallerMap[deviceType]||null;
+}
+function copyText(text,btn){
+  if(!text){return;}
+  navigator.clipboard.writeText(text).then(()=>{
+    if(!btn) return;
+    const o=btn.textContent;
+    btn.textContent='Copied!';
+    btn.style.color='var(--success)';
+    setTimeout(()=>{btn.textContent=o;btn.style.color='';},1500);
+  }).catch(()=>{
+    // Fallback for non-https
+    const ta=document.createElement('textarea');
+    ta.value=text;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.select();document.execCommand('copy');
+    document.body.removeChild(ta);
+    if(btn){const o=btn.textContent;btn.textContent='Copied!';btn.style.color='var(--success)';setTimeout(()=>{btn.textContent=o;btn.style.color='';},1500);}
+  });
+}
+
+// \u2500\u2500\u2500 Products grid \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+function buildProductsGrid(){
+  document.getElementById('products-grid').innerHTML=PRODUCTS.map(p=>`
+    <label class="product-toggle" id="ptog-${p.id}">
+      <input type="checkbox" id="pcheck-${p.id}" onchange="toggleProduct('${p.id}')">
+      <div class="toggle-check"><svg width="9" height="7" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div><div class="product-label">${p.label}</div><div class="product-desc">${p.desc}</div></div>
+    </label>`).join('');
+}
+function toggleProduct(id){const c=document.getElementById(`pcheck-${id}`);document.getElementById(`ptog-${id}`).classList.toggle('selected',c.checked);}
+
+// \u2500\u2500\u2500 Create client \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+async function createClientChecklist(){
+  const name=document.getElementById('wiz-clientname').value.trim();
+  const tech=document.getElementById('wiz-tech').value.trim();
+  if(!name){showAlert('wizard-alert','error','Client name is required.');return;}
+  const selectedProds=PRODUCTS.filter(p=>document.getElementById(`pcheck-${p.id}`)?.checked).map(p=>p.id);
+  if(!selectedProds.length){showAlert('wizard-alert','error','Select at least one product.');return;}
+  const dueDate=document.getElementById('wiz-duedate')?.value||null;
+  const id='client-'+Date.now();
+  clients[id]={
+    id,name,tech:tech||'Unassigned',createdAt:new Date().toISOString(),
+    products:selectedProds,
+    dueDate:dueDate||null,
+    syncroCustomerId:syncroCustomer?.id||null,
+    syncroCustomerName:syncroCustomer?.business_name||null,
+    syncroInstallerMap:syncroCustomer?._installerMap||null,
+    // Legacy single URL field kept for backward compat
+    syncroInstallerUrl:null,
+    steps:{},devices:{},freetexts:{}
+  };
+  await saveClients();renderSidebar();loadClientChecklist(id);
+}
+
+// \u2500\u2500\u2500 Views \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+function showView(name){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  const map={config:'view-config','new-client':'view-new-client',empty:'view-empty',
+             checklist:'view-checklist',reference:'view-reference',settings:'view-settings'};
+  document.getElementById(map[name]||'view-empty')?.classList.add('active');
+  if(name==='new-client'){
+    document.getElementById('wizard-alert').innerHTML='';
+    ['wiz-clientname','wiz-tech','syncro-search-input'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    document.getElementById('syncro-search-results').innerHTML='';
+    const badge=document.getElementById('syncro-customer-badge');
+    if(badge){badge.style.display='none';badge.textContent='';}
+    syncroCustomer=null;syncroAgentUrl=null;
+    // Set default due date
+    const offset=appSettings.defaultDueOffset||90;
+    const defaultDue=new Date();defaultDue.setDate(defaultDue.getDate()+offset);
+    const dd=document.getElementById('wiz-duedate');
+    if(dd) dd.value=defaultDue.toISOString().slice(0,10);
+    buildProductsGrid();
+  }
+  if(name!=='checklist')document.getElementById('mobile-title').textContent='System Alternatives';
+}
+function showAlert(id,type,msg){const el=document.getElementById(id);if(el)el.innerHTML=`<div class="alert alert-${type}">${msg}</div>`;}
+
+// \u2500\u2500\u2500 Init \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+applyTheme(currentTheme);
+loadConfig();
+connectSSE();
+</script>
+</body>
+</html>

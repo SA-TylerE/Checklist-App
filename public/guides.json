@@ -1,0 +1,639 @@
+{
+  "syncro-folders": {
+    "title": "Syncro — Asset Folders & Policies",
+    "sections": [
+      {
+        "title": "Create asset folders",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Navigate to the client in Syncro",
+            "b": "Open the Syncro portal and go to the client organization page."
+          },
+          {
+            "n": 2,
+            "h": "Create Workstations folder",
+            "b": "Under Assets → Folders, create a new folder named `Workstations`. Clone the SA Workstation template policy and rename it for this client (e.g. `Acme — Workstations`)."
+          },
+          {
+            "n": 3,
+            "h": "Create Servers folder",
+            "b": "Repeat the process for a `Servers` folder. Clone the SA Server template policy and rename it accordingly."
+          },
+          {
+            "n": 4,
+            "h": "Assign policies to folders",
+            "b": "Right-click each folder → Assign Policy. Select the cloned policy. All assets added to the folder will inherit the policy automatically."
+          },
+          {
+            "n": 5,
+            "h": "Verify script inheritance",
+            "b": "Open the policy and confirm required deployment scripts (Threatlocker, Huntress, etc.) are present under the Scripts tab."
+          }
+        ]
+      },
+      {
+        "title": "Configure scripts in policy",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Open the cloned policy",
+            "b": "Navigate to the policy editor for the client workstation or server policy."
+          },
+          {
+            "n": 2,
+            "h": "Add product deployment scripts",
+            "b": "Under Scripts, add the required silent install scripts for each product the client is receiving (Threatlocker, Huntress, ControlOne, Keeper, Duo, Syncrify)."
+          },
+          {
+            "n": 3,
+            "h": "Set script run conditions",
+            "b": "Configure each script to run once on enrollment, or on schedule as appropriate. Verify no conflicting run orders exist."
+          }
+        ]
+      }
+    ]
+  },
+  "threatlocker-verify": {
+    "title": "Threatlocker — Org Verification",
+    "sections": [
+      {
+        "title": "Verify auto-created org",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Install agent on first device",
+            "b": "When the Threatlocker agent is deployed via Syncro, it attempts to match an existing org under your parent account by client name. If none is found, it creates one automatically."
+          },
+          {
+            "n": 2,
+            "h": "Confirm org in Threatlocker portal",
+            "b": "After the first device enrolls, log into the Threatlocker management console. Navigate to Organizations and confirm the client org appears under your parent account with the correct name."
+          },
+          {
+            "n": 3,
+            "h": "Rename org if needed",
+            "b": "If the auto-created org name does not match your naming convention, rename it now before additional devices enroll."
+          },
+          {
+            "n": 4,
+            "h": "Note learning mode end date",
+            "b": "Learning mode starts automatically on first enrollment and lasts approximately 2 weeks. Document the end date and set a calendar reminder to review policies after learning completes."
+          }
+        ]
+      }
+    ]
+  },
+  "huntress-itdr": {
+    "title": "Huntress — ITDR & SIEM Setup",
+    "sections": [
+      {
+        "title": "ITDR configuration",
+        "note": "ITDR is configured at the account level in Huntress, not the client org level. Global Admin consent for the client tenant is required.",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Access Huntress partner portal",
+            "b": "Log into the Huntress partner portal and navigate to the top-level account Integrations menu — not the client org."
+          },
+          {
+            "n": 2,
+            "h": "Select Microsoft 365 / Entra ID integration",
+            "b": "Navigate to Integrations → Microsoft 365 / Entra ID. Click Connect for the relevant client tenant."
+          },
+          {
+            "n": 3,
+            "h": "Grant Global Admin consent",
+            "b": "Sign in with the client's Global Administrator account when prompted. This grants Huntress read access to the Entra ID tenant for identity threat detection. Global Admin is required for initial setup only — permissions can be scoped down afterward."
+          },
+          {
+            "n": 4,
+            "h": "Verify ITDR data populating",
+            "b": "Return to the client org in Huntress → ITDR tab. Confirm users and identity events are populating. Allow 15–30 minutes for initial sync."
+          }
+        ]
+      },
+      {
+        "title": "SIEM log forwarding (if subscribed)",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Navigate to SIEM settings",
+            "b": "In the Huntress partner portal, go to the client org → Settings → Log Forwarding."
+          },
+          {
+            "n": 2,
+            "h": "Configure forwarding destination",
+            "b": "Enter the SIEM endpoint (IP/hostname and port). Select the log format (CEF, Syslog, etc.) required by the SIEM platform."
+          },
+          {
+            "n": 3,
+            "h": "Verify log delivery",
+            "b": "Check the SIEM platform to confirm events from Huntress are arriving. Test with a known event if needed."
+          }
+        ]
+      }
+    ]
+  },
+  "duo-eam": {
+    "title": "Duo — Entra ID EAM Setup (Recommended)",
+    "sections": [
+      {
+        "title": "Prerequisites",
+        "warn": "Before making any Conditional Access changes, create a break-glass admin account excluded from all Duo policies. Failure to do this can lock you out of the tenant.",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Verify Entra ID P1/P2 licensing",
+            "b": "Confirm the client has Entra ID P1 or P2 licenses assigned to all users. Included in M365 E3, E5, F3, Business Premium, and EMS E3/E5. Must be added separately for lower-tier plans.",
+            "link": {
+              "text": "Microsoft licensing overview",
+              "url": "https://learn.microsoft.com/en-us/entra/fundamentals/licensing"
+            }
+          },
+          {
+            "n": 2,
+            "h": "Create a break-glass admin account",
+            "b": "Create a dedicated Entra ID admin account excluded from all Duo CA policies. Apply a strong password and restrict to trusted networks. Store credentials in the client record."
+          }
+        ]
+      },
+      {
+        "title": "Configure Duo as External Authentication Method",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Find the EAM application in Duo Admin Panel",
+            "b": "Go to Applications → Protect an Application. Search for `Microsoft Entra ID: External Authentication Methods` and click Protect.",
+            "link": {
+              "text": "Duo Admin Panel",
+              "url": "https://admin.duosecurity.com"
+            }
+          },
+          {
+            "n": 2,
+            "h": "Authorize Duo in the M365 tenant",
+            "b": "Click Authorize. You will be redirected to Microsoft. Sign in as the Global Administrator and grant consent for Duo to create the Enterprise Application in Entra ID."
+          },
+          {
+            "n": 3,
+            "h": "Register as EAM in Entra ID",
+            "b": "In the Microsoft Entra admin center → Security → Authentication Methods → Policies → External (Preview). Add Duo using the Client ID and App ID from the Duo application page.",
+            "link": {
+              "text": "Entra admin center",
+              "url": "https://entra.microsoft.com"
+            }
+          },
+          {
+            "n": 4,
+            "h": "Create Conditional Access policy",
+            "b": "In Entra ID → Security → Conditional Access → New Policy. Assign to a pilot group first. Set Target Resources to `Office 365`. Under Access Controls → Grant → select `Require multifactor authentication`. Set to Report-Only mode initially."
+          },
+          {
+            "n": 5,
+            "h": "Test and expand",
+            "b": "Test with a pilot user. After successful verification, switch the CA policy from Report-Only to On. Then expand assignment to all users."
+          }
+        ]
+      }
+    ]
+  },
+  "duo-custom": {
+    "title": "Duo — Custom Controls (Legacy / Fallback)",
+    "sections": [
+      {
+        "title": "When to use this method",
+        "warn": "Custom controls do NOT satisfy Microsoft's mandatory MFA requirement for Azure portals (enforced from Oct 2024). Accounts needing Azure portal access must use EAM or Microsoft Authenticator in addition.",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Use only if EAM fails or P1 is unavailable",
+            "b": "The EAM method is strongly preferred. Use custom controls only if EAM cannot enforce MFA for the client's 365 logins, or if the client does not have P1 licensing available."
+          }
+        ]
+      },
+      {
+        "title": "Setup steps",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Create Azure AD application in Duo",
+            "b": "In the Duo Admin Panel → Applications → Protect an Application. Search for `Microsoft Azure Active Directory` and click Protect. Record the integration key, secret key, and API hostname."
+          },
+          {
+            "n": 2,
+            "h": "Create custom control in Entra ID",
+            "b": "In the Entra admin center → Security → Conditional Access → Custom Controls (Preview). Click New custom control. Paste the JSON from the Duo Azure AD application page."
+          },
+          {
+            "n": 3,
+            "h": "Create Conditional Access policy",
+            "b": "Create a new CA policy. Assign to users/groups. Target apps (e.g. Office 365). Under Access Controls → Grant, select the Duo custom control. Enable in Report-Only mode first."
+          },
+          {
+            "n": 4,
+            "h": "Test and enable",
+            "b": "Test with a pilot user. Confirm the Duo prompt appears after M365 login. Switch policy from Report-Only to On after verification."
+          }
+        ]
+      }
+    ]
+  },
+  "keeper-sso": {
+    "title": "Keeper — SSO Connect (Entra ID)",
+    "sections": [
+      {
+        "title": "Unified login flow",
+        "note": "When configured correctly, users authenticate once through Entra ID (with Duo MFA) and are granted access to Keeper without a separate login prompt. This is the recommended setup when both Keeper and Duo are deployed.",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Create Enterprise Application in Entra ID",
+            "b": "In the Entra admin center → Enterprise Applications → New Application → Create your own. Name it `Keeper Password Manager`. Select Non-gallery application."
+          },
+          {
+            "n": 2,
+            "h": "Configure SAML SSO in Entra ID",
+            "b": "Open the app → Single sign-on → SAML. You will need the Keeper ACS URL and Entity ID from the next step."
+          },
+          {
+            "n": 3,
+            "h": "Configure SSO Connect in Keeper Admin Console",
+            "b": "In Keeper Admin Console → SSO Connect → Add New. Select SAML 2.0. Copy the ACS URL and Entity ID from Keeper and paste them into the Entra ID SAML configuration."
+          },
+          {
+            "n": 4,
+            "h": "Download and upload IdP metadata",
+            "b": "Download the Federation Metadata XML from Entra ID. Upload it into Keeper SSO Connect to complete the trust relationship."
+          },
+          {
+            "n": 5,
+            "h": "Test SSO login end-to-end",
+            "b": "Log out of Keeper and attempt login with SSO. Confirm redirect to Entra ID, Duo MFA prompt fires, then redirect back to Keeper. This is the unified auth flow.",
+            "link": {
+              "text": "Keeper SSO Connect docs",
+              "url": "https://docs.keeper.io/enterprise-guide/sso-connect-cloud"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "controlone-hw": {
+    "title": "ControlOne — Hardware Gateway Setup",
+    "sections": [
+      {
+        "title": "Initial setup",
+        "note": "This section is a stub. Update with SA-specific steps as the hardware deployment process is documented.",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Unbox and connect the ControlOne gateway",
+            "b": "Connect the device to the client network via the WAN and LAN ports as appropriate for the deployment model. Connect to power."
+          },
+          {
+            "n": 2,
+            "h": "Claim device in ControlOne portal",
+            "b": "Log into the ControlOne admin portal. Navigate to the client tenant → Devices → Add Device. Use the device serial number or claim code to register it."
+          },
+          {
+            "n": 3,
+            "h": "Configure WAN and LAN settings",
+            "b": "Set the WAN interface to match the client ISP connection type (DHCP, PPPoE, static). Configure LAN subnet and DHCP range."
+          },
+          {
+            "n": 4,
+            "h": "Verify cloud firewall connectivity",
+            "b": "Confirm the gateway is calling home to the ControlOne cloud. Check device status in the portal — it should show as online."
+          }
+        ]
+      }
+    ]
+  },
+  "controlone-firewall": {
+    "title": "ControlOne — Cloud Firewall Setup",
+    "sections": [
+      {
+        "title": "Create client tenant",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Create child tenant in ControlOne portal",
+            "b": "Log into the ControlOne partner portal under the SA parent account. Navigate to Tenants → New Tenant. Enter the client organization name and contact details."
+          },
+          {
+            "n": 2,
+            "h": "Apply baseline firewall policy",
+            "b": "Apply the SA baseline firewall policy to the new tenant. Adjust rules for any client-specific requirements (allowed ports, geo-restrictions, content filtering)."
+          },
+          {
+            "n": 3,
+            "h": "Assign admin access",
+            "b": "Add the client's designated IT contact as an admin user if required. Set appropriate permission levels."
+          },
+          {
+            "n": 4,
+            "h": "Verify policy is active",
+            "b": "Confirm the firewall policy shows as applied and active in the tenant dashboard."
+          }
+        ]
+      }
+    ]
+  },
+  "syncrify-vpn-unifi": {
+    "title": "Syncrify VPN — Unifi Site-to-Site",
+    "sections": [
+      {
+        "title": "Configure site-to-site VPN",
+        "note": "This section is a stub. Update with SA backup server IP and subnet details before use.",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Access UniFi Network controller",
+            "b": "Log into the client's UniFi Network controller (local or cloud). Navigate to Settings → VPN → Site-to-Site VPN."
+          },
+          {
+            "n": 2,
+            "h": "Create IPSec tunnel to SA backup network",
+            "b": "Add a new Site-to-Site VPN. Enter the SA backup server's public IP as the remote endpoint. Configure the pre-shared key, local and remote subnets.",
+            "code": "Local subnet:  [client LAN subnet]\nRemote subnet: [SA backup network subnet]\nRemote IP:     [SA backup server public IP]"
+          },
+          {
+            "n": 3,
+            "h": "Verify tunnel establishment",
+            "b": "Check VPN status in the UniFi controller. Confirm the tunnel shows as connected. Test connectivity by pinging the SA backup server's internal VPN IP from the client network."
+          },
+          {
+            "n": 4,
+            "h": "Configure Syncrify client to use VPN path",
+            "b": "In the Syncrify client on the server, set the backup server address to the SA backup server's internal VPN IP (not the public IP)."
+          }
+        ]
+      }
+    ]
+  },
+  "syncrify-vpn-controlone": {
+    "title": "Syncrify VPN — ControlOne Site-to-Site",
+    "sections": [
+      {
+        "title": "Configure site-to-site VPN",
+        "note": "This section is a stub. Update with SA backup server and ControlOne endpoint details before use.",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Access ControlOne portal",
+            "b": "Log into the ControlOne partner portal. Navigate to the client tenant → VPN → Site-to-Site."
+          },
+          {
+            "n": 2,
+            "h": "Create tunnel to SA backup network",
+            "b": "Add a new site-to-site VPN tunnel. Enter the SA backup network endpoint details, pre-shared key, and subnet ranges.",
+            "code": "Local subnet:  [client LAN subnet]\nRemote subnet: [SA backup network subnet]\nRemote IP:     [SA backup server public IP]"
+          },
+          {
+            "n": 3,
+            "h": "Verify tunnel and test connectivity",
+            "b": "Confirm tunnel status shows connected. Ping SA backup server internal IP from a device on the client network."
+          },
+          {
+            "n": 4,
+            "h": "Point Syncrify at internal VPN address",
+            "b": "Configure the Syncrify client on the server to use the SA backup server's VPN-side IP address."
+          }
+        ]
+      }
+    ]
+  },
+  "syncrify-vpn-zywall": {
+    "title": "Syncrify VPN — Zywall Site-to-Site",
+    "sections": [
+      {
+        "title": "Configure site-to-site VPN",
+        "note": "This section is a stub. Update with SA backup server and Zywall endpoint details before use.",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Access Zywall admin console",
+            "b": "Log into the Zywall/USG admin interface. Navigate to VPN → IPSec VPN → VPN Gateway."
+          },
+          {
+            "n": 2,
+            "h": "Create VPN gateway to SA network",
+            "b": "Add a new VPN Gateway. Enter the SA backup server public IP, authentication method (pre-shared key), and IKE version.",
+            "code": "Gateway IP:    [SA backup server public IP]\nAuth method:   Pre-shared key\nIKE version:   IKEv2 (preferred)"
+          },
+          {
+            "n": 3,
+            "h": "Create VPN connection",
+            "b": "Under VPN → IPSec VPN → VPN Connection, create a connection using the gateway above. Define local and remote policy subnets."
+          },
+          {
+            "n": 4,
+            "h": "Verify and configure Syncrify",
+            "b": "Confirm the tunnel is active in the Zywall status page. Configure the Syncrify client to use the SA backup server's internal VPN IP."
+          }
+        ]
+      }
+    ]
+  },
+  "__help_steps": {
+    "title": "Steps Editor — Help",
+    "sections": [
+      {
+        "title": "Overview",
+        "steps": [
+          {
+            "n": 1,
+            "h": "What is steps.json?",
+            "b": "steps.json defines all onboarding checklist procedures and items. Changes here affect both the client checklists and the Reference view. Always click Save after editing."
+          },
+          {
+            "n": 2,
+            "h": "Procedures",
+            "b": "A procedure is a collapsible section in the checklist (e.g. \"Syncro — RMM\"). Each phase has a product filter that controls which clients see it."
+          },
+          {
+            "n": 3,
+            "h": "Checklist Items",
+            "b": "Items are the individual checklist entries inside a phase. Each step can have sub-steps, tags, a guide reference, and special behaviors."
+          },
+          {
+            "n": 4,
+            "h": "Sub-items",
+            "b": "Sub-items appear under a parent item when it is expanded. All required sub-steps must be completed before the parent step counts as done."
+          }
+        ]
+      },
+      {
+        "title": "Phase fields",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Title",
+            "b": "The display name shown in the checklist header bar (e.g. \"Syncro — RMM\")."
+          },
+          {
+            "n": 2,
+            "h": "Badge",
+            "b": "Short label shown next to the title in the header (e.g. \"ORG SETUP\", \"VERIFY AFTER FIRST DEVICE\"). Optional."
+          },
+          {
+            "n": 3,
+            "h": "Product filter",
+            "b": "Which product this phase belongs to. Only clients that have this product selected will see this phase. Use \"final\" for the always-shown wrap-up phase. Leave blank to always show."
+          }
+        ]
+      },
+      {
+        "title": "Step fields",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Title",
+            "b": "The main text of the checklist item. Keep it action-oriented (e.g. \"Verify agent check-in in Syncro portal\")."
+          },
+          {
+            "n": 2,
+            "h": "Detail",
+            "b": "Supporting detail shown below the title in smaller text. Explain what the tech needs to do or verify."
+          },
+          {
+            "n": 3,
+            "h": "Tags",
+            "b": "Controls how the step is treated: required = counts toward progress and must be done to complete the phase; optional = shown but excluded from progress counts; verify = counts toward progress and indicates a verification/confirmation step."
+          },
+          {
+            "n": 4,
+            "h": "Guide ID",
+            "b": "If set, a \"Guide ↗\" button appears on the step that opens the matching guide from guides.json in the side panel. Enter the exact guide ID key (e.g. \"duo-eam\", \"syncro-folders\")."
+          },
+          {
+            "n": 5,
+            "h": "Product filter",
+            "b": "If set, this step only appears in the device deployment guide for clients that have the specified product. Used in device_steps only."
+          },
+          {
+            "n": 6,
+            "h": "Installer URL",
+            "b": "When checked, this step displays the Syncro installer URL for the specific device being deployed (resolved from the device type). Only relevant for the \"Install Syncro RMM agent\" device step."
+          },
+          {
+            "n": 7,
+            "h": "VPN Selector",
+            "b": "When checked, this step shows three guide buttons — Unifi VPN Guide, ControlOne VPN Guide, and Zywall VPN Guide — so the tech can open the appropriate site-to-site VPN setup guide for the client hardware."
+          }
+        ]
+      }
+    ]
+  },
+  "__help_guides": {
+    "title": "Guides Editor — Help",
+    "sections": [
+      {
+        "title": "Overview",
+        "steps": [
+          {
+            "n": 1,
+            "h": "What is guides.json?",
+            "b": "guides.json contains the step-by-step walkthrough content shown in the side panel when a tech clicks a Guide button. Guides are reference material and do not have checkboxes."
+          },
+          {
+            "n": 2,
+            "h": "Guide ID",
+            "b": "The key used to link a guide to a step. Must be unique and contain no spaces (use hyphens). Example: \"duo-eam\", \"syncro-folders\". This is what you enter in the Step Guide ID field."
+          },
+          {
+            "n": 3,
+            "h": "Sections",
+            "b": "Each guide is divided into sections (collapsible groups). Use sections to separate distinct sub-topics, e.g. \"Prerequisites\" and \"Configuration Steps\"."
+          }
+        ]
+      },
+      {
+        "title": "Section fields",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Title",
+            "b": "The section heading shown in the collapsible header bar."
+          },
+          {
+            "n": 2,
+            "h": "Note (info box)",
+            "b": "Optional. Shown as a blue info box at the top of the section. Use for important context or prerequisites."
+          },
+          {
+            "n": 3,
+            "h": "Warning (red box)",
+            "b": "Optional. Shown as a red warning box at the top of the section. Use for critical cautions (e.g. \"Create a break-glass account before proceeding\")."
+          }
+        ]
+      },
+      {
+        "title": "Step fields",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Heading (h)",
+            "b": "The bold step title shown next to the step number."
+          },
+          {
+            "n": 2,
+            "h": "Body (b)",
+            "b": "The main descriptive text. Use `backticks` around words to render them as inline code (e.g. \"Run `msiexec /i` to install\")."
+          },
+          {
+            "n": 3,
+            "h": "Code block",
+            "b": "Optional. A multiline code block shown in monospace below the body text. Use for commands, config snippets, or structured data."
+          },
+          {
+            "n": 4,
+            "h": "Link",
+            "b": "Optional. Adds a clickable link below the body text. Enter both the link text (e.g. \"Duo Admin Panel\") and the full URL (e.g. \"https://admin.duosecurity.com\"). Leave both blank for no link."
+          },
+          {
+            "n": 5,
+            "h": "Step number (n)",
+            "b": "Auto-assigned based on order. Reordering or deleting steps automatically renumbers them."
+          }
+        ]
+      }
+    ]
+  },
+  "__help_products": {
+    "title": "Product Manager — Help",
+    "sections": [
+      {
+        "title": "How products work",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Product ID",
+            "b": "A short lowercase identifier with no spaces (e.g. \"syncrify\", \"duo\"). This is the key used in phase product filters, step product filters, and client product lists."
+          },
+          {
+            "n": 2,
+            "h": "Display label",
+            "b": "The human-readable name shown in the wizard, edit products panel, and sidebar (e.g. \"Syncrify Backup\", \"Duo\")."
+          },
+          {
+            "n": 3,
+            "h": "Description",
+            "b": "Short subtitle shown under the label in the product grid (e.g. \"Endpoint backup\", \"MFA / 2FA\")."
+          },
+          {
+            "n": 4,
+            "h": "Removing a product",
+            "b": "Removing a product from this list only removes it from the product selector. It does NOT delete any phases or steps that reference it. Those will still appear for existing clients that have the product assigned."
+          },
+          {
+            "n": 5,
+            "h": "Adding a product",
+            "b": "After adding a product here, create the corresponding phases and steps in the Steps Editor using the new product ID as the product filter value."
+          }
+        ]
+      }
+    ]
+  }
+}

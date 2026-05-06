@@ -1,0 +1,44 @@
+{
+  "your-guide-id": {
+    "title": "Guide Title Shown in Panel Header",
+    "sections": [
+      {
+        "title": "Section heading (collapsible)",
+        "note": "Optional info box shown at top of section (blue/amber tone). Remove this line if not needed.",
+        "warn": "Optional warning box shown at top of section (red tone). Remove this line if not needed.",
+        "steps": [
+          {
+            "n": 1,
+            "h": "Step heading",
+            "b": "Step body text. Use `backticks` for inline code. Remove unused fields below.",
+            "code": "optional\nmultiline\ncode block",
+            "link": { "text": "Link label", "url": "https://example.com" }
+          },
+          {
+            "n": 2,
+            "h": "Minimal step (body only)",
+            "b": "Just a heading and body — no code or link needed."
+          }
+        ]
+      },
+      {
+        "title": "Second section (add as many sections as needed)",
+        "steps": [
+          { "n": 1, "h": "Another step", "b": "Body text." }
+        ]
+      }
+    ]
+  },
+
+  "second-guide-id": {
+    "title": "Second Guide Title",
+    "sections": [
+      {
+        "title": "Only section",
+        "steps": [
+          { "n": 1, "h": "Step one", "b": "Body text." }
+        ]
+      }
+    ]
+  }
+}
