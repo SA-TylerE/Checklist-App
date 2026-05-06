@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git mv *)",
+      "Bash(git rm *)",
+      "Bash(not exist *)",
+      "Bash(move config.json data\\\\config.json)",
+      "PowerShell(New-Item -ItemType Directory -Path \"c:\\\\Users\\\\tylere\\\\Documents\\\\GitHub\\\\Checklist-App\\\\data\" -Force)",
+      "PowerShell(Move-Item \"c:\\\\Users\\\\tylere\\\\Documents\\\\GitHub\\\\Checklist-App\\\\config.json\" \"c:\\\\Users\\\\tylere\\\\Documents\\\\GitHub\\\\Checklist-App\\\\data\\\\config.json\" -Force)"
+    ]
+  }
+}

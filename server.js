@@ -6,7 +6,7 @@ const os       = require('os');
 const app        = express();
 const PORT       = 3001;
 const DATA_FILE  = path.join(__dirname, 'data', 'clients.json');
-const CFG_FILE   = path.join(__dirname, 'config.json');
+const CFG_FILE   = path.join(__dirname, 'data', 'config.json');
 const BACKUP_DIR = path.join(__dirname, 'data', 'backups');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
