@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Runtime data — contains client PII, config secrets, and backups
+data/
+
+# Sensitive config if ever extracted to .env
+.env
+*.env
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
