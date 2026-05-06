@@ -479,7 +479,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 
 /* ... client menu */
 .client-menu-wrap{position:relative;display:inline-block;}
-.client-menu-btn{background:none;border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:14px;cursor:pointer;padding:2px 8px;line-height:1;transition:all 0.15s;}
+.client-menu-btn{background:var(--bg3);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:16px;font-weight:700;cursor:pointer;padding:4px 10px;line-height:1;transition:all 0.15s;}
 .client-menu-btn:hover{background:var(--bg3);color:var(--text);}
 .client-menu-dropdown{display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--bg2);border:1px solid var(--border2);border-radius:7px;min-width:130px;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,0.3);overflow:hidden;}
 .client-menu-dropdown.open{display:block;}
@@ -725,6 +725,17 @@ body.light{
   </div>
 </div>
 <div id="confirm-overlay"><div class="confirm-card"><p id="confirm-msg"></p><div class="confirm-actions"><button class="btn-secondary" id="confirm-cancel">Cancel</button><button class="btn-danger" id="confirm-ok">Confirm</button></div></div></div>
+
+<div id="client-notes-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;align-items:center;justify-content:center;">
+  <div class="modal-card" style="width:min(520px,92vw);display:flex;flex-direction:column;gap:12px;">
+    <h3 id="client-notes-modal-title" style="font-size:14px;font-weight:600;">Client Notes</h3>
+    <textarea id="client-notes-ta" class="device-notes" style="min-height:180px;resize:vertical;" placeholder="Notes about this client, special requirements, key contacts..."></textarea>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeClientNotesModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveClientNotesModal()">Save</button>
+    </div>
+  </div>
+</div>
 
 <div id="add-device-modal">
   <div class="modal-card">
@@ -1766,6 +1777,7 @@ function loadClientChecklist(id){
       <div class="client-menu-wrap" id="cmenu-wrap-${id}">
         <button class="client-menu-btn" onclick="toggleClientMenu('${id}')">&#8230;</button>
         <div class="client-menu-dropdown" id="cmenu-${id}">
+          <button class="client-menu-item" onclick="closeClientMenu('${id}');openClientNotes('${id}')">Notes${client.notes?'&nbsp;<span style="color:var(--warn);font-size:10px;">●</span>':''}</button>
           <button class="client-menu-item" onclick="closeClientMenu('${id}');showSummary('${id}')">Summary</button>
           <button class="client-menu-item" onclick="closeClientMenu('${id}');openEditClientModal('${id}')">Edit</button>
           <button class="client-menu-item danger" onclick="closeClientMenu('${id}');confirmDeleteClient('${id}')">Delete</button>
@@ -1785,18 +1797,6 @@ function loadClientChecklist(id){
     <span>Due:</span>
     <input type="date" value="${client.dueDate||''}" onchange="saveDueDate('${id}',this.value)">
     ${dueBadge}
-  </div>
-
-  <div class="client-notes-block ${client.notes?'has-notes':''}" id="client-notes-block-${id}">
-    <div class="client-notes-header" onclick="toggleClientNotes('${id}')">
-      <span>&#128221; Client Notes</span>
-      <div class="notes-dot"></div>
-      <span class="notes-icon">&#9654;</span>
-    </div>
-    <div class="client-notes-body">
-      <textarea placeholder="Notes about this client, special requirements, key contacts..."
-        onblur="saveClientNotes('${id}',this.value)">${client.notes||''}</textarea>
-    </div>
   </div>
 
   <div class="tab-bar">
@@ -1875,15 +1875,42 @@ function toggleClientNotes(clientId){
 
 async function saveClientNotes(clientId,val){
   clients[clientId].notes=val;
-  const block=document.getElementById(`client-notes-block-${clientId}`);
-  if(block) block.classList.toggle('has-notes',!!val);
   await saveClients();
 }
 
+function openClientNotes(clientId){
+  const client=clients[clientId];
+  const modal=document.getElementById('client-notes-modal');
+  document.getElementById('client-notes-modal-title').textContent=(client.name||'Client')+' — Notes';
+  document.getElementById('client-notes-ta').value=client.notes||'';
+  modal.dataset.clientId=clientId;
+  modal.style.display='flex';
+}
+function closeClientNotesModal(){
+  document.getElementById('client-notes-modal').style.display='none';
+}
+async function saveClientNotesModal(){
+  const modal=document.getElementById('client-notes-modal');
+  const clientId=modal.dataset.clientId;
+  const val=document.getElementById('client-notes-ta').value;
+  await saveClientNotes(clientId,val);
+  closeClientNotesModal();
+  if(activeClientId===clientId){
+    const ui=getChecklistUIState();
+    loadClientChecklist(clientId);
+    restoreChecklistUIState(clientId,ui);
+  }
+}
+document.getElementById('client-notes-modal').addEventListener('click',e=>{
+  if(e.target===e.currentTarget) closeClientNotesModal();
+});
+
 async function saveDueDate(clientId,val){
+  const ui=getChecklistUIState();
   clients[clientId].dueDate=val||null;
   await saveClients();
   loadClientChecklist(clientId);
+  restoreChecklistUIState(clientId,ui);
 }
 
 // \u2500\u2500\u2500 Edit products \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -2073,11 +2100,20 @@ async function saveStepNote(clientId,stepId,val){
 function togglePhase(id){document.getElementById(`phase-${id}`)?.classList.toggle('collapsed');}
 function toggleStepExpand(id){document.getElementById(`step-${id}`)?.classList.toggle('expanded');}
 function toggleFreetext(id){document.getElementById(id)?.classList.toggle('open');}
-async function toggleStep(cid,sid){clients[cid].steps[sid]=!clients[cid].steps[sid];await saveClients();loadClientChecklist(cid);}
-async function toggleSubstep(cid,pid,sid){
+async function toggleStep(cid,sid){
+  const ui=getChecklistUIState();
   clients[cid].steps[sid]=!clients[cid].steps[sid];
-  await saveClients();loadClientChecklist(cid);
-  document.getElementById(`step-${pid}`)?.classList.add('expanded');
+  await saveClients();
+  loadClientChecklist(cid);
+  restoreChecklistUIState(cid,ui);
+}
+async function toggleSubstep(cid,pid,sid){
+  const ui=getChecklistUIState();
+  ui.steps[`step-${pid}`]={expanded:true,noteOpen:false};
+  clients[cid].steps[sid]=!clients[cid].steps[sid];
+  await saveClients();
+  loadClientChecklist(cid);
+  restoreChecklistUIState(cid,ui);
 }
 async function toggleDeviceStep(cid,did,sid){
   const c=clients[cid];if(!c.devices||!c.devices[did])return;
@@ -2269,6 +2305,32 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeGuide();closeA
 
 // \u2500\u2500\u2500 API \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 // ─── SSE live sync ────────────────────────────────────────────────────────────
+function getChecklistUIState(){
+  const state={phases:{},steps:{},tab:activeChecklistTab,scrollTop:0};
+  const pane=document.getElementById('checklist-pane');
+  if(pane) state.scrollTop=pane.scrollTop;
+  document.querySelectorAll('[id^="phase-"]').forEach(el=>{
+    state.phases[el.id]=el.classList.contains('collapsed');
+  });
+  document.querySelectorAll('[id^="step-"]').forEach(el=>{
+    state.steps[el.id]={expanded:el.classList.contains('expanded'),noteOpen:el.classList.contains('note-open')};
+  });
+  return state;
+}
+function restoreChecklistUIState(clientId,state){
+  if(state.tab!=='org') switchChecklistTab(clientId,state.tab);
+  Object.entries(state.phases).forEach(([id,collapsed])=>{
+    const el=document.getElementById(id);
+    if(el) el.classList.toggle('collapsed',collapsed);
+  });
+  Object.entries(state.steps).forEach(([id,s])=>{
+    const el=document.getElementById(id);
+    if(el){el.classList.toggle('expanded',s.expanded);el.classList.toggle('note-open',s.noteOpen);}
+  });
+  const pane=document.getElementById('checklist-pane');
+  if(pane&&state.scrollTop) pane.scrollTop=state.scrollTop;
+}
+
 function findStepById(id){
   if(!stepsData.phases) return null;
   for(const p of stepsData.phases){
@@ -2347,10 +2409,12 @@ function connectSSE(){
         }
       }
     });
+    const ui=getChecklistUIState();
     clients=updated;
     renderSidebar();
     if(activeClientId&&clients[activeClientId]){
       loadClientChecklist(activeClientId);
+      restoreChecklistUIState(activeClientId,ui);
       if(changedSteps.length) setTimeout(()=>pulseSteps(changedSteps,techName),80);
     }
   });

@@ -17,7 +17,7 @@ app.use(express.static(PUBLIC_DIR));
 const sseClients = new Set();
 
 function pushEvent(type, payload, sourceId) {
-  const data = `data: ${JSON.stringify({ type, src: sourceId||'', t: Date.now(), ...payload })}\n\n`;
+  const data = `event: ${type}\ndata: ${JSON.stringify({ type, src: sourceId||'', t: Date.now(), ...payload })}\n\n`;
   for (const res of sseClients) {
     try { res.write(data); } catch(_) { sseClients.delete(res); }
   }
