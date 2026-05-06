@@ -106,7 +106,8 @@ app.put('/api/clients', (req, res) => {
     if (!req.body || typeof req.body !== 'object') return res.status(400).json({ error: 'Invalid payload' });
     atomicWrite(DATA_FILE, JSON.stringify(req.body, null, 2));
     const sessionId = req.headers['x-session-id'] || req.headers['x-source-id'] || '';
-    pushEvent('clients-updated', { clients: req.body, sessionId }, sessionId);
+    const techName  = req.headers['x-tech-name'] || '';
+    pushEvent('clients-updated', { clients: req.body, sessionId, techName }, sessionId);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: 'Failed to write client data' }); }
 });

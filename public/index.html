@@ -20,7 +20,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 #app{display:flex;height:100vh;overflow:hidden;flex-direction:column;}
 
 /* Mobile header */
-#mobile-header{display:none;height:var(--header-h);background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;padding:0 12px;gap:10px;z-index:10;}
+#mobile-header{display:none;height:var(--header-h);background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;padding:0 12px;gap:10px;z-index:10;box-shadow:0 1px 8px rgba(0,0,0,0.3);}
 .mh-menu{width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:18px;border-radius:6px;flex-shrink:0;}
 .mh-menu:hover{color:var(--text);background:var(--bg3);}
 .mh-title{font-size:13px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -43,7 +43,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .sidebar-search input:focus{border-color:var(--accent);}
 .sidebar-search input::placeholder{color:var(--text3);}
 #client-list{flex:1;overflow-y:auto;padding:4px 0;}
-.client-item{padding:7px 14px;cursor:pointer;border-left:2px solid transparent;transition:all 0.1s;}
+.client-item{padding:7px 14px;cursor:pointer;border-left:2px solid transparent;transition:all 0.1s;position:relative;}
 .client-item:hover{background:var(--bg3);}
 .client-item.active{border-left-color:var(--accent);background:rgba(59,130,246,0.08);}
 .client-item .cn{font-size:12px;font-weight:500;}
@@ -61,8 +61,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 /* Guide panel \u2014 desktop */
 #guide-panel{width:0;min-width:0;overflow:hidden;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;transition:width 0.25s;flex-shrink:0;position:relative;z-index:20;}
 #guide-panel.open{width:var(--guide-w);min-width:var(--guide-w);}
-.guide-drag-handle{display:none;width:100%;padding:8px 0 4px;cursor:ns-resize;flex-shrink:0;touch-action:none;}
-.guide-drag-handle .bar{width:36px;height:3px;background:var(--border2);border-radius:2px;margin:0 auto;}
+.guide-drag-handle{display:none;width:100%;padding:12px 0 8px;cursor:ns-resize;flex-shrink:0;touch-action:none;}
+.guide-drag-handle .bar{width:40px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto;}
 .guide-header{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
 .guide-header h3{font-size:13px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .guide-close{width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);border-radius:5px;font-size:14px;flex-shrink:0;}
@@ -181,11 +181,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .progress-bar-fill.complete{background:var(--success);}
 
 /* Phase */
-.phase-block{margin-bottom:5px;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.phase-block{margin-bottom:5px;border:1px solid var(--border);border-radius:10px;}
 .phase-block.collapsed .phase-body{display:none;}
 .phase-block.completed{opacity:0.6;}
-.phase-header{display:flex;align-items:center;gap:8px;padding:9px 13px;background:var(--bg2);cursor:pointer;user-select:none;transition:background 0.1s;}
+.phase-header{display:flex;align-items:center;gap:8px;padding:9px 13px;background:var(--bg2);cursor:pointer;user-select:none;transition:background 0.1s;position:sticky;top:0;z-index:5;border-radius:10px 10px 0 0;}
 .phase-header:hover{background:var(--bg3);}
+.phase-block.collapsed .phase-header{border-radius:10px;}
 .phase-num{width:19px;height:19px;border-radius:50%;background:var(--accent);color:white;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .phase-block.completed .phase-num{background:var(--success);}
 .phase-header h3{font-size:12px;font-weight:600;}
@@ -194,11 +195,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .phase-collapse-icon{margin-left:auto;color:var(--text3);font-size:9px;transition:transform 0.2s;flex-shrink:0;}
 .phase-block.collapsed .phase-collapse-icon{transform:rotate(-90deg);}
 .phase-progress-text{font-size:10px;color:var(--text3);flex-shrink:0;}
-.phase-body{padding:5px;}
+.phase-body{padding:5px;border-radius:0 0 10px 10px;}
 
 /* Step */
-.step-item{border-radius:6px;margin-bottom:2px;overflow:hidden;}
-.step-row{display:flex;gap:8px;padding:7px 8px;cursor:pointer;transition:background 0.1s;align-items:flex-start;border-radius:6px;}
+.step-item{border-radius:6px;margin-bottom:2px;position:relative;}
+.step-row{display:flex;gap:8px;padding:7px 8px;cursor:pointer;transition:background 0.1s;align-items:flex-start;border-radius:6px;position:relative;}
 .step-row:hover{background:var(--bg3);}
 .step-item.done>.step-row{opacity:0.5;}
 .step-item.done>.step-row .step-title{text-decoration:line-through;color:var(--text3);}
@@ -269,7 +270,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .device-info-item{font-size:11px;color:var(--text2);}
 .device-info-item strong{color:var(--text);display:block;font-size:9px;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:1px;}
 .device-steps{margin-bottom:9px;}
-.device-step-item{display:flex;gap:6px;padding:5px 6px;border-radius:4px;cursor:pointer;transition:background 0.1s;align-items:flex-start;}
+.device-step-item{display:flex;gap:6px;padding:5px 6px;border-radius:4px;cursor:pointer;transition:background 0.1s;align-items:flex-start;position:relative;}
 .device-step-item:hover{background:var(--bg4);}
 .device-step-item.done{opacity:0.5;}
 .device-step-item.done .device-step-title{text-decoration:line-through;color:var(--text3);}
@@ -465,6 +466,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 /* SSE change pulse */
 @keyframes changePulse{0%{background:rgba(59,130,246,0.25);}100%{background:transparent;}}
 .sse-pulse{animation:changePulse 1.5s ease-out;}
+/* SSE attribution chip */
+@keyframes attrFade{0%,50%{opacity:1;}100%{opacity:0;}}
+.sse-attr{position:absolute;right:8px;top:8px;padding:2px 7px;border-radius:12px;font-size:9px;font-weight:600;background:var(--accent);color:white;pointer-events:none;animation:attrFade 4s ease-out forwards;white-space:nowrap;z-index:2;}
+/* Unseen change dot on sidebar client */
+.unseen-dot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--accent);}
 
 /* Add me button */
 .add-me-btn{padding:2px 7px;font-size:10px;background:rgba(147,197,253,0.15);border:1px solid rgba(147,197,253,0.3);border-radius:4px;color:#93c5fd;cursor:pointer;white-space:nowrap;flex-shrink:0;}
@@ -521,8 +527,8 @@ body.light{
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
 
-/* Responsive */
-@media(max-width:768px){
+/* Responsive — tablet + mobile (≤1024px) */
+@media(max-width:1024px){
   #mobile-header{display:flex;}
   #sidebar{display:none;}
   #sidebar.mobile-overlay{
@@ -540,8 +546,20 @@ body.light{
   }
   #guide-panel.open{height:65vh;width:100% !important;}
   .guide-drag-handle{display:block;}
-  #checklist-pane{padding:14px;}
+  #checklist-pane{padding:20px;}
   #overlay-bg{z-index:199;}
+  /* Touch targets */
+  .step-row{min-height:52px;}
+  .substep-item{min-height:44px;}
+  .device-step-item{min-height:44px;}
+  .tab-btn{padding:10px 18px;}
+  .device-entry-header{padding:12px 14px;}
+  /* Step action buttons always visible (no hover needed on touch) */
+  .step-actions{opacity:1 !important;}
+}
+/* Mobile only (≤768px) */
+@media(max-width:768px){
+  #checklist-pane{padding:14px;}
 }
 @media(max-width:480px){
   .products-grid{grid-template-columns:1fr;}
@@ -762,7 +780,9 @@ let appSettings={
   }
 };
 let currentTheme=localStorage.getItem('theme')||'system';
-const isMobile=()=>window.innerWidth<=768;
+const isMobile=()=>window.innerWidth<=1024;
+const unseenChanges=new Map();
+const unseenToastTimers=new Map();
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 function applyTheme(theme){
@@ -780,13 +800,13 @@ window.matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{
 });
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
-function showToast(msg,type='success'){
+function showToast(msg,type='success',duration=2800){
   const c=document.getElementById('toast-container');
   const t=document.createElement('div');
   t.className='toast '+type;t.textContent=msg;
   c.appendChild(t);
   requestAnimationFrame(()=>requestAnimationFrame(()=>t.classList.add('show')));
-  setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.remove(),300);},2800);
+  setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.remove(),300);},duration);
 }
 
 // ─── Styled confirm ───────────────────────────────────────────────────────────
@@ -1476,10 +1496,13 @@ function renderSidebar(filter){
     const staleDays=appSettings.staleDays||0;
     const stale=staleDays&&((now-new Date(lastMod).getTime())/(1000*60*60*24))>staleDays;
     const staleBadge=stale?`<span class="stale-dot" title="Inactive ${staleDays}+ days">\u25cf</span>`:'';
-    return `<div class="client-item ${c.id===activeClientId?'active':''}" onclick="selectClient('${c.id}')">
+    const unseen=unseenChanges.get(c.id);
+    const unseenBadge=unseen?`<span class="unseen-dot" title="${unseen.techName?unseen.techName+' made changes':'Changes made'}"></span>`:'';
+    return `<div class="client-item ${c.id===activeClientId?'active':''}" onclick="selectClient('${c.id}')" title="${c.name}">
       <div class="cn">${c.name} ${staleBadge}</div>
       <div class="cm">${c.tech} \u00b7 ${pct}% org</div>
       <div class="cpbar"><div class="cpbar-fill" style="width:${pct}%"></div></div>
+      ${unseenBadge}
     </div>`;
   }).join('');
 }
@@ -1705,6 +1728,7 @@ function renderDeviceGuide(clientId){
 
 function loadClientChecklist(id){
   activeClientId=id;
+  unseenChanges.delete(id);
   const client=clients[id];
   const phases=buildPhases(client);
   const prog=overallProgress(client);
@@ -2246,27 +2270,56 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeGuide();closeA
 
 // \u2500\u2500\u2500 API \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 // ─── SSE live sync ────────────────────────────────────────────────────────────
+function findStepById(id){
+  if(!stepsData.phases) return null;
+  for(const p of stepsData.phases){
+    for(const s of p.steps){
+      if(s.id===id) return s;
+      if(s.substeps) for(const sub of s.substeps){if(sub.id===id) return sub;}
+    }
+  }
+  return null;
+}
+function findDevStepById(id){
+  return (stepsData.device_steps||[]).find(s=>s.id===id)||null;
+}
+
 function detectChangedSteps(oldClient,newClient){
   const changed=[];
   const allIds=new Set([...Object.keys(oldClient.steps||{}),...Object.keys(newClient.steps||{})]);
   allIds.forEach(id=>{
-    if((oldClient.steps||{})[id]!==(newClient.steps||{})[id]) changed.push(id);
+    if((oldClient.steps||{})[id]!==(newClient.steps||{})[id]){
+      const def=findStepById(id);
+      changed.push({id,done:!!(newClient.steps||{})[id],title:def?.title||''});
+    }
   });
   // Device steps
   Object.values(newClient.devices||{}).forEach(dev=>{
     const oldDev=(oldClient.devices||{})[dev.id];
     if(!oldDev) return;
     Object.keys(dev.steps||{}).forEach(sid=>{
-      if((oldDev.steps||{})[sid]!==(dev.steps||{})[sid]) changed.push('dev-'+dev.id+'-'+sid);
+      if((oldDev.steps||{})[sid]!==(dev.steps||{})[sid]){
+        const def=findDevStepById(sid);
+        changed.push({id:'dev-'+dev.id+'-'+sid,done:!!(dev.steps||{})[sid],title:def?.title||''});
+      }
     });
   });
   return changed;
 }
 
-function pulseSteps(ids){
-  ids.forEach(id=>{
+function pulseSteps(changes,techName){
+  changes.forEach(({id,done})=>{
     const el=document.getElementById('step-'+id)||document.querySelector(`[id$="-${id}"]`);
-    if(el){el.classList.remove('sse-pulse');void el.offsetWidth;el.classList.add('sse-pulse');}
+    if(!el) return;
+    el.classList.remove('sse-pulse');void el.offsetWidth;el.classList.add('sse-pulse');
+    if(techName){
+      el.querySelector('.sse-attr')?.remove();
+      const chip=document.createElement('span');
+      chip.className='sse-attr';
+      chip.textContent=(done?'✓ ':'✕ ')+techName;
+      el.appendChild(chip);
+      setTimeout(()=>chip.remove(),4200);
+    }
   });
 }
 
@@ -2275,18 +2328,31 @@ function connectSSE(){
   sseSource=new EventSource('/api/events');
   sseSource.addEventListener('clients-updated',e=>{
     const payload=JSON.parse(e.data);
-    // lastEventId carries the session that made the change
     if(payload.sessionId===SESSION_ID) return;
     const updated=payload.clients||payload;
-    // Find what changed if we're viewing a client
-    const changedIds=activeClientId&&updated[activeClientId]?
+    const techName=payload.techName||'';
+    // Find what changed on the active client
+    const changedSteps=activeClientId&&updated[activeClientId]?
       detectChangedSteps(clients[activeClientId],updated[activeClientId]):[];
+    // Flag non-active clients that changed
+    Object.keys(updated).forEach(cid=>{
+      if(cid===activeClientId) return;
+      const oldC=clients[cid],newC=updated[cid];
+      if(!oldC||!newC) return;
+      if(oldC.lastModified!==newC.lastModified){
+        const prev=unseenChanges.get(cid)||{count:0};
+        unseenChanges.set(cid,{count:prev.count+1,techName});
+        if(!unseenToastTimers.has(cid)){
+          showToast(`${newC.name}${techName?' — '+techName+' updated':' updated'}`, 'info', 5000);
+          unseenToastTimers.set(cid,setTimeout(()=>unseenToastTimers.delete(cid),10000));
+        }
+      }
+    });
     clients=updated;
     renderSidebar();
     if(activeClientId&&clients[activeClientId]){
       loadClientChecklist(activeClientId);
-      // Pulse changed step elements after render
-      if(changedIds.length) setTimeout(()=>pulseSteps(changedIds),80);
+      if(changedSteps.length) setTimeout(()=>pulseSteps(changedSteps,techName),80);
     }
   });
   sseSource.addEventListener('steps-updated',e=>{
@@ -2325,7 +2391,8 @@ async function loadConfig(){
 async function loadClients(){try{const r=await fetch('/api/clients');if(!r.ok)throw new Error();clients=await r.json();}catch(e){clients={};}}
 async function saveClients(){
   if(activeClientId&&clients[activeClientId]) clients[activeClientId].lastModified=new Date().toISOString();
-  try{await fetch('/api/clients',{method:'PUT',headers:{'Content-Type':'application/json','X-Session-Id':SESSION_ID},body:JSON.stringify(clients)});}catch(e){console.error(e);}
+  const myName=localStorage.getItem('myName')||'';
+  try{await fetch('/api/clients',{method:'PUT',headers:{'Content-Type':'application/json','X-Session-Id':SESSION_ID,'X-Tech-Name':myName},body:JSON.stringify(clients)});}catch(e){console.error(e);}
 }
 
 // \u2500\u2500\u2500 Syncro \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
