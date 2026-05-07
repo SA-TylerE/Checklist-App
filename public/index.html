@@ -479,7 +479,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 
 /* ... client menu */
 .client-menu-wrap{position:relative;display:inline-block;}
-.client-menu-btn{background:var(--bg3);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:16px;font-weight:700;cursor:pointer;padding:4px 10px;line-height:1;transition:all 0.15s;}
+.client-menu-btn{background:var(--bg3);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;padding:5px 11px;line-height:1;transition:all 0.15s;}
+.theme-pill-wrap{flex:1;display:flex;justify-content:center;}
+.who-chip{padding:5px 10px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);color:#93c5fd;border-radius:5px;font-size:11px;font-weight:500;cursor:pointer;white-space:nowrap;transition:background 0.15s;max-width:140px;overflow:hidden;text-overflow:ellipsis;}
+.who-chip:hover{background:rgba(59,130,246,0.2);}
+body.light .who-chip{background:rgba(30,64,175,0.06);border-color:rgba(30,64,175,0.2);color:#1e40af;}
 .client-menu-btn:hover{background:var(--bg3);color:var(--text);}
 .client-menu-dropdown{display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--bg2);border:1px solid var(--border2);border-radius:7px;min-width:130px;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,0.3);overflow:hidden;}
 .client-menu-dropdown.open{display:block;}
@@ -609,7 +613,7 @@ body.light{
 
         <!-- Bottom bar: theme toggle + settings -->
         <div class="sidebar-bottom-bar">
-          <div class="theme-pill">
+          <div class="theme-pill-wrap"><div class="theme-pill">
             <button class="theme-btn" id="theme-light" onclick="applyTheme('light')" title="Light">
               <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/><line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/><line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/></svg>
             </button>
@@ -619,7 +623,7 @@ body.light{
             <button class="theme-btn" id="theme-dark" onclick="applyTheme('dark')" title="Dark">
               <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
             </button>
-          </div>
+          </div></div>
           <div class="sidebar-bottom-sep"></div>
           <button class="sidebar-icon-btn" onclick="openSettings()" title="Settings">&#9881;</button>
         </div>
@@ -972,8 +976,11 @@ function switchSidebarNav(tab){
 }
 
 function openSettings(){
+  activeClientId=null;
+  document.getElementById('mobile-title').textContent='System Alternatives';
   showView('settings');
   renderSettingsView();
+  renderSidebar();
 }
 
 // ─── Reference list ───────────────────────────────────────────────────────────
@@ -1750,10 +1757,8 @@ function loadClientChecklist(id){
   const devDone=devList.filter(d=>devStatus(d,devSteps)==='complete').length;
 
   document.getElementById('mobile-title').textContent=client.name;
-
-  // Who's working (session storage)
-  const whoKey='who-'+id;
-  const whoVal=sessionStorage.getItem(whoKey)||'';
+  ensureMyName();
+  const myName=localStorage.getItem('myName')||'';
 
   // Due date badge
   let dueBadge='';
@@ -1770,10 +1775,11 @@ function loadClientChecklist(id){
   let html=`<div class="checklist-header">
     <div>
       <h2>${client.name}</h2>
-      <div class="meta">Tech: ${client.tech} &nbsp;·&nbsp; Created: ${new Date(client.createdAt).toLocaleDateString()} &nbsp;·&nbsp; ${client.products.length} products</div>
-      ${client.syncroCustomerName?`<div class="meta" style="margin-top:1px;">Syncro: ${client.syncroCustomerName} (${client.syncroDeviceType||''})</div>`:''}
+      <div class="meta">Tech: ${client.tech} &nbsp;·&nbsp; Created: ${new Date(client.createdAt).toLocaleDateString()}</div>
+      ${client.syncroCustomerName?`<div class="meta" style="margin-top:1px;">Syncro: ${client.syncroCustomerName}</div>`:''}
     </div>
     <div class="header-actions">
+      <button class="who-chip" onclick="editWhoWorking()" title="Click to change your name">&#128100; ${myName||'Set your name'}</button>
       <div class="client-menu-wrap" id="cmenu-wrap-${id}">
         <button class="client-menu-btn" onclick="toggleClientMenu('${id}')">&#8230;</button>
         <div class="client-menu-dropdown" id="cmenu-${id}">
@@ -1786,18 +1792,10 @@ function loadClientChecklist(id){
     </div>
   </div>
 
-  <div class="who-working">
-    <span>&#128100;</span>
-    <input type="text" placeholder="Who's working on this?" value="${whoVal}"
-      oninput="sessionStorage.setItem('who-${id}',this.value)" id="who-input-${id}">
-    ${!whoVal?`<button class="add-me-btn" onclick="addMeToWorking('${id}')">+ Add me</button>`:''}
-  </div>
-
-  <div class="due-date-row">
-    <span>Due:</span>
-    <input type="date" value="${client.dueDate||''}" onchange="saveDueDate('${id}',this.value)">
+  ${(client.dueDate||dueBadge)?`<div class="due-date-row">
+    ${client.dueDate?`<span>Due ${new Date(client.dueDate+'T12:00:00').toLocaleDateString()}</span>`:''}
     ${dueBadge}
-  </div>
+  </div>`:''}
 
   <div class="tab-bar">
     <button class="tab-btn active" id="tab-btn-org-${id}" onclick="switchChecklistTab('${id}','org')">Organization</button>
@@ -1853,6 +1851,21 @@ function switchChecklistTab(clientId,tab){
     document.getElementById(`tab-btn-${t}-${clientId}`)?.classList.toggle('active',t===tab);
     document.getElementById(`tab-${t}-${clientId}`)?.classList.toggle('active',t===tab);
   });
+}
+
+function ensureMyName(){
+  if(!localStorage.getItem('myName')){
+    const n=(prompt('Enter your name — used to identify your changes in shared checklists:')||'').trim();
+    if(n) localStorage.setItem('myName',n);
+  }
+}
+function editWhoWorking(){
+  const current=localStorage.getItem('myName')||'';
+  const n=prompt('Update your name:',current);
+  if(n===null) return;
+  const trimmed=n.trim();
+  localStorage.setItem('myName',trimmed);
+  document.querySelectorAll('.who-chip').forEach(c=>{c.innerHTML=`&#128100; ${trimmed||'Set your name'}`;});
 }
 
 function addMeToWorking(clientId){
@@ -2503,7 +2516,9 @@ function selectSyncroCustomer(idx){
   if(badge){
     badge.style.display='block';
     const types=Object.keys(syncroCustomer._installerMap);
-    badge.textContent=`${syncroCustomer.business_name} — RMM links found: ${types.length?types.join(', '):'none (manual entry required per device)'}`;
+    badge.textContent=types.length
+      ?`${syncroCustomer.business_name} — RMM installers found`
+      :`${syncroCustomer.business_name} — no RMM data (manual URL needed per device)`;
   }
 }
 
