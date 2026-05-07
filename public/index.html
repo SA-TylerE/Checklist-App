@@ -395,10 +395,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .notes-dot{width:6px;height:6px;border-radius:50%;background:var(--warn);flex-shrink:0;display:none;}
 .client-notes-block.has-notes .notes-dot{display:block;}
 
-/* Step notes */
-.step-note-btn{width:18px;height:18px;border-radius:3px;background:none;border:1px solid var(--border);color:var(--text3);font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s;}
+/* Step title row (title + Notes btn inline) */
+.step-title-row{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;}
+.step-title-row .step-title{flex-shrink:1;min-width:0;}
+/* Step notes — text label, inline with title */
+.step-note-btn{padding:1px 6px;border-radius:4px;background:none;border:1px solid var(--border);color:var(--text3);font-size:10px;font-family:var(--sans);cursor:pointer;flex-shrink:0;white-space:nowrap;transition:all 0.15s;}
 .step-note-btn:hover{border-color:var(--accent);color:var(--accent);}
-.step-note-btn.has-note{border-color:var(--warn);color:var(--warn);background:rgba(245,158,11,0.1);}
+.step-note-btn.has-note{border-color:var(--warn);color:var(--warn);background:rgba(245,158,11,0.08);}
+/* Sidebar client item — dot in top-right corner */
+.client-item .notify-dot{position:absolute;top:6px;right:7px;margin:0;}
 .step-note-area{display:none;padding:6px 8px 6px 31px;}
 .step-item.note-open .step-note-area{display:block;}
 .step-note-area textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:6px;color:var(--text);font-size:11px;font-family:var(--sans);resize:vertical;min-height:52px;outline:none;}
@@ -1750,8 +1755,9 @@ function renderStep(clientId,step){
   const expandIcon=hasSubs?`<span class="step-expand-icon">&#9654;</span>`:'';
   const guideBtn=hasGuide?`<button class="btn-guide" onclick="event.stopPropagation();openGuide('${step.guide}')">Guide &#x2197;</button>`:'';
   const stepNote=client.stepNotes&&client.stepNotes[step.id]||'';
-  const noteBtn=`<button class="step-note-btn ${stepNote?'has-note':''}" title="Note" onclick="event.stopPropagation();toggleStepNote('${step.id}')">&#9998;</button>`;
-  const tags=step.tags?.length?`<div class="step-tags">${step.tags.map(t=>`<span class="step-tag ${t}">${t}</span>`).join('')}</div>`:'';
+  const noteBtn=`<button class="step-note-btn ${stepNote?'has-note':''}" onclick="event.stopPropagation();toggleStepNote('${step.id}')">Notes</button>`;
+  // Tags + guide in same row; guide on far right of badges
+  const tags=(step.tags?.length||hasGuide)?`<div class="step-tags">${(step.tags||[]).map(t=>`<span class="step-tag ${t}">${t}</span>`).join('')}${guideBtn}</div>`:'';
   const installerUrl=step.installer_url&&clients[clientId].syncroInstallerUrl;
   const extra=installerUrl?`<div class="installer-link" onclick="event.stopPropagation();copyText('${installerUrl}',this)">&#128279; ${installerUrl} <span style="opacity:0.5;font-size:9px;">(copy)</span></div>`:'';
   let subsHtml='';
@@ -1783,15 +1789,18 @@ function renderStep(clientId,step){
     vpnHtml=`<div class="vpn-selector">${VPN_OPTIONS.map(v=>`<button class="vpn-btn" onclick="event.stopPropagation();openGuide('${v.id}')">${v.label} VPN Guide &#x2197;</button>`).join('')}</div>`;
   }
   const clickAction=hasSubs?`toggleStepExpand('${step.id}')`:`toggleStep('${clientId}','${step.id}')`;
-  return `<div class="step-item ${state}" id="step-${step.id}" data-notify-id="st:${step.id}">
+  return `<div class="step-item ${state}" id="step-${step.id}" data-notify-id="st:${step.id}" data-notify-slot=".step-actions">
     <div class="step-row" onclick="${clickAction}">
       <div class="step-check">${checkHtml}</div>
       <div class="step-body">
-        <div class="step-title">${step.title}</div>
+        <div class="step-title-row">
+          <div class="step-title">${step.title}</div>
+          ${noteBtn}
+        </div>
         ${step.detail?`<div class="step-detail">${step.detail}</div>`:''}
         ${extra}${tags}
       </div>
-      <div class="step-actions">${noteBtn}${guideBtn}${expandIcon}</div>
+      <div class="step-actions">${expandIcon}</div>
     </div>
     ${subsHtml}${ftHtml}${vpnHtml}
     <div class="step-note-area">
@@ -2725,8 +2734,15 @@ function renderAllDots(){
     const dot=document.createElement('span');
     dot.className='notify-dot';
     if(meta?.techName) dot.title='Changed by '+meta.techName;
-    const anchor=el.querySelector('.step-title,.device-step-title,.substep-title,.phase-progress-text,.device-entry-name,.cn');
-    if(anchor) anchor.after(dot); else el.appendChild(dot);
+    const slotSel=el.dataset.notifySlot;
+    if(slotSel){
+      const slotEl=el.querySelector(slotSel);
+      if(slotEl) slotEl.appendChild(dot);
+      else el.appendChild(dot);
+    } else {
+      const anchor=el.querySelector('.step-title,.device-step-title,.substep-title,.phase-progress-text,.device-entry-name,.cn');
+      if(anchor) anchor.after(dot); else el.appendChild(dot);
+    }
     el.addEventListener('mouseenter',()=>{
       if(direct) notifyStore.delete(nid);
       el.querySelectorAll('[data-notify-id]').forEach(d=>notifyStore.delete(d.dataset.notifyId));
