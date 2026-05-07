@@ -957,7 +957,8 @@ function actionLabel(action){
     step_complete:'Completed step',step_incomplete:'Unchecked step',substep_complete:'Completed substep',substep_incomplete:'Unchecked substep',
     device_step_complete:'Completed device step',device_step_incomplete:'Unchecked device step',
     device_added:'Added device',device_removed:'Removed device',notes_updated:'Updated notes',
-    customer_linked:'Linked Syncro customer',customer_unlinked:'Unlinked Syncro customer'};
+    customer_linked:'Linked Syncro customer',customer_unlinked:'Unlinked Syncro customer',
+    checklist_edited:'Edited checklist info'};
   return map[action]||action;
 }
 function relTime(ts){
@@ -1715,10 +1716,13 @@ function selectClient(id){
   stepUpdateDots.clear();phaseUpdateDots.clear();
   document.getElementById('clear-updates-btn')?.style.setProperty('display','none');
   unseenChanges.delete(id);
-  // Load pending dots for new client (applyUpdateDots will render them after loadClientChecklist)
+  // Load pending dots for new client
   const clientDots=pendingClientDots.get(id);
   if(clientDots) clientDots.forEach(sid=>stepUpdateDots.add(sid));
   loadClientChecklist(id);
+  // applyUpdateDots is only auto-called from restoreChecklistUIState (SSE path)
+  // for direct navigation we must call it explicitly after the DOM is ready
+  applyUpdateDots();
 }
 function filterClients(val){renderSidebar(val);}
 
@@ -2472,12 +2476,17 @@ function refreshDeviceGuide(clientId){
 
 async function saveFreetext(cid,ftId,val){if(!clients[cid].freetexts)clients[cid].freetexts={};clients[cid].freetexts[ftId]=val;await saveClients();}
 async function saveDeviceNotes(cid,did,val){
-  if(clients[cid].devices&&clients[cid].devices[did])clients[cid].devices[did].notes=val;
+  if(clients[cid].devices&&clients[cid].devices[did]){
+    clients[cid].devices[did].notes=val;
+    logAction('notes_updated',{details:`Device: ${clients[cid].devices[did].name||did}`});
+  }
   await saveClients();
 }
 async function deleteDevice(cid,did){
+  const devName=clients[cid]?.devices?.[did]?.name||did;
   styledConfirm('Remove this device record?',async()=>{
     if(clients[cid].devices)delete clients[cid].devices[did];
+    logAction('device_removed',{details:devName});
     await saveClients();refreshDeviceGuide(cid);
   });
 }
@@ -2549,6 +2558,7 @@ async function confirmAddDevice(){
     steps:{},notes:'',expanded:true,
     rawInstallerUrl:rawUrl,shortUrl:shortUrl};
   modalShortUrl=null;
+  logAction('device_added',{details:`${name} (${type})`});
   await saveClients();closeAddDeviceModal();refreshDeviceGuide(cid);
 }
 document.getElementById('add-device-modal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeAddDeviceModal();});
@@ -2609,9 +2619,9 @@ function applyUpdateDots(){
       titleEl.appendChild(dot);
       el.addEventListener('mouseenter',()=>{
         stepUpdateDots.delete(id);
+        if(activeClientId) pendingClientDots.get(activeClientId)?.delete(id);
         dot.style.opacity='0';dot.style.animation='none';
         setTimeout(()=>dot.remove(),380);
-        // Remove phase dot if no more steps in that phase have dots
         const phase=el.closest('.phase-block');
         if(phase){
           const hasDotInPhase=[...stepUpdateDots].some(sid=>{
@@ -2676,16 +2686,34 @@ function detectChangedSteps(oldClient,newClient){
       changed.push({id,done:!!(newClient.steps||{})[id],title:def?.title||'',phase:findStepPhase(id)});
     }
   });
-  // Device steps
+  // Device additions / removals
+  const oldDevIds=new Set(Object.keys(oldClient.devices||{}));
+  const newDevIds=new Set(Object.keys(newClient.devices||{}));
+  newDevIds.forEach(did=>{
+    if(!oldDevIds.has(did)){
+      const dev=newClient.devices[did];
+      changed.push({id:'dev-added-'+did,done:true,title:`Device added: ${dev.name||did}`,phase:'Devices',deviceAction:true});
+    }
+  });
+  oldDevIds.forEach(did=>{
+    if(!newDevIds.has(did)){
+      const dev=oldClient.devices[did];
+      changed.push({id:'dev-removed-'+did,done:false,title:`Device removed: ${dev.name||did}`,phase:'Devices',deviceAction:true});
+    }
+  });
+  // Device step toggles + notes changes
   Object.values(newClient.devices||{}).forEach(dev=>{
     const oldDev=(oldClient.devices||{})[dev.id];
     if(!oldDev) return;
     Object.keys(dev.steps||{}).forEach(sid=>{
       if((oldDev.steps||{})[sid]!==(dev.steps||{})[sid]){
         const def=findDevStepById(sid);
-        changed.push({id:'dev-'+dev.id+'-'+sid,done:!!(dev.steps||{})[sid],title:def?.title||''});
+        changed.push({id:'dev-'+dev.id+'-'+sid,done:!!(dev.steps||{})[sid],title:`${def?.title||sid} — ${dev.name||dev.id}`,phase:'Devices'});
       }
     });
+    if((oldDev.notes||'')!==(dev.notes||'')){
+      changed.push({id:'dev-notes-'+dev.id,done:true,title:`Notes updated: ${dev.name||dev.id}`,phase:'Devices',deviceAction:true});
+    }
   });
   return changed;
 }
@@ -2784,7 +2812,8 @@ function connectSSE(){
       // Toast for all changed clients
       const who=techName||'A tech';
       const phases=[...new Set(cidChanges.map(c=>c.phase).filter(Boolean))];
-      const toastTitle=`${newC.name} · ${phases.length===1?phases[0]:'Multiple sections'} — Updated`;
+      const sectionLabel=phases.length===1?phases[0]:phases.length>1?phases.join(' · '):'Devices';
+      const toastTitle=`${newC.name} · ${sectionLabel} — Updated`;
       const bodyLines=cidChanges.map(({title,done})=>`${done?'✓':'○'} ${title||'a step'}`);
       const now=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
       const footer=`by ${who} · ${now}`;
