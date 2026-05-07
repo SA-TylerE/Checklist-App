@@ -184,6 +184,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .progress-bar-fill.complete{background:var(--success);background-image:none;animation:none;}
 @keyframes progressStripe{from{background-position:0 0;}to{background-position:14px 0;}}
 
+/* Phase + device card grids */
+.phase-grid,.device-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px;align-items:start;}
+.phase-grid .phase-block,.device-grid .device-entry{margin-bottom:0;}
+.phase-grid .completed-divider{grid-column:1/-1;}
+/* In grid, phase headers don't need to be sticky (multiple columns) */
+.phase-grid .phase-header{position:static;}
+
 /* Phase */
 .phase-block{margin-bottom:5px;border:1px solid var(--border);border-radius:10px;}
 .phase-block.collapsed .phase-body{display:none;}
@@ -1982,7 +1989,7 @@ function renderDeviceGuide(clientId){
       <div class="device-add-btn-wrap">
         <button class="btn-primary btn-sm" onclick="showAddDeviceModal('${clientId}')">+ Add Device</button>
       </div>
-      ${devList.length===0?`<div style="padding:4px 3px 10px;font-size:11px;color:var(--text3);">No devices added yet. Click + Add Device to begin tracking deployment.</div>`:rows}
+      ${devList.length===0?`<div style="padding:4px 3px 10px;font-size:11px;color:var(--text3);">No devices added yet. Click + Add Device to begin tracking deployment.</div>`:`<div class="device-grid">${rows}</div>`}
     </div>
   </div>`;
 }
@@ -2053,14 +2060,15 @@ function loadClientChecklist(id){
   </div>
 
   <!-- Org tab -->
-  <div class="tab-panel ${activeChecklistTab!=='devices'?'active':''}" id="tab-org-${id}">`;
+  <div class="tab-panel ${activeChecklistTab!=='devices'?'active':''}" id="tab-org-${id}">
+  <div class="phase-grid">`;
 
   activePhases.forEach((p,i)=>{ html+=renderPhase(id,p,i+1,i>0); });
   if(completedPhases.length){
     html+=`<div class="completed-divider">Completed sections</div>`;
     completedPhases.forEach(p=>{ html+=renderPhase(id,p,'✓',true); });
   }
-  html+=`</div>`;
+  html+=`</div></div>`;
 
   // Devices tab
   html+=`<div class="tab-panel ${activeChecklistTab==='devices'?'active':''}" id="tab-devices-${id}">`;
@@ -2505,7 +2513,7 @@ function refreshDeviceGuide(clientId){
   body.innerHTML=`<div class="device-add-btn-wrap">
     <button class="btn-primary btn-sm" onclick="showAddDeviceModal('${clientId}')">+ Add Device</button>
   </div>
-  ${devList.length===0?`<div style="padding:4px 3px 10px;font-size:11px;color:var(--text3);">No devices added yet. Click + Add Device to begin tracking deployment.</div>`:rows}`;
+  ${devList.length===0?`<div style="padding:4px 3px 10px;font-size:11px;color:var(--text3);">No devices added yet. Click + Add Device to begin tracking deployment.</div>`:`<div class="device-grid">${rows}</div>`}`;
 
   // Inject installer blocks per device
   devList.forEach(dev=>{
