@@ -72,7 +72,8 @@ app.get('/api/config', (req, res) => {
       syncroToken:     cfg.syncro_api_token  || '',
       syncroSubdomain: cfg.syncro_subdomain  || '',
       staleDays:       cfg.stale_days        || 14,
-      dueWarningDays:  cfg.due_warning_days   || 7,
+      dueWarningDays:  cfg.due_warning_days  || 7,
+      orgName:         cfg.org_name          || 'System Alternatives',
     });
   } catch(e) { res.status(500).json({ error: 'Failed to read config' }); }
 });
@@ -87,7 +88,8 @@ app.put('/api/config', (req, res) => {
       syncro_api_token: b.syncroToken     ?? cur.syncro_api_token,
       syncro_subdomain: b.syncroSubdomain ?? cur.syncro_subdomain,
       stale_days:       b.staleDays       ?? cur.stale_days,
-      due_warning_days: b.dueWarningDays   ?? cur.due_warning_days,
+      due_warning_days: b.dueWarningDays  ?? cur.due_warning_days,
+      org_name:         b.orgName         ?? cur.org_name,
     };
     atomicWrite(CFG_FILE, JSON.stringify(updated, null, 2));
     pushEvent('config-updated', {}, req.headers['x-source-id']);

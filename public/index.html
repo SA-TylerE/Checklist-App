@@ -419,14 +419,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .qr-panel canvas{border-radius:4px;}
 
 /* Settings page */
-.settings-section{margin-bottom:18px;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
-.settings-section-header{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:var(--bg3);cursor:pointer;user-select:none;}
-.settings-section-header:hover{background:var(--bg4);}
-.settings-section-title{font-size:13px;font-weight:600;}
-.settings-section-body{display:none;padding:14px;}
-.settings-section.open .settings-section-body{display:block;}
-.settings-section-icon{font-size:9px;color:var(--text3);transition:transform 0.15s;}
-.settings-section.open .settings-section-icon{transform:rotate(90deg);}
+.settings-block{border:1px solid var(--border);border-radius:8px;margin-bottom:16px;overflow:hidden;}
+.settings-block-header{padding:11px 16px;background:var(--bg3);font-size:13px;font-weight:600;border-bottom:1px solid var(--border);}
+.settings-block-body{padding:16px;}
+.field-hint{font-size:10px;color:var(--text3);margin-top:3px;line-height:1.4;}
+/* Syncro link card */
+.syncro-linked-card{display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:6px;}
+.syncro-linked-name{font-size:12px;font-weight:500;flex:1;color:#93c5fd;}
+body.light .syncro-linked-name{color:#1e40af;}
+/* Syncro link modal */
+#syncro-link-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;align-items:center;justify-content:center;}
+#syncro-link-modal.show{display:flex;}
 
 /* Editor rows */
 .editor-list{display:flex;flex-direction:column;gap:6px;}
@@ -644,18 +647,13 @@ body.light{
         <div id="view-new-client" class="view">
           <div class="wizard-card">
             <h2>New Client Onboarding</h2>
-            <div class="wizard-subtitle">Select products and configure Syncro installer.</div>
+            <div class="wizard-subtitle">Select products and optionally link a Syncro customer.</div>
             <div id="wizard-alert"></div>
-            <div class="field-group"><label>Client Name</label><input type="text" id="wiz-clientname" placeholder="e.g. Acme Corporation"></div>
+            <div class="field-group"><label>Checklist Name</label><input type="text" id="wiz-clientname" placeholder="e.g. Acme Corp Onboarding"></div>
             <div class="field-group"><label>Tech Assigned</label><input type="text" id="wiz-tech" placeholder="Your name"></div>
-            <div class="syncro-lookup">
-              <div class="lookup-title">Syncro &#8212; Customer Lookup</div>
-              <div class="lookup-row">
-                <input type="text" id="syncro-search-input" placeholder="Search Syncro customer..." onkeydown="if(event.key==='Enter')searchSyncroCustomers()">
-                <button class="btn-primary btn-sm" onclick="searchSyncroCustomers()">Search</button>
-              </div>
-              <div id="syncro-search-results" class="search-results"></div>
-              <div id="syncro-customer-badge" style="display:none;font-size:11px;color:var(--accent);margin-top:6px;padding:4px 8px;background:rgba(59,130,246,0.08);border-radius:4px;border:1px solid rgba(59,130,246,0.2);"></div>
+            <div class="field-group">
+              <label>Syncro Customer <span style="font-weight:400;color:var(--text3);">(optional)</span></label>
+              <div id="syncro-link-area"></div>
             </div>
             <div class="field-group">
               <label>Due Date</label>
@@ -729,6 +727,20 @@ body.light{
   </div>
 </div>
 <div id="confirm-overlay"><div class="confirm-card"><p id="confirm-msg"></p><div class="confirm-actions"><button class="btn-secondary" id="confirm-cancel">Cancel</button><button class="btn-danger" id="confirm-ok">Confirm</button></div></div></div>
+
+<div id="syncro-link-modal">
+  <div class="modal-card" style="width:min(480px,92vw);">
+    <h3>Link Syncro Customer</h3>
+    <div class="lookup-row" style="margin-bottom:10px;">
+      <input type="text" id="slm-input" placeholder="Search by company name..." onkeydown="if(event.key==='Enter')searchSyncroInModal()">
+      <button class="btn-primary btn-sm" onclick="searchSyncroInModal()">Search</button>
+    </div>
+    <div id="slm-results" class="search-results" style="max-height:240px;overflow-y:auto;min-height:32px;"></div>
+    <div class="modal-actions" style="margin-top:12px;">
+      <button class="btn-secondary" onclick="closeSyncroLinkModal()">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <div id="client-notes-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;align-items:center;justify-content:center;">
   <div class="modal-card" style="width:min(520px,92vw);display:flex;flex-direction:column;gap:12px;">
@@ -977,7 +989,7 @@ function switchSidebarNav(tab){
 
 function openSettings(){
   activeClientId=null;
-  document.getElementById('mobile-title').textContent='System Alternatives';
+  document.getElementById('mobile-title').textContent=config?.orgName||'System Alternatives';
   showView('settings');
   renderSettingsView();
   renderSidebar();
@@ -1381,40 +1393,81 @@ function deleteGuideStep(gid,si,gsi){
   renderGuideEditor();
 }
 
-// ─── Config editor ────────────────────────────────────────────────────────────
-function renderAppSettings(){
-  const body=document.getElementById('app-settings-body');
+// ─── Settings ─────────────────────────────────────────────────────────────────
+function renderSettingsView(){
+  document.getElementById('settings-content').innerHTML=`
+    <div style="max-width:760px;">
+      <h2 style="font-size:18px;font-weight:700;margin-bottom:18px;">Settings</h2>
+      <div class="settings-block">
+        <div class="settings-block-header">Configuration</div>
+        <div class="settings-block-body" id="cfg-section-body"></div>
+      </div>
+      <div class="settings-block">
+        <div class="settings-block-header">Procedure Editor</div>
+        <div class="settings-block-body" id="procedure-editor-body"></div>
+      </div>
+      <div class="settings-block">
+        <div class="settings-block-header">Guide Editor</div>
+        <div class="settings-block-body" id="guide-editor-body"></div>
+      </div>
+    </div>`;
+  renderConfigSection();
+  renderProcedureEditor();
+  renderGuideEditor();
+}
+
+function renderConfigSection(){
+  const body=document.getElementById('cfg-section-body');
+  if(!body) return;
   const t=appSettings.urlTemplates||{};
   body.innerHTML=`
-    <div class="config-field-row">
-      <div class="editor-field">
-        <label>Stale Checklist Threshold (days)</label>
-        <input type="number" id="cfg-stale" value="${appSettings.staleDays||30}" min="0" placeholder="e.g. 30" style="width:120px;">
-        <div style="font-size:10px;color:var(--text2);margin-top:3px;">Clients with no activity beyond this threshold are flagged in the sidebar. 0 = disabled.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+      <div class="field-group" style="margin:0;grid-column:1/-1;"><label>Organisation Name</label>
+        <input id="cfg-org" value="${(config?.orgName||'System Alternatives').replace(/"/g,'&quot;')}" placeholder="e.g. System Alternatives">
+        <div class="field-hint">Displayed in the sidebar and mobile header.</div>
       </div>
-      <div class="editor-field">
-        <label>Due Date Warning (days before)</label>
-        <input type="number" id="cfg-due" value="${appSettings.dueDays||3}" min="1" placeholder="e.g. 3" style="width:120px;">
-        <div style="font-size:10px;color:var(--text2);margin-top:3px;">Warn badge this many days before due date.</div>
+      <div class="field-group" style="margin:0;"><label>Syncro Subdomain</label>
+        <input id="cfg-subdomain" value="${(config?.syncroSubdomain||'').replace(/"/g,'&quot;')}" placeholder="yourcompany">
       </div>
-    </div>
-    <div class="config-field-row">
-      <div class="editor-field">
-        <label>Default Due Date Offset (days from today)</label>
-        <input type="number" id="cfg-offset" value="${appSettings.defaultDueOffset||90}" min="1" style="width:120px;">
-        <div style="font-size:10px;color:var(--text2);margin-top:3px;">Pre-fills due date when creating a new client.</div>
+      <div class="field-group" style="margin:0;"><label>Syncro API Token</label>
+        <input id="cfg-token" type="password" value="${config?.syncroToken||''}" placeholder="••••••••">
       </div>
     </div>
-    <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;margin:14px 0 8px;">RMM URL Templates</div>
-    <div style="font-size:10px;color:var(--text3);margin-bottom:10px;">The token/key from Syncro is appended to the end of each template.</div>
-    ${['Workstation','Server','Mac','Linux'].map(type=>`
-      <div class="editor-field">
-        <label>${type}</label>
-        <input type="text" id="cfg-url-${type.toLowerCase()}" value="${(t[type]||'').replace(/"/g,'&quot;')}" placeholder="URL prefix...">
-      </div>`).join('')}
-    <button class="editor-save-btn" onclick="saveAppSettings()">Save</button>`;
+    <div style="border-top:1px solid var(--border);margin:0 -16px;padding:14px 16px 0;">
+      <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;">Checklist Behaviour</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
+        <div class="field-group" style="margin:0;"><label>Stale Threshold (days)</label>
+          <input type="number" id="cfg-stale" value="${appSettings.staleDays||30}" min="0">
+          <div class="field-hint">Flag inactive clients. 0 = disabled.</div>
+        </div>
+        <div class="field-group" style="margin:0;"><label>Due Warning (days before)</label>
+          <input type="number" id="cfg-due" value="${appSettings.dueDays||3}" min="1">
+          <div class="field-hint">Show amber badge this many days before due.</div>
+        </div>
+        <div class="field-group" style="margin:0;"><label>Default Due Offset (days)</label>
+          <input type="number" id="cfg-offset" value="${appSettings.defaultDueOffset||90}" min="1">
+          <div class="field-hint">Pre-fill due date on new checklists.</div>
+        </div>
+      </div>
+    </div>
+    <div style="border-top:1px solid var(--border);margin:0 -16px;padding:14px 16px 0;">
+      <div style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">RMM Installer URL Prefixes</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:12px;">The agent token from Syncro is appended to each prefix to build the full download URL.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+        ${['Workstation','Server','Mac','Linux'].map(type=>`
+          <div class="field-group" style="margin:0;"><label>${type}</label>
+            <input id="cfg-url-${type.toLowerCase()}" value="${(t[type]||'').replace(/"/g,'&quot;')}" placeholder="URL prefix...">
+          </div>`).join('')}
+      </div>
+    </div>
+    <button class="btn-primary" onclick="saveAllConfig()">Save Configuration</button>`;
 }
-async function saveAppSettings(){
+
+async function saveAllConfig(){
+  const orgName=document.getElementById('cfg-org').value.trim();
+  const subdomain=document.getElementById('cfg-subdomain').value.trim();
+  const token=document.getElementById('cfg-token').value.trim();
+  if(!subdomain||!token){showToast('Syncro subdomain and token are required','error');return;}
   const staleDays=parseInt(document.getElementById('cfg-stale').value)||0;
   const dueDays=parseInt(document.getElementById('cfg-due').value)||3;
   const defaultDueOffset=parseInt(document.getElementById('cfg-offset').value)||90;
@@ -1424,81 +1477,19 @@ async function saveAppSettings(){
     Mac:document.getElementById('cfg-url-mac').value.trim(),
     Linux:document.getElementById('cfg-url-linux').value.trim()
   };
-  appSettings={staleDays,dueDays,defaultDueOffset,urlTemplates};
-  const r=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
-  if(r.ok) showToast('Settings saved');
-  else showToast('Save failed','error');
-  renderSidebar();
-}
-
-function renderConfigEditor(){
-  const body=document.getElementById('config-editor-body');
-  body.innerHTML=`
-    <div class="config-field-row">
-      <div class="editor-field"><label>Syncro Subdomain</label>
-        <input id="cfg-subdomain" value="${config?.syncroSubdomain||''}" placeholder="yourcompany">
-      </div>
-      <div class="editor-field"><label>Syncro API Token</label>
-        <input id="cfg-token" type="password" value="${config?.syncroToken||''}" placeholder="••••••••">
-      </div>
-    </div>
-    <button class="editor-save-btn" onclick="saveConfig()">Save Config</button>`;
-}
-async function saveConfig(){
-  const subdomain=document.getElementById('cfg-subdomain').value.trim();
-  const token=document.getElementById('cfg-token').value.trim();
-  if(!subdomain||!token){showToast('Both fields required','error');return;}
-  const r=await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({syncroSubdomain:subdomain,syncroToken:token})});
-  if(r.ok){config={syncroSubdomain:subdomain,syncroToken:token};showToast('Config saved');}
-  else showToast('Save failed','error');
-}
-
-// ─── Main settings renderer ───────────────────────────────────────────────────
-function renderSettingsView(){
-  document.getElementById('settings-content').innerHTML=`
-    <div style="max-width:760px;">
-      <h2 style="font-size:18px;font-weight:700;margin-bottom:18px;">Settings</h2>
-
-      <div class="settings-section" id="ss-config">
-        <div class="settings-section-header" onclick="settingsToggle('ss-config');renderConfigEditor()">
-          <span class="settings-section-title">&#9881; Syncro Configuration</span>
-          <span class="settings-section-icon">&#9654;</span>
-        </div>
-        <div class="settings-section-body">
-          <div id="config-editor-body"></div>
-        </div>
-      </div>
-
-      <div class="settings-section" id="ss-app-settings">
-        <div class="settings-section-header" onclick="settingsToggle('ss-app-settings');renderAppSettings()">
-          <span class="settings-section-title">&#128337; Checklist Behaviour</span>
-          <span class="settings-section-icon">&#9654;</span>
-        </div>
-        <div class="settings-section-body">
-          <div id="app-settings-body"></div>
-        </div>
-      </div>
-
-      <div class="settings-section" id="ss-procedures">
-        <div class="settings-section-header" onclick="settingsToggle('ss-procedures');if(document.getElementById('ss-procedures').classList.contains('open'))renderProcedureEditor()">
-          <span class="settings-section-title">&#128221; Procedure Editor</span>
-          <span class="settings-section-icon">&#9654;</span>
-        </div>
-        <div class="settings-section-body">
-          <div id="procedure-editor-body"></div>
-        </div>
-      </div>
-
-      <div class="settings-section" id="ss-guides">
-        <div class="settings-section-header" onclick="settingsToggle('ss-guides');if(document.getElementById('ss-guides').classList.contains('open'))renderGuideEditor()">
-          <span class="settings-section-title">&#128196; Guide Editor</span>
-          <span class="settings-section-icon">&#9654;</span>
-        </div>
-        <div class="settings-section-body">
-          <div id="guide-editor-body"></div>
-        </div>
-      </div>
-    </div>`;
+  const [cfgR,setR]=await Promise.all([
+    fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({syncroSubdomain:subdomain,syncroToken:token,orgName})}),
+    fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({staleDays,dueDays,defaultDueOffset,urlTemplates})})
+  ]);
+  if(cfgR.ok&&setR.ok){
+    config={...config,syncroToken:token,syncroSubdomain:subdomain,orgName};
+    appSettings={staleDays,dueDays,defaultDueOffset,urlTemplates};
+    document.querySelectorAll('.sidebar-top-brand').forEach(el=>el.textContent=orgName||'System Alternatives');
+    renderSidebar();
+    showToast('Configuration saved');
+  }else{
+    showToast('Save failed','error');
+  }
 }
 
 function renderSidebar(filter){
@@ -2247,7 +2238,7 @@ async function deleteDevice(cid,did){
 async function confirmDeleteClient(id){
   styledConfirm(`Delete checklist for "${clients[id]?.name}"? This cannot be undone.`,async()=>{
     delete clients[id];await saveClients();activeClientId=null;
-    document.getElementById('mobile-title').textContent='System Alternatives';
+    document.getElementById('mobile-title').textContent=config?.orgName||'System Alternatives';
     renderSidebar();showView('empty');
   });
 }
@@ -2454,7 +2445,10 @@ async function loadConfig(){
     if(!cfgRes.ok) throw new Error(`Config HTTP ${cfgRes.status}`);
     const cfg=await cfgRes.json();
     if(!cfg.syncroToken||!cfg.syncroSubdomain) throw new Error('config.json missing required fields');
-    config={syncroToken:cfg.syncroToken,syncroSubdomain:cfg.syncroSubdomain};
+    config={syncroToken:cfg.syncroToken,syncroSubdomain:cfg.syncroSubdomain,orgName:cfg.orgName||'System Alternatives'};
+    const orgName=config.orgName;
+    document.querySelectorAll('.sidebar-top-brand').forEach(el=>el.textContent=orgName);
+    document.getElementById('mobile-title').textContent=orgName;
     if(guidesRes.ok) guides=await guidesRes.json();
     else console.warn('guides.json not found');
     if(stepsRes.ok) stepsData=await stepsRes.json();
@@ -2472,20 +2466,52 @@ async function saveClients(){
 }
 
 // \u2500\u2500\u2500 Syncro \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-async function searchSyncroCustomers(){
-  if(!config)return;
-  const q=document.getElementById('syncro-search-input').value.trim();if(!q)return;
-  const el=document.getElementById('syncro-search-results');
+function renderSyncroLinkArea(){
+  const area=document.getElementById('syncro-link-area');
+  if(!area) return;
+  if(syncroCustomer){
+    area.innerHTML=`<div class="syncro-linked-card">
+      <span class="syncro-linked-name">&#128279; ${syncroCustomer.business_name}</span>
+      <button class="btn-secondary btn-sm" onclick="openSyncroLinkModal()">Change</button>
+      <button class="btn-secondary btn-sm" onclick="unlinkSyncroCustomer()" title="Unlink">&#10005;</button>
+    </div>`;
+  }else{
+    area.innerHTML=`<button class="btn-secondary" onclick="openSyncroLinkModal()">&#128279; Link Syncro Customer</button>`;
+  }
+}
+function openSyncroLinkModal(){
+  if(!config?.syncroToken){showToast('Add Syncro credentials in Settings first','error');return;}
+  document.getElementById('slm-input').value='';
+  document.getElementById('slm-results').innerHTML='';
+  document.getElementById('syncro-link-modal').classList.add('show');
+  setTimeout(()=>document.getElementById('slm-input').focus(),80);
+}
+function closeSyncroLinkModal(){document.getElementById('syncro-link-modal').classList.remove('show');}
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('syncro-link-modal')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeSyncroLinkModal();});
+});
+async function searchSyncroInModal(){
+  const q=document.getElementById('slm-input').value.trim();if(!q)return;
+  const el=document.getElementById('slm-results');
   el.innerHTML='<span class="spinner"></span>';
   try{
     const r=await fetch(`https://${config.syncroSubdomain}.syncromsp.com/api/v1/customers?business_name=${encodeURIComponent(q)}`,{headers:{'accept':'application/json','Authorization':config.syncroToken}});
     if(!r.ok)throw new Error(`HTTP ${r.status}`);
     const data=await r.json();const list=data.customers||[];
-    if(!list.length){el.innerHTML='<div style="color:var(--text3);font-size:10px;padding:4px 0;">No customers found.</div>';return;}
-    el.innerHTML=list.map((c,i)=>`<div class="search-result-item" onclick="selectSyncroCustomer(${i})" id="sri-${i}"><span class="sri-name">${c.business_name}</span><span class="sri-id">ID: ${c.id}</span></div>`).join('');
+    if(!list.length){el.innerHTML='<div style="color:var(--text3);font-size:11px;padding:6px 0;">No customers found.</div>';return;}
+    el.innerHTML=list.map((c,i)=>`<div class="search-result-item" onclick="selectSyncroInModal(${i})"><span class="sri-name">${c.business_name}</span><span class="sri-id">ID: ${c.id}</span></div>`).join('');
     el._customers=list;
-  }catch(e){el.innerHTML=`<div style="color:#fca5a5;font-size:10px;padding:4px 0;">Error: ${e.message}</div>`;}
+  }catch(e){el.innerHTML=`<div style="color:#fca5a5;font-size:11px;padding:6px 0;">Error: ${e.message}</div>`;}
 }
+function selectSyncroInModal(idx){
+  const el=document.getElementById('slm-results');
+  const list=el._customers;if(!list)return;
+  syncroCustomer=list[idx];
+  syncroCustomer._installerMap=buildInstallerMap(syncroCustomer);
+  closeSyncroLinkModal();
+  renderSyncroLinkArea();
+}
+function unlinkSyncroCustomer(){syncroCustomer=null;renderSyncroLinkArea();}
 // Build installer URL map from Syncro customer properties
 function buildInstallerMap(customer){
   const p=customer.properties||{};
@@ -2502,24 +2528,6 @@ function buildInstallerMap(customer){
     if(val) map[type]=template+val;
   });
   return map;
-}
-
-function selectSyncroCustomer(idx){
-  const el=document.getElementById('syncro-search-results');
-  const list=el._customers;if(!list)return;
-  syncroCustomer=list[idx];
-  document.querySelectorAll('.search-result-item').forEach(e=>e.classList.remove('selected-customer'));
-  document.getElementById(`sri-${idx}`).classList.add('selected-customer');
-  // Store full URL map on syncroCustomer
-  syncroCustomer._installerMap=buildInstallerMap(syncroCustomer);
-  const badge=document.getElementById('syncro-customer-badge');
-  if(badge){
-    badge.style.display='block';
-    const types=Object.keys(syncroCustomer._installerMap);
-    badge.textContent=types.length
-      ?`${syncroCustomer.business_name} — RMM installers found`
-      :`${syncroCustomer.business_name} — no RMM data (manual URL needed per device)`;
-  }
 }
 
 function selectDevice(type){
@@ -2565,7 +2573,7 @@ function toggleProduct(id){const c=document.getElementById(`pcheck-${id}`);docum
 async function createClientChecklist(){
   const name=document.getElementById('wiz-clientname').value.trim();
   const tech=document.getElementById('wiz-tech').value.trim();
-  if(!name){showAlert('wizard-alert','error','Client name is required.');return;}
+  if(!name){showAlert('wizard-alert','error','Checklist name is required.');return;}
   const selectedProds=PRODUCTS.filter(p=>document.getElementById(`pcheck-${p.id}`)?.checked).map(p=>p.id);
   if(!selectedProds.length){showAlert('wizard-alert','error','Select at least one product.');return;}
   const dueDate=document.getElementById('wiz-duedate')?.value||null;
@@ -2592,19 +2600,16 @@ function showView(name){
   document.getElementById(map[name]||'view-empty')?.classList.add('active');
   if(name==='new-client'){
     document.getElementById('wizard-alert').innerHTML='';
-    ['wiz-clientname','wiz-tech','syncro-search-input'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-    document.getElementById('syncro-search-results').innerHTML='';
-    const badge=document.getElementById('syncro-customer-badge');
-    if(badge){badge.style.display='none';badge.textContent='';}
+    ['wiz-clientname','wiz-tech'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     syncroCustomer=null;syncroAgentUrl=null;
-    // Set default due date
+    renderSyncroLinkArea();
     const offset=appSettings.defaultDueOffset||90;
     const defaultDue=new Date();defaultDue.setDate(defaultDue.getDate()+offset);
     const dd=document.getElementById('wiz-duedate');
     if(dd) dd.value=defaultDue.toISOString().slice(0,10);
     buildProductsGrid();
   }
-  if(name!=='checklist')document.getElementById('mobile-title').textContent='System Alternatives';
+  if(name!=='checklist')document.getElementById('mobile-title').textContent=config?.orgName||'System Alternatives';
 }
 function showAlert(id,type,msg){const el=document.getElementById(id);if(el)el.innerHTML=`<div class="alert alert-${type}">${msg}</div>`;}
 
