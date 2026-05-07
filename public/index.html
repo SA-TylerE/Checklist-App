@@ -344,8 +344,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .toast{border-radius:8px;font-size:12px;font-weight:500;opacity:0;transform:translateY(16px);transition:opacity 0.28s ease,transform 0.28s ease;pointer-events:none;overflow:hidden;}
 .toast.show{opacity:1;transform:translateY(0);}
 .toast.removing{opacity:0;transform:translateY(8px);}
-.toast-title{font-size:11px;font-weight:700;padding:8px 12px 4px;opacity:0.9;}
-.toast-body{padding:4px 12px 9px;line-height:1.45;}
+.toast-title{font-size:11px;font-weight:700;padding:8px 12px 4px;}
+.toast-body{padding:4px 12px 6px;line-height:1.5;}
+.toast-footer{font-size:9px;opacity:0.6;padding:4px 12px 8px;border-top:1px solid rgba(255,255,255,0.12);margin-top:2px;}
 .toast.simple .toast-body{padding:9px 12px;}
 .toast.success{background:#166534;color:#86efac;border:1px solid rgba(34,197,94,0.3);}
 .toast.error{background:#7f1d1d;color:#fca5a5;border:1px solid rgba(239,68,68,0.3);}
@@ -877,6 +878,16 @@ window.matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{
 // ─── Toast ────────────────────────────────────────────────────────────────────
 function showToast(msg,type='success',duration=2800){
   showRichToast({body:msg,type,duration,simple:true});
+}
+function showRichToastFull({title,body,footer,type='info',duration=4500}){
+  const c=document.getElementById('toast-container');
+  const t=document.createElement('div');
+  t.className='toast '+type;
+  t.innerHTML=`<div class="toast-title">${title}</div><div class="toast-body">${body}</div><div class="toast-footer">${footer}</div>`;
+  c.appendChild(t);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>t.classList.add('show')));
+  t._expTimer=setTimeout(()=>{t.classList.add('removing');setTimeout(()=>t.remove(),350);},duration);
+  return t;
 }
 function showRichToast({title,body,type='info',duration=4500,simple=false}){
   const c=document.getElementById('toast-container');
@@ -1658,6 +1669,7 @@ async function saveAllConfig(){
 }
 
 function renderSidebar(filter){
+  const sbFrom=captureBarWidths();
   const list=document.getElementById('client-list');
   const entries=Object.values(clients).filter(c=>!filter||c.name.toLowerCase().includes(filter.toLowerCase()));
   if(!entries.length){list.innerHTML=`<div style="padding:10px;font-size:10px;color:var(--text3);text-align:center;">No clients yet</div>`;return;}
@@ -1678,10 +1690,12 @@ function renderSidebar(filter){
       ${unseenBadge}
     </div>`;
   }).join('');
-  animateBars(list);
+  animateBars(list, sbFrom);
 }
 function selectClient(id){
   if(isMobile()) closeOverlays();
+  unseenChanges.delete(id);
+  clearAllUpdateDots();
   loadClientChecklist(id);
 }
 function filterClients(val){renderSidebar(val);}
@@ -1902,7 +1916,6 @@ function renderDeviceGuide(clientId){
 
 function loadClientChecklist(id){
   activeClientId=id;
-  unseenChanges.delete(id);
   const client=clients[id];
   const phases=buildPhases(client);
   const prog=overallProgress(client);
@@ -2523,14 +2536,18 @@ function captureBarWidths(){
   document.querySelectorAll('[data-bar-id]').forEach(el=>{m[el.dataset.barId]=el.style.width;});
   return m;
 }
-function animateBars(container){
-  const from=pendingBarWidths;pendingBarWidths=null;
+function animateBars(container, fromWidths){
+  // Explicit fromWidths → use it, leave pendingBarWidths alone
+  // No argument → consume pendingBarWidths
+  let from;
+  if(fromWidths!==undefined){from=fromWidths;}
+  else{from=pendingBarWidths||{};pendingBarWidths=null;}
   const els=(container||document).querySelectorAll('[data-w]');
   if(from&&Object.keys(from).length){
     els.forEach(el=>{
       if(el.dataset.barId){
         const prev=from[el.dataset.barId];
-        if(prev!==undefined&&prev!=='0%'&&prev!==''){
+        if(prev&&prev!=='0%'&&prev!==''){
           el.style.transition='none';
           el.style.width=prev;
           void el.offsetWidth;
@@ -2648,10 +2665,18 @@ function detectChangedSteps(oldClient,newClient){
 }
 
 function pulseSteps(changes,techName){
+  // Mark active client in sidebar as having unseen changes
+  if(activeClientId&&changes.length){
+    const prev=unseenChanges.get(activeClientId)||{count:0};
+    unseenChanges.set(activeClientId,{count:prev.count+changes.length,techName});
+    renderSidebar();
+  }
   const pulsedPhases=new Set();
   changes.forEach(({id,done})=>{
     const el=document.getElementById('step-'+id)||document.querySelector(`[id$="-${id}"]`);
     if(el){
+      // Resolve title element FIRST (used by chip and dot below)
+      const titleEl=el.querySelector('.step-title,.device-step-title,.substep-title');
       // Pulse the element
       el.classList.remove('sse-pulse');void el.offsetWidth;el.classList.add('sse-pulse');
       // Attribution chip — inline after step title
@@ -2661,9 +2686,8 @@ function pulseSteps(changes,techName){
         chip.textContent=(done?'✓ ':'✕ ')+techName;
         titleEl.appendChild(chip);setTimeout(()=>chip.remove(),4200);
       }
-      // Track step for persistent dot (applyUpdateDots handles actual DOM)
+      // Track step for persistent dot
       stepUpdateDots.add(id);
-      const titleEl=el.querySelector('.step-title,.device-step-title,.substep-title');
       if(titleEl){
         titleEl.querySelector('.step-update-dot')?.remove();
         const dot=document.createElement('span');dot.className='step-update-dot';
@@ -2721,24 +2745,27 @@ function connectSSE(){
       if(!oldC||!newC||oldC.lastModified===newC.lastModified) return;
       const prev=unseenChanges.get(cid)||{count:0};
       unseenChanges.set(cid,{count:prev.count+1,techName});
-      // Build toast lines immediately for this client
+      // Build toast content — group by phase for title
       const cidChanges=detectChangedSteps(oldC,newC);
       const who=techName||'A tech';
-      const newLines=cidChanges.map(({title,done,phase})=>
-        `${done?'✓':'○'} <strong>${title||'a step'}</strong>${phase?` <span style="opacity:0.6;font-size:9px;">· ${phase}</span>`:''}`
+      const phases=[...new Set(cidChanges.map(c=>c.phase).filter(Boolean))];
+      const toastTitle=phases.length===1?`${phases[0]} — Updated`:`${newC.name} — Updated`;
+      const bodyLines=cidChanges.map(({title,done})=>
+        `${done?'✓':'○'} ${title||'a step'}`
       );
+      const now=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      const footer=`by ${who} · ${now}`;
       // Live-update existing toast if still visible, else create immediately
       const existingToast=unseenToastTimers.get(cid+'_toast');
       if(existingToast&&existingToast.isConnected&&!existingToast.classList.contains('removing')){
         const bodyEl=existingToast.querySelector('.toast-body');
-        if(bodyEl) bodyEl.innerHTML+=`<br>${newLines.join('<br>')}`;
+        if(bodyEl) bodyEl.innerHTML+=`<br>${bodyLines.join('<br>')}`;
+        const ftEl=existingToast.querySelector('.toast-footer');
+        if(ftEl) ftEl.textContent=`by ${who} · ${now}`;
         clearTimeout(existingToast._expTimer);
-        existingToast._expTimer=setTimeout(()=>{
-          existingToast.classList.add('removing');
-          setTimeout(()=>existingToast.remove(),350);
-        },5000);
+        existingToast._expTimer=setTimeout(()=>{existingToast.classList.add('removing');setTimeout(()=>existingToast.remove(),350);},5000);
       } else {
-        const t=showRichToast({title:`${who} — ${newC.name}`,body:newLines.join('<br>'),type:'info',duration:5000});
+        const t=showRichToastFull({title:toastTitle,body:bodyLines.join('<br>'),footer,type:'info',duration:5500});
         unseenToastTimers.set(cid+'_toast',t);
       }
     });
