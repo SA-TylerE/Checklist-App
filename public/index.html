@@ -863,6 +863,8 @@ let currentTheme=localStorage.getItem('theme')||'system';
 const isMobile=()=>window.innerWidth<=1024;
 const unseenChanges=new Map();
 const unseenToastTimers=new Map();
+const notifyStore=new Map();          // notifyId -> {techName,ts} — single source of truth
+const pendingClientChanges=new Map(); // clientId -> {changes:Array, techName:string}
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 function applyTheme(theme){
