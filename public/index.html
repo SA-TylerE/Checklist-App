@@ -58,9 +58,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 #main-area{flex:1;display:flex;overflow:hidden;min-width:0;}
 #checklist-pane{flex:1;overflow-y:auto;padding:24px 28px;min-width:0;}
 
-/* Guide panel \u2014 desktop */
-#guide-panel{width:0;min-width:0;overflow:hidden;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;transition:width 0.25s;flex-shrink:0;position:relative;z-index:20;}
-#guide-panel.open{width:var(--guide-w);min-width:var(--guide-w);}
+/* Guide panel \u2014 fixed overlay, no layout shift */
+#guide-panel{position:fixed;right:0;top:0;height:100dvh;width:0;overflow:hidden;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;transition:width 0.25s;z-index:150;box-shadow:-4px 0 20px rgba(0,0,0,0.25);}
+#guide-panel.open{width:var(--guide-w);}
 .guide-drag-handle{display:none;width:100%;padding:12px 0 8px;cursor:ns-resize;flex-shrink:0;touch-action:none;}
 .guide-drag-handle .bar{width:40px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto;}
 .guide-header{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
@@ -88,8 +88,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .guide-note{background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:5px;padding:7px 9px;font-size:10px;color:#93c5fd;margin-bottom:8px;line-height:1.5;}
 .guide-warn{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:5px;padding:7px 9px;font-size:10px;color:#fca5a5;margin-bottom:8px;line-height:1.5;}
 
-/* Overlay bg \u2014 sits BELOW guide panel z-index */
-#overlay-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:15;}
+/* Overlay bg \u2014 sits between content and guide/sidebar */
+#overlay-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:140;}
 #overlay-bg.show{display:block;}
 
 /* Views */
@@ -185,11 +185,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 @keyframes progressStripe{from{background-position:0 0;}to{background-position:14px 0;}}
 
 /* Phase + device card grids */
-.phase-grid,.device-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px;align-items:start;}
+.phase-grid,.device-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(450px,1fr));gap:10px;align-items:start;}
 .phase-grid .phase-block,.device-grid .device-entry{margin-bottom:0;}
-.phase-grid .completed-divider{grid-column:1/-1;}
-/* In grid, phase headers don't need to be sticky (multiple columns) */
+/* In grid, phase headers don't need to be sticky */
 .phase-grid .phase-header{position:static;}
+/* Completed section */
+.completed-section{margin-top:20px;}
+.completed-section-hdr{display:flex;align-items:center;gap:10px;margin-bottom:10px;color:var(--text3);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;}
+.completed-section-hdr::before,.completed-section-hdr::after{content:'';flex:1;height:1px;background:var(--border);}
 
 /* Phase */
 .phase-block{margin-bottom:5px;border:1px solid var(--border);border-radius:10px;}
@@ -1078,12 +1081,13 @@ function openGuide(guideId){
   document.getElementById('guide-title').textContent=guide.title;
   document.getElementById('guide-content').innerHTML=renderGuideBody(guide);
   panel.classList.add('open');
-  if(isMobile()) document.getElementById('overlay-bg').classList.add('show');
+  // Show backdrop on all screen sizes — guide now overlays content everywhere
+  document.getElementById('overlay-bg').classList.add('show');
 }
 function closeGuide(){
   activeGuideId=null;
   document.getElementById('guide-panel').classList.remove('open');
-  if(isMobile()) document.getElementById('overlay-bg').classList.remove('show');
+  document.getElementById('overlay-bg').classList.remove('show');
 }
 function toggleGuideSection(id){document.getElementById(id)?.classList.toggle('open');}
 
@@ -2063,12 +2067,15 @@ function loadClientChecklist(id){
   <div class="tab-panel ${activeChecklistTab!=='devices'?'active':''}" id="tab-org-${id}">
   <div class="phase-grid">`;
 
-  activePhases.forEach((p,i)=>{ html+=renderPhase(id,p,i+1,i>0); });
+  activePhases.forEach((p,i)=>{ html+=renderPhase(id,p,i+1,false); }); // all open by default
+  html+=`</div>`;
+
   if(completedPhases.length){
-    html+=`<div class="completed-divider">Completed sections</div>`;
-    completedPhases.forEach(p=>{ html+=renderPhase(id,p,'✓',true); });
+    html+=`<div class="completed-section"><div class="completed-section-hdr">Completed</div><div class="phase-grid">`;
+    completedPhases.forEach(p=>{ html+=renderPhase(id,p,'✓',true); }); // completed collapsed
+    html+=`</div></div>`;
   }
-  html+=`</div></div>`;
+  html+=`</div>`;
 
   // Devices tab
   html+=`<div class="tab-panel ${activeChecklistTab==='devices'?'active':''}" id="tab-devices-${id}">`;
