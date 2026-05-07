@@ -7,8 +7,10 @@ const app        = express();
 const PORT       = 3001;
 const DATA_FILE  = path.join(__dirname, 'data', 'clients.json');
 const CFG_FILE   = path.join(__dirname, 'data', 'config.json');
+const LOG_FILE   = path.join(__dirname, 'data', 'logs.json');
 const BACKUP_DIR = path.join(__dirname, 'data', 'backups');
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const MAX_LOGS   = 5000;
 
 app.use(express.json({ limit: '5mb' }));
 app.use(express.static(PUBLIC_DIR));
@@ -189,6 +191,29 @@ app.get('/api/events', (req, res) => {
   const hb = setInterval(() => { try { res.write(': heartbeat\n\n'); } catch(_) { clearInterval(hb); } }, 25000);
   sseClients.add(res);
   req.on('close', () => { clearInterval(hb); sseClients.delete(res); });
+});
+
+// Logs
+function readLogs(){
+  try{ return JSON.parse(fs.readFileSync(LOG_FILE,'utf8')); }catch(_){ return []; }
+}
+app.get('/api/logs',(req,res)=>{
+  try{
+    let logs=readLogs();
+    const {clientId,limit=500}=req.query;
+    if(clientId) logs=logs.filter(l=>l.clientId===clientId);
+    res.json(logs.slice(0,parseInt(limit)));
+  }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/logs',(req,res)=>{
+  try{
+    let logs=readLogs();
+    const entry={...req.body,id:Date.now()+'-'+Math.random().toString(36).slice(2,6)};
+    logs.unshift(entry);
+    if(logs.length>MAX_LOGS) logs=logs.slice(0,MAX_LOGS);
+    atomicWrite(LOG_FILE,JSON.stringify(logs));
+    res.json({ok:true});
+  }catch(e){res.status(500).json({error:e.message});}
 });
 
 // Health
