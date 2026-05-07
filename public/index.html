@@ -481,9 +481,13 @@ body.light .syncro-linked-name{color:#1e40af;}
 .sse-attr{position:absolute;right:8px;top:8px;padding:2px 7px;border-radius:12px;font-size:9px;font-weight:600;background:var(--accent);color:white;pointer-events:none;animation:attrFade 4s ease-out forwards;white-space:nowrap;z-index:2;}
 /* Unseen change dot on sidebar client */
 .unseen-dot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--accent);}
-/* Per-step update dot */
-.step-update-dot{position:absolute;left:3px;top:50%;transform:translateY(-50%);width:6px;height:6px;border-radius:50%;background:var(--accent);pointer-events:none;transition:opacity 0.35s;z-index:2;}
-.step-item:hover>.step-row .step-update-dot,.step-item:hover>.step-update-dot{opacity:0;}
+/* Per-step update dot — inline after step title */
+@keyframes dotPulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.3;transform:scale(0.6);}}
+.step-update-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-left:6px;vertical-align:middle;flex-shrink:0;pointer-events:none;animation:dotPulse 1.5s ease-in-out infinite;transition:opacity 0.35s;}
+.step-item:hover .step-update-dot{opacity:0;animation:none;}
+/* Phase header update dot */
+.phase-update-dot{display:none;width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-left:4px;animation:dotPulse 1.5s ease-in-out infinite;}
+.phase-block.has-update .phase-update-dot{display:inline-block;}
 /* Clear updates button */
 .clear-updates-btn{font-size:10px;padding:2px 8px;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text3);cursor:pointer;white-space:nowrap;transition:all 0.15s;}
 .clear-updates-btn:hover{border-color:var(--border2);color:var(--text);}
@@ -534,7 +538,7 @@ body.light .who-chip{background:rgba(30,64,175,0.06);border-color:rgba(30,64,175
 .edit-client-card h3{font-size:15px;font-weight:600;margin-bottom:16px;}
 
 /* Theme pill — modern 3-segment style */
-.theme-pill{display:flex;background:var(--bg4);border:1px solid var(--border);border-radius:7px;overflow:hidden;padding:2px;gap:2px;}
+.theme-pill{display:flex;background:var(--bg4);border:1px solid var(--border);border-radius:7px;overflow:hidden;padding:2px;gap:2px;margin:0;}
 .theme-btn{display:flex;align-items:center;justify-content:center;gap:5px;padding:5px 10px;font-size:11px;color:var(--text3);cursor:pointer;background:none;border:none;border-radius:5px;transition:all 0.15s;white-space:nowrap;}
 .theme-btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 .theme-btn.active{background:var(--bg2);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,0.25);}
@@ -852,6 +856,7 @@ let currentTheme=localStorage.getItem('theme')||'system';
 const isMobile=()=>window.innerWidth<=1024;
 const unseenChanges=new Map();
 const unseenToastTimers=new Map();
+const phaseUpdateDots=new Set(); // phase element IDs that have pending update dots
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 function applyTheme(theme){
@@ -879,7 +884,7 @@ function showRichToast({title,body,type='info',duration=4500,simple=false}){
   if(title&&!simple){
     t.innerHTML=`<div class="toast-title">${title}</div><div class="toast-body">${body||''}</div>`;
   }else{
-    t.innerHTML=`<div class="toast-body">${body||msg||''}</div>`;
+    t.innerHTML=`<div class="toast-body">${body||''}</div>`;
   }
   c.appendChild(t);
   requestAnimationFrame(()=>requestAnimationFrame(()=>t.classList.add('show')));
@@ -902,6 +907,8 @@ async function logAction(action,details={}){
 
 function clearAllUpdateDots(){
   document.querySelectorAll('.step-update-dot').forEach(d=>d.remove());
+  phaseUpdateDots.clear();
+  document.querySelectorAll('.phase-block.has-update').forEach(p=>p.classList.remove('has-update'));
   document.getElementById('clear-updates-btn')?.style.setProperty('display','none');
 }
 
@@ -1667,10 +1674,11 @@ function renderSidebar(filter){
     return `<div class="client-item ${c.id===activeClientId?'active':''}" onclick="selectClient('${c.id}')" title="${c.name}">
       <div class="cn">${c.name} ${staleBadge}</div>
       <div class="cm">${c.tech} \u00b7 ${pct}% org</div>
-      <div class="cpbar"><div class="cpbar-fill" style="width:${pct}%"></div></div>
+      <div class="cpbar"><div class="cpbar-fill" style="width:0" data-w="${pct}"></div></div>
       ${unseenBadge}
     </div>`;
   }).join('');
+  animateBars(list);
 }
 function selectClient(id){
   if(isMobile()) closeOverlays();
@@ -1771,7 +1779,7 @@ function renderPhase(clientId,phase,phaseNum,forceCollapsed){
   return `<div class="phase-block ${complete?'completed':''} ${collapsed?'collapsed':''}" id="phase-${phase.id}">
     <div class="phase-header" onclick="togglePhase('${phase.id}')">
       <div class="phase-num">${complete?chk():phaseNum}</div>
-      <h3>${phase.title}</h3>
+      <h3>${phase.title}</h3><span class="phase-update-dot"></span>
       ${phase.badge?`<span class="phase-badge">${phase.badge}</span>`:''}
       <span class="phase-progress-text">${prog.done}/${prog.total}</span>
       <span class="phase-collapse-icon">&#9660;</span>
@@ -1955,7 +1963,7 @@ function loadClientChecklist(id){
 
   <div class="progress-bar-wrap">
     <div class="progress-stats"><span>${prog.done} of ${prog.total} org steps complete</span><span>${pct}%</span></div>
-    <div class="progress-bar"><div class="progress-bar-fill ${pct===100?'complete':''}" style="width:${pct}%"></div></div>
+    <div class="progress-bar"><div class="progress-bar-fill ${pct===100?'complete':''}" style="width:0" data-w="${pct}"></div></div>
   </div>
 
   <!-- Org tab -->
@@ -1974,6 +1982,7 @@ function loadClientChecklist(id){
   html+=`</div>`;
 
   document.getElementById('checklist-content').innerHTML=html;
+  animateBars(document.getElementById('checklist-content'));
   // Restore active tab
   if(activeChecklistTab==='devices'){
     switchChecklistTab(id,'devices');
@@ -2508,6 +2517,14 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeGuide();closeA
 
 // \u2500\u2500\u2500 API \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 // ─── SSE live sync ────────────────────────────────────────────────────────────
+function animateBars(container){
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    (container||document).querySelectorAll('[data-w]').forEach(el=>{
+      el.style.width=el.dataset.w+'%';
+    });
+  }));
+}
+
 function getChecklistUIState(){
   const state={phases:{},steps:{},tab:activeChecklistTab,scrollTop:0};
   const pane=document.getElementById('checklist-pane');
@@ -2530,6 +2547,8 @@ function restoreChecklistUIState(clientId,state){
     const el=document.getElementById(id);
     if(el){el.classList.toggle('expanded',s.expanded);el.classList.toggle('note-open',s.noteOpen);}
   });
+  // Re-apply persistent phase update dots
+  phaseUpdateDots.forEach(id=>{document.getElementById(id)?.classList.add('has-update');});
   const pane=document.getElementById('checklist-pane');
   if(pane&&state.scrollTop) pane.scrollTop=state.scrollTop;
 }
@@ -2587,37 +2606,44 @@ function pulseSteps(changes,techName){
   changes.forEach(({id,done})=>{
     const el=document.getElementById('step-'+id)||document.querySelector(`[id$="-${id}"]`);
     if(el){
+      // Pulse the element
       el.classList.remove('sse-pulse');void el.offsetWidth;el.classList.add('sse-pulse');
-      // Attribution chip
+      // Attribution chip (on step row, not full element)
       if(techName){
         el.querySelector('.sse-attr')?.remove();
         const chip=document.createElement('span');chip.className='sse-attr';
         chip.textContent=(done?'✓ ':'✕ ')+techName;
         el.appendChild(chip);setTimeout(()=>chip.remove(),4200);
       }
-      // Persistent update dot
-      el.querySelector('.step-update-dot')?.remove();
-      const dot=document.createElement('span');dot.className='step-update-dot';
-      el.appendChild(dot);
-      el.addEventListener('mouseenter',()=>{
-        dot.style.opacity='0';setTimeout(()=>dot.remove(),380);
-      },{once:true});
-      // Show clear button if in active checklist
-      const cb=document.getElementById('clear-updates-btn');
-      if(cb) cb.style.removeProperty('display');
-      // Pulse collapsed parent phase header
+      // Inline update dot after step title (one per step, replaces existing)
+      const titleEl=el.querySelector('.step-title,.device-step-title,.substep-title');
+      if(titleEl){
+        titleEl.querySelector('.step-update-dot')?.remove();
+        const dot=document.createElement('span');dot.className='step-update-dot';
+        titleEl.appendChild(dot);
+        el.addEventListener('mouseenter',()=>{
+          dot.style.opacity='0';dot.style.animation='none';
+          setTimeout(()=>dot.remove(),380);
+        },{once:true});
+      }
+      // Show "clear updates" button
+      document.getElementById('clear-updates-btn')?.style.removeProperty('display');
+      // Phase header: pulse + persistent dot
       const phase=el.closest('.phase-block');
-      if(phase&&phase.classList.contains('collapsed')&&!pulsedPhases.has(phase.id)){
-        pulsedPhases.add(phase.id);
+      if(phase){
         const hdr=phase.querySelector('.phase-header');
-        if(hdr){hdr.classList.remove('sse-pulse');void hdr.offsetWidth;hdr.classList.add('sse-pulse');}
+        if(hdr&&!pulsedPhases.has(phase.id)){
+          pulsedPhases.add(phase.id);
+          hdr.classList.remove('sse-pulse');void hdr.offsetWidth;hdr.classList.add('sse-pulse');
+        }
+        // Always add has-update to phase (visible when collapsed)
+        phase.classList.add('has-update');
+        phaseUpdateDots.add(phase.id);
       }
     } else {
-      // Step not in DOM (different tab or collapsed device) — pulse sidebar item
-      if(activeClientId){
-        const sidebarItem=document.querySelector(`#client-list .client-item.active`);
-        if(sidebarItem){sidebarItem.classList.remove('sse-pulse');void sidebarItem.offsetWidth;sidebarItem.classList.add('sse-pulse');}
-      }
+      // Not in DOM — pulse active sidebar item as fallback
+      const sidebarItem=document.querySelector('#client-list .client-item.active');
+      if(sidebarItem){sidebarItem.classList.remove('sse-pulse');void sidebarItem.offsetWidth;sidebarItem.classList.add('sse-pulse');}
     }
   });
 }
@@ -2640,23 +2666,31 @@ function connectSSE(){
       if(!oldC||!newC||oldC.lastModified===newC.lastModified) return;
       const prev=unseenChanges.get(cid)||{count:0};
       unseenChanges.set(cid,{count:prev.count+1,techName});
+      // Compute what changed on this specific client
+      const cidChanges=detectChangedSteps(oldC,newC);
       // Batch changes into a 1.5s window then show one rich toast
       if(!unseenToastTimers.has(cid)){
-        const buf={techName,changes:[...changedSteps],clientName:newC.name};
+        const buf={techName,changes:[...cidChanges],clientName:newC.name};
         const timer=setTimeout(()=>{
           unseenToastTimers.delete(cid);
           const b=unseenToastTimers.get(cid+'_buf')||buf;
-          const t=b.techName||'A tech';
-          const lines=(b.changes||[]).map(({title,done})=>`${done?'✓':'○'} ${title||'a step'}`);
-          showRichToast({title:`${t} — ${b.clientName||cid}`,body:lines.slice(0,4).join('<br>'),type:'info',duration:5000});
+          const who=b.techName||'A tech';
+          const lines=(b.changes||[]).map(({title,done,phase})=>
+            `${done?'✓':'○'} <strong>${title||'a step'}</strong>${phase?' <span style="opacity:0.65;font-size:10px;">· '+phase+'</span>':''}`
+          );
+          showRichToast({
+            title:`${who} — ${b.clientName||cid}`,
+            body:lines.slice(0,5).join('<br>'),
+            type:'info',duration:6000
+          });
           unseenToastTimers.delete(cid+'_buf');
         },1500);
         unseenToastTimers.set(cid,timer);
-        unseenToastTimers.set(cid+'_buf',{techName,changes:[...changedSteps],clientName:newC.name});
+        unseenToastTimers.set(cid+'_buf',buf);
       } else {
         // Accumulate into existing buffer
         const buf=unseenToastTimers.get(cid+'_buf');
-        if(buf){buf.changes.push(...changedSteps);buf.techName=techName||buf.techName;}
+        if(buf){buf.changes.push(...cidChanges);buf.techName=techName||buf.techName;}
       }
     });
     const ui=getChecklistUIState();
