@@ -108,7 +108,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 /* Form */
 .field-group{margin-bottom:12px;}
 .field-group label{display:block;font-size:10px;font-weight:500;color:var(--text2);margin-bottom:3px;letter-spacing:0.04em;text-transform:uppercase;}
-.field-group input,.field-group select,.field-group textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;outline:none;font-family:var(--sans);}
+.field-group input,.field-group select,.field-group textarea{width:100%;max-width:560px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;outline:none;font-family:var(--sans);}
+.field-group textarea{max-width:100%;} /* let textareas fill for readability */
+.modal-card .field-group input,.modal-card .field-group select,.modal-card .field-group textarea,.edit-client-card .field-group input{max-width:100%;} /* full width inside modals */
 .field-group input:focus,.field-group textarea:focus,.field-group select:focus{border-color:var(--accent);}
 .field-group input::placeholder,.field-group textarea::placeholder{color:var(--text3);}
 .field-group textarea{resize:vertical;min-height:52px;}
@@ -1839,10 +1841,10 @@ function renderInstEntry(clientId, dev){
   const rawUrl=dev.rawInstallerUrl||(client.syncroInstallerMap?.[dev.type])||client.syncroInstallerUrl||null;
   if(rawUrl) return `<div id="inst-${clientId}-${dev.id}"></div>`;
   // No URL — show inline input
-  return `<div class="inst-manual" id="imw-${clientId}-${dev.id}" onclick="event.stopPropagation()">
-    <div style="display:flex;gap:5px;margin-top:5px;align-items:center;flex-wrap:wrap;">
-      <input type="text" id="iminp-${dev.id}" class="field-group input" style="flex:1;min-width:140px;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:11px;outline:none;font-family:var(--sans);" placeholder="Paste RMM installer URL…" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
-      <button class="btn-primary btn-sm" onclick="event.stopPropagation();saveDevInstUrl('${clientId}','${dev.id}','${escHtml(dev.type||'')}')">Save &amp; Shorten</button>
+  return `<div class="inst-manual" id="imw-${clientId}-${dev.id}" onclick="event.stopPropagation()" style="max-width:540px;">
+    <div style="display:flex;gap:6px;margin-top:6px;align-items:stretch;">
+      <input type="text" id="iminp-${dev.id}" style="flex:1;min-width:0;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px 9px;color:var(--text);font-size:11px;outline:none;font-family:var(--sans);height:32px;box-sizing:border-box;" placeholder="Paste RMM installer URL…" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+      <button class="btn-primary btn-sm" style="height:32px;white-space:nowrap;flex-shrink:0;" onclick="event.stopPropagation();saveDevInstUrl('${clientId}','${dev.id}','${escHtml(dev.type||'')}')">Save &amp; Shorten</button>
     </div>
     <div id="imshort-${dev.id}" style="display:none;font-size:10px;color:var(--accent);margin-top:3px;"></div>
   </div>`;
@@ -1850,7 +1852,15 @@ function renderInstEntry(clientId, dev){
 async function saveDevInstUrl(clientId, devId, devType){
   const input=document.getElementById('iminp-'+devId);
   const raw=(input?.value||'').trim();
-  if(!raw){input?.focus();return;}
+  if(!raw){input?.focus();showToast('Enter a URL first','error');return;}
+  let isValidUrl=false;
+  try{const u=new URL(raw);isValidUrl=u.protocol==='https:'||u.protocol==='http:';}catch(_){}
+  if(!isValidUrl){
+    input.style.borderColor='var(--danger)';
+    showToast('Please enter a valid https:// URL','error');
+    setTimeout(()=>{if(input)input.style.borderColor='var(--border)';},2500);
+    return;
+  }
   const btn=input?.nextElementSibling;
   if(btn){btn.textContent='Saving…';btn.disabled=true;}
   let shortUrl=null;
@@ -1949,7 +1959,7 @@ function renderDeviceGuide(clientId){
         </div>
       </div>`;
     }).join('');
-    return `<div class="device-entry ${dev.expanded?'expanded':''}" id="dev-${dev.id}">
+    return `<div class="device-entry ${isDevExpanded(clientId,dev.id)?'expanded':''}" id="dev-${dev.id}">
       <div class="device-entry-header" onclick="toggleDeviceEntry('${clientId}','${dev.id}')">
         <span class="device-entry-name">${dev.name}</span>
         <span class="device-entry-meta">${dev.type||''}</span>
@@ -2423,10 +2433,18 @@ async function toggleDeviceStep(cid,did,sid){
   await saveClients();
   refreshDeviceGuide(cid);
 }
-async function toggleDeviceEntry(cid,did){
+function devExpKey(cid,did){return`devexp-${cid}-${did}`;}
+function isDevExpanded(cid,did){
+  const s=sessionStorage.getItem(devExpKey(cid,did));
+  if(s!==null) return s==='1';
+  return !!(clients[cid]?.devices?.[did]?.expanded); // initial state from data
+}
+function setDevExpanded(cid,did,val){sessionStorage.setItem(devExpKey(cid,did),val?'1':'0');}
+
+function toggleDeviceEntry(cid,did){
+  // Session-local: don't save to server, don't broadcast
   const c=clients[cid];if(!c.devices||!c.devices[did])return;
-  c.devices[did].expanded=!c.devices[did].expanded;
-  await saveClients();
+  setDevExpanded(cid,did,!isDevExpanded(cid,did));
   refreshDeviceGuide(cid);
 }
 function refreshDeviceGuide(clientId){
@@ -2475,7 +2493,7 @@ function refreshDeviceGuide(clientId){
         </div>
       </div>`;
     }).join('');
-    return `<div class="device-entry ${dev.expanded?'expanded':''}" id="dev-${dev.id}">
+    return `<div class="device-entry ${isDevExpanded(clientId,dev.id)?'expanded':''}" id="dev-${dev.id}">
       <div class="device-entry-header" onclick="toggleDeviceEntry('${clientId}','${dev.id}')">
         <span class="device-entry-name">${dev.name}</span>
         <span class="device-entry-meta">${dev.type||''}</span>
@@ -2687,6 +2705,32 @@ function applyUpdateDots(){
     const phase=el.closest('.phase-block');
     if(phase) phaseUpdateDots.add(phase.id);
   });
+  // Device entry header dots (for dev- prefixed IDs)
+  const affectedDevIds=new Set();
+  stepUpdateDots.forEach(id=>{
+    const m=id.match(/dev-(dev-\d+)/);
+    if(m) affectedDevIds.add(m[1]);
+  });
+  affectedDevIds.forEach(devId=>{
+    const devEl=document.getElementById('dev-'+devId);
+    if(!devEl) return;
+    const nameEl=devEl.querySelector('.device-entry-name');
+    if(nameEl&&!nameEl.querySelector('.step-update-dot')){
+      const dot=document.createElement('span');dot.className='step-update-dot';
+      dot.style.cssText='margin-left:5px;vertical-align:middle;display:inline-block;';
+      nameEl.appendChild(dot);
+      devEl.addEventListener('mouseenter',()=>{
+        dot.style.opacity='0';dot.style.animation='none';
+        setTimeout(()=>dot.remove(),380);
+        // Remove all step IDs for this device from tracking
+        [...stepUpdateDots].filter(id=>id.includes(devId)).forEach(sid=>{
+          stepUpdateDots.delete(sid);
+          pendingClientDots.get(activeClientId)?.delete(sid);
+        });
+        applyTabDots();
+      },{once:true});
+    }
+  });
   // Apply phase dots (class + direct style for reliability)
   phaseUpdateDots.forEach(id=>{
     const el=document.getElementById(id);
@@ -2790,7 +2834,7 @@ function detectChangedSteps(oldClient,newClient){
     Object.keys(dev.steps||{}).forEach(sid=>{
       if((oldDev.steps||{})[sid]!==(dev.steps||{})[sid]){
         const def=findDevStepById(sid);
-        changed.push({id:'dev-'+dev.id+'-'+sid,done:!!(dev.steps||{})[sid],title:`${def?.title||sid} — ${dev.name||dev.id}`,phase:'Devices'});
+        changed.push({id:'dev-'+dev.id+'-'+sid,done:!!(dev.steps||{})[sid],title:def?.title||sid,deviceName:dev.name||dev.id,phase:'Devices'});
       }
     });
     if((oldDev.notes||'')!==(dev.notes||'')){
@@ -2895,12 +2939,15 @@ function connectSSE(){
       // Toast for all changed clients
       const who=techName||'A tech';
       const phases=[...new Set(cidChanges.map(c=>c.phase).filter(Boolean))];
-      const sectionLabel=phases.length===1?phases[0]:phases.length>1?phases.join(' · '):'Devices';
+      const deviceNames=[...new Set(cidChanges.map(c=>c.deviceName).filter(Boolean))];
+      const sectionLabel=deviceNames.length===1?deviceNames[0]:(phases.length===1?phases[0]:phases.length>1?phases.join(' · '):'Updated');
       const toastTitle=`${newC.name} · ${sectionLabel} — Updated`;
+      // Use per-device key so different devices get separate toasts
+      const toastKey=deviceNames.length===1?`${cid}_${deviceNames[0]}`:`${cid}_toast`;
       const bodyLines=cidChanges.map(({title,done})=>`${done?'✓':'○'} ${title||'a step'}`);
       const now=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
       const footer=`by ${who} · ${now}`;
-      const existingToast=unseenToastTimers.get(cid+'_toast');
+      const existingToast=unseenToastTimers.get(toastKey);
       if(existingToast&&existingToast.isConnected&&!existingToast.classList.contains('removing')){
         const bodyEl=existingToast.querySelector('.toast-body');
         if(bodyEl) bodyEl.innerHTML+=`<br>${bodyLines.join('<br>')}`;
@@ -2910,7 +2957,7 @@ function connectSSE(){
         existingToast._expTimer=setTimeout(()=>{existingToast.classList.add('removing');setTimeout(()=>existingToast.remove(),350);},5000);
       } else {
         const t=showRichToastFull({title:toastTitle,body:bodyLines.join('<br>'),footer,type:'info',duration:5500,clientId:cid});
-        unseenToastTimers.set(cid+'_toast',t);
+        unseenToastTimers.set(toastKey,t);
       }
     });
     const ui=getChecklistUIState();
