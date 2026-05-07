@@ -491,13 +491,9 @@ body.light .syncro-linked-name{color:#1e40af;}
 .sse-attr{display:inline-block;padding:1px 6px;border-radius:10px;font-size:9px;font-weight:600;background:var(--accent);color:white;pointer-events:none;animation:attrFade 4s ease-out forwards;white-space:nowrap;margin-left:5px;vertical-align:middle;}
 /* Unseen change dot on sidebar client */
 .unseen-dot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--accent);}
-/* Per-step update dot — inline after step title */
+/* Unified notification dot — rendered by renderAllDots() on [data-notify-id] elements */
 @keyframes dotPulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.3;transform:scale(0.6);}}
-.step-update-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-left:6px;vertical-align:middle;flex-shrink:0;pointer-events:none;animation:dotPulse 1.5s ease-in-out infinite;transition:opacity 0.35s;}
-.step-item:hover .step-update-dot{opacity:0;animation:none;}
-/* Phase header update dot */
-.phase-update-dot{display:none;width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-left:4px;animation:dotPulse 1.5s ease-in-out infinite;}
-.phase-block.has-update .phase-update-dot{display:inline-block;}
+.notify-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-left:6px;vertical-align:middle;flex-shrink:0;pointer-events:none;animation:dotPulse 1.5s ease-in-out infinite;transition:opacity 0.35s;}
 /* Clear updates button */
 .clear-updates-btn{font-size:10px;padding:2px 8px;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text3);cursor:pointer;white-space:nowrap;transition:all 0.15s;}
 .clear-updates-btn:hover{border-color:var(--border2);color:var(--text);}
@@ -867,9 +863,6 @@ let currentTheme=localStorage.getItem('theme')||'system';
 const isMobile=()=>window.innerWidth<=1024;
 const unseenChanges=new Map();
 const unseenToastTimers=new Map();
-const phaseUpdateDots=new Set();      // phase element IDs with pending dots
-const stepUpdateDots=new Set();       // step IDs with pending inline dots (active client)
-const pendingClientDots=new Map();    // clientId -> Set of step IDs (all clients)
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 function applyTheme(theme){
@@ -931,15 +924,9 @@ async function logAction(action,details={}){
 }
 
 function clearAllUpdateDots(){
-  document.querySelectorAll('.step-update-dot').forEach(d=>d.remove());
-  stepUpdateDots.clear();phaseUpdateDots.clear();
-  if(activeClientId) pendingClientDots.delete(activeClientId);
-  document.querySelectorAll('.phase-block.has-update').forEach(p=>{
-    p.classList.remove('has-update');
-    const dot=p.querySelector('.phase-update-dot');
-    if(dot) dot.style.display='';
-  });
-  document.getElementById('clear-updates-btn')?.style.setProperty('display','none');
+  notifyStore.clear();
+  if(activeClientId) pendingClientChanges.delete(activeClientId);
+  renderAllDots();
 }
 
 async function showClientLog(clientId){
@@ -1703,7 +1690,7 @@ function renderSidebar(filter){
     const staleBadge=stale?`<span class="stale-dot" title="Inactive ${staleDays}+ days">\u25cf</span>`:'';
     const unseen=unseenChanges.get(c.id);
     const unseenBadge=unseen?`<span class="unseen-dot" title="${unseen.techName?unseen.techName+' made changes':'Changes made'}"></span>`:'';
-    return `<div class="client-item ${c.id===activeClientId?'active':''}" onclick="selectClient('${c.id}')" title="${c.name}">
+    return `<div class="client-item ${c.id===activeClientId?'active':''}" onclick="selectClient('${c.id}')" title="${c.name}" data-notify-id="cl:${c.id}">
       <div class="cn">${c.name} ${staleBadge}</div>
       <div class="cm">${c.tech} \u00b7 ${pct}% org</div>
       <div class="cpbar"><div class="cpbar-fill" style="width:0" data-w="${pct}" data-bar-id="sb-${c.id}"></div></div>
@@ -1714,22 +1701,15 @@ function renderSidebar(filter){
 }
 function selectClient(id){
   if(isMobile()) closeOverlays();
-  // Save current client's remaining dots before switching
-  if(activeClientId&&activeClientId!==id&&stepUpdateDots.size)
-    pendingClientDots.set(activeClientId,new Set(stepUpdateDots));
-  // Clear displayed dots
-  document.querySelectorAll('.step-update-dot').forEach(d=>d.remove());
-  document.querySelectorAll('.phase-block.has-update').forEach(p=>p.classList.remove('has-update'));
-  stepUpdateDots.clear();phaseUpdateDots.clear();
-  document.getElementById('clear-updates-btn')?.style.setProperty('display','none');
+  // Clear active client dots — new system tracks per client in pendingClientChanges
+  notifyStore.clear();
   unseenChanges.delete(id);
-  // Load pending dots for new client
-  const clientDots=pendingClientDots.get(id);
-  if(clientDots) clientDots.forEach(sid=>stepUpdateDots.add(sid));
+  // Load pending changes for the target client into notify store
+  const pending=pendingClientChanges.get(id);
+  if(pending) addToNotifyStore(pending.changes,id,pending.techName);
+  pendingClientChanges.delete(id);
   loadClientChecklist(id);
-  // applyUpdateDots is only auto-called from restoreChecklistUIState (SSE path)
-  // for direct navigation we must call it explicitly after the DOM is ready
-  applyUpdateDots();
+  renderAllDots();
 }
 function filterClients(val){renderSidebar(val);}
 
@@ -1777,7 +1757,7 @@ function renderStep(clientId,step){
     subsHtml=`<div class="substeps">`+step.substeps.map(sub=>{
       const done=!!client.steps[sub.id];
       const subTags=sub.tags?.length?`<div class="step-tags">${sub.tags.map(t=>`<span class="step-tag ${t}">${t}</span>`).join('')}</div>`:'';
-      return `<div class="substep-item ${done?'done':''}" onclick="event.stopPropagation();toggleSubstep('${clientId}','${step.id}','${sub.id}')">
+      return `<div class="substep-item ${done?'done':''}" onclick="event.stopPropagation();toggleSubstep('${clientId}','${step.id}','${sub.id}')" data-notify-id="st:${sub.id}">
         <div class="substep-check">${done?chk():''}</div>
         <div><div class="substep-title">${sub.title}</div>${sub.detail?`<div class="substep-detail">${sub.detail}</div>`:''}${subTags}</div>
       </div>`;
@@ -1801,7 +1781,7 @@ function renderStep(clientId,step){
     vpnHtml=`<div class="vpn-selector">${VPN_OPTIONS.map(v=>`<button class="vpn-btn" onclick="event.stopPropagation();openGuide('${v.id}')">${v.label} VPN Guide &#x2197;</button>`).join('')}</div>`;
   }
   const clickAction=hasSubs?`toggleStepExpand('${step.id}')`:`toggleStep('${clientId}','${step.id}')`;
-  return `<div class="step-item ${state}" id="step-${step.id}">
+  return `<div class="step-item ${state}" id="step-${step.id}" data-notify-id="st:${step.id}">
     <div class="step-row" onclick="${clickAction}">
       <div class="step-check">${checkHtml}</div>
       <div class="step-body">
@@ -1823,12 +1803,12 @@ function renderPhase(clientId,phase,phaseNum,forceCollapsed){
   const complete=isPhaseComplete(client,phase);
   const prog=phaseProgress(client,phase);
   const collapsed=forceCollapsed||complete;
-  return `<div class="phase-block ${complete?'completed':''} ${collapsed?'collapsed':''}" id="phase-${phase.id}">
+  return `<div class="phase-block ${complete?'completed':''} ${collapsed?'collapsed':''}" id="phase-${phase.id}" data-notify-id="ph:${phase.id}">
     <div class="phase-header" onclick="togglePhase('${phase.id}')">
       <div class="phase-num">${complete?chk():phaseNum}</div>
       <h3>${phase.title}</h3>
       ${phase.badge?`<span class="phase-badge">${phase.badge}</span>`:''}
-      <span class="phase-progress-text">${prog.done}/${prog.total}</span><span class="phase-update-dot"></span>
+      <span class="phase-progress-text">${prog.done}/${prog.total}</span>
       <span class="phase-collapse-icon">&#9660;</span>
     </div>
     <div class="phase-body">${phase.steps.map(s=>renderStep(clientId,s)).join('')}</div>
@@ -1949,7 +1929,7 @@ function renderDeviceGuide(clientId){
       const done=!!(dev.steps&&dev.steps[s.id]);
       const gb=s.vpn_selector?`<div class="vpn-selector">${VPN_OPTIONS.map(v=>`<button class="vpn-btn" onclick="event.stopPropagation();openGuide('${v.id}')">${v.label} VPN Guide &#x2197;</button>`).join('')}</div>`:'';
       const installerHtml=s.installer_url?renderInstEntry(clientId,dev):'';
-      return `<div class="device-step-item ${done?'done':''}" onclick="toggleDeviceStep('${clientId}','${dev.id}','${s.id}')" id="dvs-${dev.id}-${s.id}">
+      return `<div class="device-step-item ${done?'done':''}" onclick="toggleDeviceStep('${clientId}','${dev.id}','${s.id}')" id="dvs-${dev.id}-${s.id}" data-notify-id="dvst:${dev.id}:${s.id}">
         <div class="device-step-check">${done?chk():''}</div>
         <div style="flex:1;min-width:0;">
           <div class="device-step-title">${s.title}</div>
@@ -1959,7 +1939,7 @@ function renderDeviceGuide(clientId){
         </div>
       </div>`;
     }).join('');
-    return `<div class="device-entry ${isDevExpanded(clientId,dev.id)?'expanded':''}" id="dev-${dev.id}">
+    return `<div class="device-entry ${isDevExpanded(clientId,dev.id)?'expanded':''}" id="dev-${dev.id}" data-notify-id="dva:${dev.id}">
       <div class="device-entry-header" onclick="toggleDeviceEntry('${clientId}','${dev.id}')">
         <span class="device-entry-name">${dev.name}</span>
         <span class="device-entry-meta">${dev.type||''}</span>
@@ -2052,8 +2032,8 @@ function loadClientChecklist(id){
   </div>`:''}
 
   <div class="tab-bar">
-    <button class="tab-btn ${activeChecklistTab!=='devices'?'active':''}" id="tab-btn-org-${id}" onclick="switchChecklistTab('${id}','org')">Organization</button>
-    <button class="tab-btn ${activeChecklistTab==='devices'?'active':''}" id="tab-btn-devices-${id}" onclick="switchChecklistTab('${id}','devices')">Devices (${devDone}/${devList.length})</button>
+    <button class="tab-btn ${activeChecklistTab!=='devices'?'active':''}" id="tab-btn-org-${id}" data-notify-id="tab:org" onclick="switchChecklistTab('${id}','org')">Organization</button>
+    <button class="tab-btn ${activeChecklistTab==='devices'?'active':''}" id="tab-btn-devices-${id}" data-notify-id="tab:devices" onclick="switchChecklistTab('${id}','devices')">Devices (${devDone}/${devList.length})</button>
   </div>
 
   <div class="progress-bar-wrap">
@@ -2480,7 +2460,7 @@ function refreshDeviceGuide(clientId){
       const done=!!(dev.steps&&dev.steps[s.id]);
       const installerHtml=s.installer_url?renderInstEntry(clientId,dev):'';
       const gb=s.vpn_selector?`<div class="vpn-selector">${VPN_OPTIONS.map(v=>`<button class="vpn-btn" onclick="event.stopPropagation();openGuide('${v.id}')">${v.label} VPN Guide &#x2197;</button>`).join('')}</div>`:'';
-      return `<div class="device-step-item ${done?'done':''}" onclick="toggleDeviceStep('${clientId}','${dev.id}','${s.id}')" id="dvs-${dev.id}-${s.id}">
+      return `<div class="device-step-item ${done?'done':''}" onclick="toggleDeviceStep('${clientId}','${dev.id}','${s.id}')" id="dvs-${dev.id}-${s.id}" data-notify-id="dvst:${dev.id}:${s.id}">
         <div class="device-step-check">${done?chk():''}</div>
         <div style="flex:1;min-width:0;">
           <div class="device-step-title">${s.title}</div>
@@ -2489,7 +2469,7 @@ function refreshDeviceGuide(clientId){
         </div>
       </div>`;
     }).join('');
-    return `<div class="device-entry ${isDevExpanded(clientId,dev.id)?'expanded':''}" id="dev-${dev.id}">
+    return `<div class="device-entry ${isDevExpanded(clientId,dev.id)?'expanded':''}" id="dev-${dev.id}" data-notify-id="dva:${dev.id}">
       <div class="device-entry-header" onclick="toggleDeviceEntry('${clientId}','${dev.id}')">
         <span class="device-entry-name">${dev.name}</span>
         <span class="device-entry-meta">${dev.type||''}</span>
@@ -2664,117 +2644,6 @@ function getChecklistUIState(){
   });
   return state;
 }
-function applyUpdateDots(){
-  // Step dots + compute which phases and tabs need dots
-  let hasOrgDots=false,hasDevDots=false;
-  stepUpdateDots.forEach(id=>{
-    if(id.startsWith('dev-')) hasDevDots=true; else hasOrgDots=true;
-    // Device step items have id="dvs-devId-stepId"; composite change id = "dev-devId-stepId"
-    if(id.startsWith('dev-')){
-      const dvEl=document.getElementById('dvs-'+id.slice(4));
-      if(dvEl){
-        const titleEl=dvEl.querySelector('.device-step-title');
-        if(titleEl&&!titleEl.querySelector('.step-update-dot')){
-          const dot=document.createElement('span');dot.className='step-update-dot';
-          titleEl.appendChild(dot);
-          dvEl.addEventListener('mouseenter',()=>{
-            stepUpdateDots.delete(id);
-            pendingClientDots.get(activeClientId)?.delete(id);
-            dot.style.opacity='0';dot.style.animation='none';
-            setTimeout(()=>dot.remove(),380);
-            applyTabDots();
-          },{once:true});
-        }
-      }
-    }
-    const el=document.getElementById('step-'+id)||document.querySelector(`[id$="-${id}"]`);
-    if(!el) return;
-    const titleEl=el.querySelector('.step-title,.device-step-title,.substep-title');
-    if(titleEl&&!titleEl.querySelector('.step-update-dot')){
-      const dot=document.createElement('span');dot.className='step-update-dot';
-      titleEl.appendChild(dot);
-      el.addEventListener('mouseenter',()=>{
-        stepUpdateDots.delete(id);
-        if(activeClientId) pendingClientDots.get(activeClientId)?.delete(id);
-        dot.style.opacity='0';dot.style.animation='none';
-        setTimeout(()=>dot.remove(),380);
-        const phase=el.closest('.phase-block');
-        if(phase){
-          const hasDotInPhase=[...stepUpdateDots].some(sid=>{
-            const sel=document.getElementById('step-'+sid)||document.querySelector(`[id$="-${sid}"]`);
-            return sel&&phase.contains(sel);
-          });
-          if(!hasDotInPhase){
-            phase.classList.remove('has-update');
-            phase.querySelector('.phase-update-dot')?.style.setProperty('display','none');
-            phaseUpdateDots.delete(phase.id);
-          }
-        }
-        // Re-apply tab dots
-        applyTabDots();
-      },{once:true});
-    }
-    // Compute which phase this step belongs to
-    const phase=el.closest('.phase-block');
-    if(phase) phaseUpdateDots.add(phase.id);
-  });
-  // Device entry header dots (for dev- prefixed IDs)
-  const affectedDevIds=new Set();
-  stepUpdateDots.forEach(id=>{
-    const m=id.match(/dev-(dev-\d+)/);
-    if(m) affectedDevIds.add(m[1]);
-  });
-  affectedDevIds.forEach(devId=>{
-    const devEl=document.getElementById('dev-'+devId);
-    if(!devEl) return;
-    const nameEl=devEl.querySelector('.device-entry-name');
-    if(nameEl&&!nameEl.querySelector('.step-update-dot')){
-      const dot=document.createElement('span');dot.className='step-update-dot';
-      dot.style.cssText='margin-left:5px;vertical-align:middle;display:inline-block;';
-      nameEl.appendChild(dot);
-      devEl.addEventListener('mouseenter',()=>{
-        dot.style.opacity='0';dot.style.animation='none';
-        setTimeout(()=>dot.remove(),380);
-        // Remove all step IDs for this device from tracking
-        [...stepUpdateDots].filter(id=>id.includes(devId)).forEach(sid=>{
-          stepUpdateDots.delete(sid);
-          pendingClientDots.get(activeClientId)?.delete(sid);
-        });
-        applyTabDots();
-      },{once:true});
-    }
-  });
-  // Apply phase dots (class + direct style for reliability)
-  phaseUpdateDots.forEach(id=>{
-    const el=document.getElementById(id);
-    if(el){
-      el.classList.add('has-update');
-      const dot=el.querySelector('.phase-update-dot');
-      if(dot) dot.style.display='inline-block';
-    }
-  });
-  // Apply tab dots
-  applyTabDots();
-  if(stepUpdateDots.size>0){document.getElementById('clear-updates-btn')?.style.removeProperty('display');}
-}
-
-function applyTabDots(){
-  if(!activeClientId) return;
-  let hasOrg=false,hasDev=false;
-  stepUpdateDots.forEach(id=>{if(id.startsWith('dev-')) hasDev=true; else hasOrg=true;});
-  ['org','devices'].forEach(tab=>{
-    const btn=document.getElementById(`tab-btn-${tab}-${activeClientId}`);
-    if(!btn) return;
-    btn.querySelectorAll('.tab-update-dot').forEach(d=>d.remove());
-    const has=tab==='org'?hasOrg:hasDev;
-    if(has){
-      const d=document.createElement('span');
-      d.className='step-update-dot tab-update-dot';
-      d.style.cssText='margin-left:5px;vertical-align:middle;';
-      btn.appendChild(d);
-    }
-  });
-}
 
 function restoreChecklistUIState(clientId,state){
   if(state.tab!=='org') switchChecklistTab(clientId,state.tab);
@@ -2786,7 +2655,7 @@ function restoreChecklistUIState(clientId,state){
     const el=document.getElementById(id);
     if(el){el.classList.toggle('expanded',s.expanded);el.classList.toggle('note-open',s.noteOpen);}
   });
-  applyUpdateDots();
+  renderAllDots();
   const pane=document.getElementById('checklist-pane');
   if(pane&&state.scrollTop) pane.scrollTop=state.scrollTop;
 }
@@ -2800,6 +2669,71 @@ function findStepPhase(id){
     }
   }
   return 'Device';
+}
+
+function findStepPhaseId(id){
+  if(!stepsData.phases) return null;
+  for(const p of stepsData.phases){
+    for(const s of p.steps){
+      if(s.id===id) return p.id;
+      if(s.substeps) for(const sub of s.substeps){if(sub.id===id) return p.id;}
+    }
+  }
+  return null;
+}
+
+// ── Unified notification system ─────────────────────────────────────────────
+function notifyIdsForChange(change,clientId){
+  const ids=[];
+  if(change.devId||change.deviceAction){
+    if(change.stepId) ids.push('dvst:'+change.devId+':'+change.stepId);
+    if(change.devId) ids.push('dva:'+change.devId);
+    ids.push('tab:devices');
+  } else if(change.id){
+    ids.push('st:'+change.id);
+    const phId=change.phaseId||findStepPhaseId(change.id);
+    if(phId) ids.push('ph:'+phId);
+    ids.push('tab:org');
+  }
+  if(clientId) ids.push('cl:'+clientId);
+  return ids;
+}
+function addToNotifyStore(changes,clientId,techName){
+  const meta={techName:techName||'',ts:Date.now()};
+  changes.forEach(c=>{notifyIdsForChange(c,clientId).forEach(nid=>notifyStore.set(nid,meta));});
+}
+function pruneTabNotifications(){
+  const hasOrg=[...notifyStore.keys()].some(k=>k.startsWith('st:')||k.startsWith('ph:'));
+  const hasDev=[...notifyStore.keys()].some(k=>k.startsWith('dvst:')||k.startsWith('dva:'));
+  if(!hasOrg) notifyStore.delete('tab:org');
+  if(!hasDev) notifyStore.delete('tab:devices');
+}
+function renderAllDots(){
+  document.querySelectorAll('.notify-dot').forEach(d=>d.remove());
+  const clearBtn=document.getElementById('clear-updates-btn');
+  if(notifyStore.size===0){clearBtn?.style.setProperty('display','none');return;}
+  let dotCount=0;
+  document.querySelectorAll('[data-notify-id]').forEach(el=>{
+    const nid=el.dataset.notifyId;
+    const direct=notifyStore.has(nid);
+    const inherited=!direct&&[...el.querySelectorAll('[data-notify-id]')].some(d=>notifyStore.has(d.dataset.notifyId));
+    if(!direct&&!inherited) return;
+    dotCount++;
+    const meta=direct?notifyStore.get(nid):[...el.querySelectorAll('[data-notify-id]')].map(d=>notifyStore.get(d.dataset.notifyId)).find(Boolean);
+    const dot=document.createElement('span');
+    dot.className='notify-dot';
+    if(meta?.techName) dot.title='Changed by '+meta.techName;
+    const anchor=el.querySelector('.step-title,.device-step-title,.substep-title,.phase-progress-text,.device-entry-name,.cn');
+    if(anchor) anchor.after(dot); else el.appendChild(dot);
+    el.addEventListener('mouseenter',()=>{
+      if(direct) notifyStore.delete(nid);
+      el.querySelectorAll('[data-notify-id]').forEach(d=>notifyStore.delete(d.dataset.notifyId));
+      dot.style.opacity='0';dot.style.animation='none';
+      pruneTabNotifications();
+      setTimeout(()=>{dot.remove();renderAllDots();},380);
+    },{once:true});
+  });
+  clearBtn?.style[dotCount?'removeProperty':'setProperty']('display','none');
 }
 
 function findStepById(id){
@@ -2822,7 +2756,7 @@ function detectChangedSteps(oldClient,newClient){
   allIds.forEach(id=>{
     if((oldClient.steps||{})[id]!==(newClient.steps||{})[id]){
       const def=findStepById(id);
-      changed.push({id,done:!!(newClient.steps||{})[id],title:def?.title||'',phase:findStepPhase(id)});
+      changed.push({id,done:!!(newClient.steps||{})[id],title:def?.title||'',phase:findStepPhase(id),phaseId:findStepPhaseId(id)});
     }
   });
   // Device additions / removals
@@ -2831,13 +2765,13 @@ function detectChangedSteps(oldClient,newClient){
   newDevIds.forEach(did=>{
     if(!oldDevIds.has(did)){
       const dev=newClient.devices[did];
-      changed.push({id:'dev-added-'+did,done:true,title:`Device added: ${dev.name||did}`,phase:'Devices',deviceAction:true});
+      changed.push({id:'dev-added-'+did,devId:did,done:true,title:`Device added: ${dev.name||did}`,phase:'Devices',deviceAction:true});
     }
   });
   oldDevIds.forEach(did=>{
     if(!newDevIds.has(did)){
       const dev=oldClient.devices[did];
-      changed.push({id:'dev-removed-'+did,done:false,title:`Device removed: ${dev.name||did}`,phase:'Devices',deviceAction:true});
+      changed.push({id:'dev-removed-'+did,devId:did,done:false,title:`Device removed: ${dev.name||did}`,phase:'Devices',deviceAction:true});
     }
   });
   // Device step toggles + notes changes
@@ -2847,78 +2781,45 @@ function detectChangedSteps(oldClient,newClient){
     Object.keys(dev.steps||{}).forEach(sid=>{
       if((oldDev.steps||{})[sid]!==(dev.steps||{})[sid]){
         const def=findDevStepById(sid);
-        changed.push({id:'dev-'+dev.id+'-'+sid,done:!!(dev.steps||{})[sid],title:def?.title||sid,deviceName:dev.name||dev.id,phase:'Devices'});
+        changed.push({id:'dev-'+dev.id+'-'+sid,devId:dev.id,stepId:sid,done:!!(dev.steps||{})[sid],title:def?.title||sid,deviceName:dev.name||dev.id,phase:'Devices'});
       }
     });
     if((oldDev.notes||'')!==(dev.notes||'')){
-      changed.push({id:'dev-notes-'+dev.id,done:true,title:`Notes updated: ${dev.name||dev.id}`,phase:'Devices',deviceAction:true});
+      changed.push({id:'dev-notes-'+dev.id,devId:dev.id,done:true,title:`Notes updated: ${dev.name||dev.id}`,phase:'Devices',deviceAction:true});
     }
   });
   return changed;
 }
 
 function pulseSteps(changes,techName){
-  // Track dots in persistent per-client map
-  if(activeClientId&&changes.length){
-    if(!pendingClientDots.has(activeClientId)) pendingClientDots.set(activeClientId,new Set());
-    changes.forEach(({id})=>pendingClientDots.get(activeClientId).add(id));
-  }
+  // Populate notify store for active client
+  if(activeClientId&&changes.length) addToNotifyStore(changes,activeClientId,techName);
   const pulsedPhases=new Set();
   changes.forEach(({id,done})=>{
-    const el=document.getElementById('step-'+id)||document.querySelector(`[id$="-${id}"]`);
+    const el=document.getElementById('step-'+id)||document.querySelector('[id$="-'+id+'"]');
     if(el){
-      // Resolve title element FIRST (used by chip and dot below)
       const titleEl=el.querySelector('.step-title,.device-step-title,.substep-title');
-      // Pulse the element
       el.classList.remove('sse-pulse');void el.offsetWidth;el.classList.add('sse-pulse');
-      // Attribution chip — inline after step title
       if(techName&&titleEl){
         titleEl.querySelector('.sse-attr')?.remove();
         const chip=document.createElement('span');chip.className='sse-attr';
         chip.textContent=(done?'✓ ':'✕ ')+techName;
         titleEl.appendChild(chip);setTimeout(()=>chip.remove(),4200);
       }
-      // Track step for persistent dot
-      stepUpdateDots.add(id);
-      if(titleEl){
-        titleEl.querySelector('.step-update-dot')?.remove();
-        const dot=document.createElement('span');dot.className='step-update-dot';
-        titleEl.appendChild(dot);
-        el.addEventListener('mouseenter',()=>{
-          stepUpdateDots.delete(id);
-          dot.style.opacity='0';dot.style.animation='none';
-          setTimeout(()=>dot.remove(),380);
-          const phase=el.closest('.phase-block');
-          if(phase){
-            const hasDotInPhase=[...stepUpdateDots].some(sid=>{
-              const sel=document.getElementById('step-'+sid)||document.querySelector(`[id$="-${sid}"]`);
-              return sel&&phase.contains(sel);
-            });
-            if(!hasDotInPhase){phase.classList.remove('has-update');phaseUpdateDots.delete(phase.id);}
-          }
-        },{once:true});
-      }
-      document.getElementById('clear-updates-btn')?.style.removeProperty('display');
-      // Phase header: pulse + persistent dot
       const phase=el.closest('.phase-block');
-      if(phase){
+      if(phase&&!pulsedPhases.has(phase.id)){
+        pulsedPhases.add(phase.id);
         const hdr=phase.querySelector('.phase-header');
-        if(hdr&&!pulsedPhases.has(phase.id)){
-          pulsedPhases.add(phase.id);
-          hdr.classList.remove('sse-pulse');void hdr.offsetWidth;hdr.classList.add('sse-pulse');
-        }
-        // Always add has-update to phase (visible when collapsed)
-        phase.classList.add('has-update');
-        phaseUpdateDots.add(phase.id);
+        if(hdr){hdr.classList.remove('sse-pulse');void hdr.offsetWidth;hdr.classList.add('sse-pulse');}
       }
     } else {
-      // Not in DOM — pulse active sidebar item as fallback
       const sidebarItem=document.querySelector('#client-list .client-item.active');
       if(sidebarItem){sidebarItem.classList.remove('sse-pulse');void sidebarItem.offsetWidth;sidebarItem.classList.add('sse-pulse');}
     }
   });
-  applyTabDots();
+  renderAllDots();
 }
+
 
 function connectSSE(){
   if(sseSource) sseSource.close();
@@ -2943,8 +2844,10 @@ function connectSSE(){
       const cidChanges=detectChangedSteps(oldC,newC);
       if(!cidChanges.length) return; // expanded/collapsed only — skip
       // Track pending dots for this client
-      if(!pendingClientDots.has(cid)) pendingClientDots.set(cid,new Set());
-      cidChanges.forEach(({id})=>pendingClientDots.get(cid).add(id));
+      const pcExisting=pendingClientChanges.get(cid)||{changes:[],techName};
+      pcExisting.changes.push(...cidChanges.map(c=>({...c,techName})));
+      pcExisting.techName=techName;
+      pendingClientChanges.set(cid,pcExisting);
       // Unseen sidebar badge (non-active clients only)
       if(cid!==activeClientId){
         const prev=unseenChanges.get(cid)||{count:0};
