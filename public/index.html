@@ -538,6 +538,7 @@ body.light .who-chip{background:rgba(30,64,175,0.06);border-color:rgba(30,64,175
 .client-menu-item{display:block;width:100%;padding:9px 14px;font-size:12px;color:var(--text);background:none;border:none;text-align:left;cursor:pointer;transition:background 0.1s;}
 .client-menu-item:hover{background:var(--bg3);}
 .client-menu-item.danger{color:var(--danger);}
+.client-menu-item.warn{color:var(--warn);}
 
 /* Edit client modal */
 #edit-client-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;align-items:center;justify-content:center;}
@@ -931,7 +932,11 @@ function clearAllUpdateDots(){
   document.querySelectorAll('.step-update-dot').forEach(d=>d.remove());
   stepUpdateDots.clear();phaseUpdateDots.clear();
   if(activeClientId) pendingClientDots.delete(activeClientId);
-  document.querySelectorAll('.phase-block.has-update').forEach(p=>p.classList.remove('has-update'));
+  document.querySelectorAll('.phase-block.has-update').forEach(p=>{
+    p.classList.remove('has-update');
+    const dot=p.querySelector('.phase-update-dot');
+    if(dot) dot.style.display='';
+  });
   document.getElementById('clear-updates-btn')?.style.setProperty('display','none');
 }
 
@@ -1828,6 +1833,53 @@ function renderPhase(clientId,phase,phaseNum,forceCollapsed){
   </div>`;
 }
 
+function renderInstEntry(clientId, dev){
+  // Returns HTML for the installer entry in a device step
+  const client=clients[clientId];
+  const rawUrl=dev.rawInstallerUrl||(client.syncroInstallerMap?.[dev.type])||client.syncroInstallerUrl||null;
+  if(rawUrl) return `<div id="inst-${clientId}-${dev.id}"></div>`;
+  // No URL — show inline input
+  return `<div class="inst-manual" id="imw-${clientId}-${dev.id}" onclick="event.stopPropagation()">
+    <div style="display:flex;gap:5px;margin-top:5px;align-items:center;flex-wrap:wrap;">
+      <input type="text" id="iminp-${dev.id}" class="field-group input" style="flex:1;min-width:140px;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:11px;outline:none;font-family:var(--sans);" placeholder="Paste RMM installer URL…" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+      <button class="btn-primary btn-sm" onclick="event.stopPropagation();saveDevInstUrl('${clientId}','${dev.id}','${escHtml(dev.type||'')}')">Save &amp; Shorten</button>
+    </div>
+    <div id="imshort-${dev.id}" style="display:none;font-size:10px;color:var(--accent);margin-top:3px;"></div>
+  </div>`;
+}
+async function saveDevInstUrl(clientId, devId, devType){
+  const input=document.getElementById('iminp-'+devId);
+  const raw=(input?.value||'').trim();
+  if(!raw){input?.focus();return;}
+  const btn=input?.nextElementSibling;
+  if(btn){btn.textContent='Saving…';btn.disabled=true;}
+  let shortUrl=null;
+  try{
+    const r=await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(raw)}`);
+    if(r.ok){const s=(await r.text()).trim();if(s!==raw)shortUrl=s;}
+  }catch(_){}
+  const c=clients[clientId];
+  if(!c?.devices?.[devId]) return;
+  c.devices[devId].rawInstallerUrl=raw;
+  c.devices[devId].shortUrl=shortUrl;
+  // Cache to installer map so future devices of same type reuse it
+  if(devType&&devType!=='Other'){
+    if(!c.syncroInstallerMap) c.syncroInstallerMap={};
+    c.syncroInstallerMap[devType]=raw;
+  }
+  await saveClients();
+  // Replace the manual input div with the rendered installer block
+  const wrap=document.getElementById('imw-'+clientId+'-'+devId);
+  if(wrap){
+    const cid=`inst-${clientId}-${devId}`;
+    const div=document.createElement('div');div.id=cid;
+    wrap.replaceWith(div);
+    renderInstallerBlock(raw,cid,shortUrl,(s)=>{
+      clients[clientId].devices[devId].shortUrl=s;saveClients();
+    });
+  }
+  showToast('Installer URL saved');
+}
 function renderInstallerBlock(rawUrl, containerId, storedShort, onShortened){
   const el=document.getElementById(containerId);
   if(!el) return;
@@ -1886,13 +1938,7 @@ function renderDeviceGuide(clientId){
     const stepsHtml=devSteps.map(s=>{
       const done=!!(dev.steps&&dev.steps[s.id]);
       const gb=s.vpn_selector?`<div class="vpn-selector">${VPN_OPTIONS.map(v=>`<button class="vpn-btn" onclick="event.stopPropagation();openGuide('${v.id}')">${v.label} VPN Guide &#x2197;</button>`).join('')}</div>`:'';
-      const installerContainerId=`inst-${clientId}-${dev.id}`;
-      const rawInstUrl=dev.rawInstallerUrl||(client.syncroInstallerMap?.[dev.type])||client.syncroInstallerUrl||null;
-      const installerHtml=s.installer_url
-        ?(rawInstUrl
-          ?`<div id="${installerContainerId}"></div>`
-          :`<div style="font-size:10px;color:var(--text3);margin-top:4px;">No installer URL stored for this client. Add one via the wizard.</div>`)
-        :'';
+      const installerHtml=s.installer_url?renderInstEntry(clientId,dev):'';
       return `<div class="device-step-item ${done?'done':''}" onclick="toggleDeviceStep('${clientId}','${dev.id}','${s.id}')">
         <div class="device-step-check">${done?chk():''}</div>
         <div style="flex:1;min-width:0;">
@@ -1980,10 +2026,10 @@ function loadClientChecklist(id){
       <div class="client-menu-wrap" id="cmenu-wrap-${id}">
         <button class="client-menu-btn" onclick="toggleClientMenu('${id}')">&#8230;</button>
         <div class="client-menu-dropdown" id="cmenu-${id}">
+          <button class="client-menu-item" onclick="closeClientMenu('${id}');showSummary('${id}')">Summary</button>
           <button class="client-menu-item" onclick="closeClientMenu('${id}');openClientNotes('${id}')">Notes${client.notes?'&nbsp;<span style="color:var(--warn);font-size:10px;">●</span>':''}</button>
           <button class="client-menu-item" onclick="closeClientMenu('${id}');showClientLog('${id}')">View Log</button>
-          <button class="client-menu-item" onclick="closeClientMenu('${id}');showSummary('${id}')">Summary</button>
-          <button class="client-menu-item" onclick="closeClientMenu('${id}');openEditClientModal('${id}')">Edit</button>
+          <button class="client-menu-item warn" onclick="closeClientMenu('${id}');openEditClientModal('${id}')">Edit</button>
           <button class="client-menu-item danger" onclick="closeClientMenu('${id}');confirmDeleteClient('${id}')">Delete</button>
         </div>
       </div>
@@ -2418,12 +2464,7 @@ function refreshDeviceGuide(clientId){
     const lmap={'not-started':'Not Started','in-progress':'In Progress','complete':'Complete'};
     const stepsHtml=devSteps.map(s=>{
       const done=!!(dev.steps&&dev.steps[s.id]);
-      const installerContainerId=`inst-${clientId}-${dev.id}`;
-      const rawInstUrl=dev.rawInstallerUrl||(client.syncroInstallerMap?.[dev.type])||client.syncroInstallerUrl||null;
-      const installerHtml=s.installer_url
-        ?(rawInstUrl?`<div id="${installerContainerId}"></div>`
-          :`<div style="font-size:10px;color:var(--text3);margin-top:4px;">No installer URL for this device type — edit device to add manually.</div>`)
-        :'';
+      const installerHtml=s.installer_url?renderInstEntry(clientId,dev):'';
       const gb=s.vpn_selector?`<div class="vpn-selector">${VPN_OPTIONS.map(v=>`<button class="vpn-btn" onclick="event.stopPropagation();openGuide('${v.id}')">${v.label} VPN Guide &#x2197;</button>`).join('')}</div>`:'';
       return `<div class="device-step-item ${done?'done':''}" onclick="toggleDeviceStep('${clientId}','${dev.id}','${s.id}')">
         <div class="device-step-check">${done?chk():''}</div>
@@ -2610,9 +2651,13 @@ function getChecklistUIState(){
   return state;
 }
 function applyUpdateDots(){
+  // Step dots + compute which phases and tabs need dots
+  let hasOrgDots=false,hasDevDots=false;
   stepUpdateDots.forEach(id=>{
     const el=document.getElementById('step-'+id)||document.querySelector(`[id$="-${id}"]`);
     if(!el) return;
+    // Track which tab this step belongs to
+    if(id.startsWith('dev-')) hasDevDots=true; else hasOrgDots=true;
     const titleEl=el.querySelector('.step-title,.device-step-title,.substep-title');
     if(titleEl&&!titleEl.querySelector('.step-update-dot')){
       const dot=document.createElement('span');dot.className='step-update-dot';
@@ -2628,13 +2673,50 @@ function applyUpdateDots(){
             const sel=document.getElementById('step-'+sid)||document.querySelector(`[id$="-${sid}"]`);
             return sel&&phase.contains(sel);
           });
-          if(!hasDotInPhase){phase.classList.remove('has-update');phaseUpdateDots.delete(phase.id);}
+          if(!hasDotInPhase){
+            phase.classList.remove('has-update');
+            phase.querySelector('.phase-update-dot')?.style.setProperty('display','none');
+            phaseUpdateDots.delete(phase.id);
+          }
         }
+        // Re-apply tab dots
+        applyTabDots();
       },{once:true});
     }
+    // Compute which phase this step belongs to
+    const phase=el.closest('.phase-block');
+    if(phase) phaseUpdateDots.add(phase.id);
   });
-  phaseUpdateDots.forEach(id=>{document.getElementById(id)?.classList.add('has-update');});
+  // Apply phase dots (class + direct style for reliability)
+  phaseUpdateDots.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){
+      el.classList.add('has-update');
+      const dot=el.querySelector('.phase-update-dot');
+      if(dot) dot.style.display='inline-block';
+    }
+  });
+  // Apply tab dots
+  applyTabDots();
   if(stepUpdateDots.size>0){document.getElementById('clear-updates-btn')?.style.removeProperty('display');}
+}
+
+function applyTabDots(){
+  if(!activeClientId) return;
+  let hasOrg=false,hasDev=false;
+  stepUpdateDots.forEach(id=>{if(id.startsWith('dev-')) hasDev=true; else hasOrg=true;});
+  ['org','devices'].forEach(tab=>{
+    const btn=document.getElementById(`tab-btn-${tab}-${activeClientId}`);
+    if(!btn) return;
+    btn.querySelectorAll('.tab-update-dot').forEach(d=>d.remove());
+    const has=tab==='org'?hasOrg:hasDev;
+    if(has){
+      const d=document.createElement('span');
+      d.className='step-update-dot tab-update-dot';
+      d.style.cssText='margin-left:5px;vertical-align:middle;';
+      btn.appendChild(d);
+    }
+  });
 }
 
 function restoreChecklistUIState(clientId,state){
@@ -2801,6 +2883,7 @@ function connectSSE(){
       const oldC=clients[cid],newC=updated[cid];
       if(!oldC||!newC||oldC.lastModified===newC.lastModified) return;
       const cidChanges=detectChangedSteps(oldC,newC);
+      if(!cidChanges.length) return; // expanded/collapsed only — skip
       // Track pending dots for this client
       if(!pendingClientDots.has(cid)) pendingClientDots.set(cid,new Set());
       cidChanges.forEach(({id})=>pendingClientDots.get(cid).add(id));
