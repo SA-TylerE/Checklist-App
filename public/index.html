@@ -176,11 +176,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .header-actions{display:flex;gap:6px;align-items:center;flex-shrink:0;}
 .progress-bar-wrap{margin-bottom:14px;}
 .progress-stats{display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:4px;}
-.progress-bar{height:3px;background:var(--bg3);border-radius:3px;overflow:hidden;}
-.progress-bar-fill{height:100%;background:var(--accent);border-radius:3px;transition:width 0.55s ease;}
-.progress-bar-fill:not(.complete){background-image:repeating-linear-gradient(-45deg,transparent,transparent 8px,rgba(255,255,255,0.1) 8px,rgba(255,255,255,0.1) 16px);background-size:32px 32px;animation:progressStripe 1.2s linear infinite;}
+.progress-bar{height:5px;background:var(--bg3);border-radius:5px;overflow:hidden;}
+.progress-bar-fill{height:100%;border-radius:5px;transition:width 0.45s ease;}
+.progress-bar-fill:not(.complete){background-color:var(--accent);background-image:repeating-linear-gradient(-45deg,transparent 0,transparent 5px,rgba(255,255,255,0.18) 5px,rgba(255,255,255,0.18) 10px);background-size:14px 14px;animation:progressStripe 0.7s linear infinite;will-change:background-position;}
 .progress-bar-fill.complete{background:var(--success);background-image:none;animation:none;}
-@keyframes progressStripe{from{background-position:0 0;}to{background-position:32px 0;}}
+@keyframes progressStripe{from{background-position:0 0;}to{background-position:14px 0;}}
 
 /* Phase */
 .phase-block{margin-bottom:5px;border:1px solid var(--border);border-radius:10px;}
@@ -478,7 +478,7 @@ body.light .syncro-linked-name{color:#1e40af;}
 .sse-pulse{animation:changePulse 1.5s ease-out;}
 /* SSE attribution chip */
 @keyframes attrFade{0%,50%{opacity:1;}100%{opacity:0;}}
-.sse-attr{position:absolute;right:8px;top:8px;padding:2px 7px;border-radius:12px;font-size:9px;font-weight:600;background:var(--accent);color:white;pointer-events:none;animation:attrFade 4s ease-out forwards;white-space:nowrap;z-index:2;}
+.sse-attr{display:inline-block;padding:1px 6px;border-radius:10px;font-size:9px;font-weight:600;background:var(--accent);color:white;pointer-events:none;animation:attrFade 4s ease-out forwards;white-space:nowrap;margin-left:5px;vertical-align:middle;}
 /* Unseen change dot on sidebar client */
 .unseen-dot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--accent);}
 /* Per-step update dot — inline after step title */
@@ -857,6 +857,7 @@ const isMobile=()=>window.innerWidth<=1024;
 const unseenChanges=new Map();
 const unseenToastTimers=new Map();
 const phaseUpdateDots=new Set(); // phase element IDs that have pending update dots
+const stepUpdateDots=new Set();  // step IDs that have pending inline dots
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 function applyTheme(theme){
@@ -888,10 +889,8 @@ function showRichToast({title,body,type='info',duration=4500,simple=false}){
   }
   c.appendChild(t);
   requestAnimationFrame(()=>requestAnimationFrame(()=>t.classList.add('show')));
-  setTimeout(()=>{
-    t.classList.add('removing');
-    setTimeout(()=>t.remove(),350);
-  },duration);
+  t._expTimer=setTimeout(()=>{t.classList.add('removing');setTimeout(()=>t.remove(),350);},duration);
+  return t;
 }
 
 async function logAction(action,details={}){
@@ -907,6 +906,7 @@ async function logAction(action,details={}){
 
 function clearAllUpdateDots(){
   document.querySelectorAll('.step-update-dot').forEach(d=>d.remove());
+  stepUpdateDots.clear();
   phaseUpdateDots.clear();
   document.querySelectorAll('.phase-block.has-update').forEach(p=>p.classList.remove('has-update'));
   document.getElementById('clear-updates-btn')?.style.setProperty('display','none');
@@ -1674,7 +1674,7 @@ function renderSidebar(filter){
     return `<div class="client-item ${c.id===activeClientId?'active':''}" onclick="selectClient('${c.id}')" title="${c.name}">
       <div class="cn">${c.name} ${staleBadge}</div>
       <div class="cm">${c.tech} \u00b7 ${pct}% org</div>
-      <div class="cpbar"><div class="cpbar-fill" style="width:0" data-w="${pct}"></div></div>
+      <div class="cpbar"><div class="cpbar-fill" style="width:0" data-w="${pct}" data-bar-id="sb-${c.id}"></div></div>
       ${unseenBadge}
     </div>`;
   }).join('');
@@ -1779,9 +1779,9 @@ function renderPhase(clientId,phase,phaseNum,forceCollapsed){
   return `<div class="phase-block ${complete?'completed':''} ${collapsed?'collapsed':''}" id="phase-${phase.id}">
     <div class="phase-header" onclick="togglePhase('${phase.id}')">
       <div class="phase-num">${complete?chk():phaseNum}</div>
-      <h3>${phase.title}</h3><span class="phase-update-dot"></span>
+      <h3>${phase.title}</h3>
       ${phase.badge?`<span class="phase-badge">${phase.badge}</span>`:''}
-      <span class="phase-progress-text">${prog.done}/${prog.total}</span>
+      <span class="phase-progress-text">${prog.done}/${prog.total}</span><span class="phase-update-dot"></span>
       <span class="phase-collapse-icon">&#9660;</span>
     </div>
     <div class="phase-body">${phase.steps.map(s=>renderStep(clientId,s)).join('')}</div>
@@ -1963,7 +1963,7 @@ function loadClientChecklist(id){
 
   <div class="progress-bar-wrap">
     <div class="progress-stats"><span>${prog.done} of ${prog.total} org steps complete</span><span>${pct}%</span></div>
-    <div class="progress-bar"><div class="progress-bar-fill ${pct===100?'complete':''}" style="width:0" data-w="${pct}"></div></div>
+    <div class="progress-bar"><div class="progress-bar-fill ${pct===100?'complete':''}" style="width:0" data-w="${pct}" data-bar-id="main"></div></div>
   </div>
 
   <!-- Org tab -->
@@ -2308,7 +2308,7 @@ function togglePhase(id){document.getElementById(`phase-${id}`)?.classList.toggl
 function toggleStepExpand(id){document.getElementById(`step-${id}`)?.classList.toggle('expanded');}
 function toggleFreetext(id){document.getElementById(id)?.classList.toggle('open');}
 async function toggleStep(cid,sid){
-  const ui=getChecklistUIState();
+  const ui=getChecklistUIState();pendingBarWidths=captureBarWidths();
   const done=!clients[cid].steps[sid];
   clients[cid].steps[sid]=done;
   const def=findStepById(sid);
@@ -2316,7 +2316,7 @@ async function toggleStep(cid,sid){
   await saveClients();loadClientChecklist(cid);restoreChecklistUIState(cid,ui);
 }
 async function toggleSubstep(cid,pid,sid){
-  const ui=getChecklistUIState();ui.steps[`step-${pid}`]={expanded:true,noteOpen:false};
+  const ui=getChecklistUIState();ui.steps[`step-${pid}`]={expanded:true,noteOpen:false};pendingBarWidths=captureBarWidths();
   const done=!clients[cid].steps[sid];
   clients[cid].steps[sid]=done;
   const def=findStepById(sid);
@@ -2517,11 +2517,30 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeGuide();closeA
 
 // \u2500\u2500\u2500 API \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 // ─── SSE live sync ────────────────────────────────────────────────────────────
+let pendingBarWidths=null;
+function captureBarWidths(){
+  const m={};
+  document.querySelectorAll('[data-bar-id]').forEach(el=>{m[el.dataset.barId]=el.style.width;});
+  return m;
+}
 function animateBars(container){
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{
-    (container||document).querySelectorAll('[data-w]').forEach(el=>{
-      el.style.width=el.dataset.w+'%';
+  const from=pendingBarWidths;pendingBarWidths=null;
+  const els=(container||document).querySelectorAll('[data-w]');
+  if(from&&Object.keys(from).length){
+    els.forEach(el=>{
+      if(el.dataset.barId){
+        const prev=from[el.dataset.barId];
+        if(prev!==undefined&&prev!=='0%'&&prev!==''){
+          el.style.transition='none';
+          el.style.width=prev;
+          void el.offsetWidth;
+          el.style.transition='';
+        }
+      }
     });
+  }
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    els.forEach(el=>{el.style.width=el.dataset.w+'%';});
   }));
 }
 
@@ -2537,6 +2556,34 @@ function getChecklistUIState(){
   });
   return state;
 }
+function applyUpdateDots(){
+  stepUpdateDots.forEach(id=>{
+    const el=document.getElementById('step-'+id)||document.querySelector(`[id$="-${id}"]`);
+    if(!el) return;
+    const titleEl=el.querySelector('.step-title,.device-step-title,.substep-title');
+    if(titleEl&&!titleEl.querySelector('.step-update-dot')){
+      const dot=document.createElement('span');dot.className='step-update-dot';
+      titleEl.appendChild(dot);
+      el.addEventListener('mouseenter',()=>{
+        stepUpdateDots.delete(id);
+        dot.style.opacity='0';dot.style.animation='none';
+        setTimeout(()=>dot.remove(),380);
+        // Remove phase dot if no more steps in that phase have dots
+        const phase=el.closest('.phase-block');
+        if(phase){
+          const hasDotInPhase=[...stepUpdateDots].some(sid=>{
+            const sel=document.getElementById('step-'+sid)||document.querySelector(`[id$="-${sid}"]`);
+            return sel&&phase.contains(sel);
+          });
+          if(!hasDotInPhase){phase.classList.remove('has-update');phaseUpdateDots.delete(phase.id);}
+        }
+      },{once:true});
+    }
+  });
+  phaseUpdateDots.forEach(id=>{document.getElementById(id)?.classList.add('has-update');});
+  if(stepUpdateDots.size>0){document.getElementById('clear-updates-btn')?.style.removeProperty('display');}
+}
+
 function restoreChecklistUIState(clientId,state){
   if(state.tab!=='org') switchChecklistTab(clientId,state.tab);
   Object.entries(state.phases).forEach(([id,collapsed])=>{
@@ -2547,8 +2594,7 @@ function restoreChecklistUIState(clientId,state){
     const el=document.getElementById(id);
     if(el){el.classList.toggle('expanded',s.expanded);el.classList.toggle('note-open',s.noteOpen);}
   });
-  // Re-apply persistent phase update dots
-  phaseUpdateDots.forEach(id=>{document.getElementById(id)?.classList.add('has-update');});
+  applyUpdateDots();
   const pane=document.getElementById('checklist-pane');
   if(pane&&state.scrollTop) pane.scrollTop=state.scrollTop;
 }
@@ -2608,25 +2654,34 @@ function pulseSteps(changes,techName){
     if(el){
       // Pulse the element
       el.classList.remove('sse-pulse');void el.offsetWidth;el.classList.add('sse-pulse');
-      // Attribution chip (on step row, not full element)
-      if(techName){
-        el.querySelector('.sse-attr')?.remove();
+      // Attribution chip — inline after step title
+      if(techName&&titleEl){
+        titleEl.querySelector('.sse-attr')?.remove();
         const chip=document.createElement('span');chip.className='sse-attr';
         chip.textContent=(done?'✓ ':'✕ ')+techName;
-        el.appendChild(chip);setTimeout(()=>chip.remove(),4200);
+        titleEl.appendChild(chip);setTimeout(()=>chip.remove(),4200);
       }
-      // Inline update dot after step title (one per step, replaces existing)
+      // Track step for persistent dot (applyUpdateDots handles actual DOM)
+      stepUpdateDots.add(id);
       const titleEl=el.querySelector('.step-title,.device-step-title,.substep-title');
       if(titleEl){
         titleEl.querySelector('.step-update-dot')?.remove();
         const dot=document.createElement('span');dot.className='step-update-dot';
         titleEl.appendChild(dot);
         el.addEventListener('mouseenter',()=>{
+          stepUpdateDots.delete(id);
           dot.style.opacity='0';dot.style.animation='none';
           setTimeout(()=>dot.remove(),380);
+          const phase=el.closest('.phase-block');
+          if(phase){
+            const hasDotInPhase=[...stepUpdateDots].some(sid=>{
+              const sel=document.getElementById('step-'+sid)||document.querySelector(`[id$="-${sid}"]`);
+              return sel&&phase.contains(sel);
+            });
+            if(!hasDotInPhase){phase.classList.remove('has-update');phaseUpdateDots.delete(phase.id);}
+          }
         },{once:true});
       }
-      // Show "clear updates" button
       document.getElementById('clear-updates-btn')?.style.removeProperty('display');
       // Phase header: pulse + persistent dot
       const phase=el.closest('.phase-block');
@@ -2666,34 +2721,28 @@ function connectSSE(){
       if(!oldC||!newC||oldC.lastModified===newC.lastModified) return;
       const prev=unseenChanges.get(cid)||{count:0};
       unseenChanges.set(cid,{count:prev.count+1,techName});
-      // Compute what changed on this specific client
+      // Build toast lines immediately for this client
       const cidChanges=detectChangedSteps(oldC,newC);
-      // Batch changes into a 1.5s window then show one rich toast
-      if(!unseenToastTimers.has(cid)){
-        const buf={techName,changes:[...cidChanges],clientName:newC.name};
-        const timer=setTimeout(()=>{
-          unseenToastTimers.delete(cid);
-          const b=unseenToastTimers.get(cid+'_buf')||buf;
-          const who=b.techName||'A tech';
-          const lines=(b.changes||[]).map(({title,done,phase})=>
-            `${done?'✓':'○'} <strong>${title||'a step'}</strong>${phase?' <span style="opacity:0.65;font-size:10px;">· '+phase+'</span>':''}`
-          );
-          showRichToast({
-            title:`${who} — ${b.clientName||cid}`,
-            body:lines.slice(0,5).join('<br>'),
-            type:'info',duration:6000
-          });
-          unseenToastTimers.delete(cid+'_buf');
-        },1500);
-        unseenToastTimers.set(cid,timer);
-        unseenToastTimers.set(cid+'_buf',buf);
+      const who=techName||'A tech';
+      const newLines=cidChanges.map(({title,done,phase})=>
+        `${done?'✓':'○'} <strong>${title||'a step'}</strong>${phase?` <span style="opacity:0.6;font-size:9px;">· ${phase}</span>`:''}`
+      );
+      // Live-update existing toast if still visible, else create immediately
+      const existingToast=unseenToastTimers.get(cid+'_toast');
+      if(existingToast&&existingToast.isConnected&&!existingToast.classList.contains('removing')){
+        const bodyEl=existingToast.querySelector('.toast-body');
+        if(bodyEl) bodyEl.innerHTML+=`<br>${newLines.join('<br>')}`;
+        clearTimeout(existingToast._expTimer);
+        existingToast._expTimer=setTimeout(()=>{
+          existingToast.classList.add('removing');
+          setTimeout(()=>existingToast.remove(),350);
+        },5000);
       } else {
-        // Accumulate into existing buffer
-        const buf=unseenToastTimers.get(cid+'_buf');
-        if(buf){buf.changes.push(...cidChanges);buf.techName=techName||buf.techName;}
+        const t=showRichToast({title:`${who} — ${newC.name}`,body:newLines.join('<br>'),type:'info',duration:5000});
+        unseenToastTimers.set(cid+'_toast',t);
       }
     });
-    const ui=getChecklistUIState();
+    const ui=getChecklistUIState();pendingBarWidths=captureBarWidths();
     clients=updated;
     renderSidebar();
     if(activeClientId&&clients[activeClientId]){
