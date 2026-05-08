@@ -13,7 +13,7 @@
   --success:#22c55e;--warn:#f59e0b;--danger:#ef4444;
   --mono:'JetBrains Mono','Fira Code',monospace;
   --sans:'Inter',system-ui,sans-serif;
-  --sidebar-w:220px;--guide-w:380px;--header-h:48px;
+  --sidebar-w:220px;--guide-w:520px;--header-h:48px;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.6;min-height:100vh;min-height:100dvh;overflow:hidden;}
@@ -445,9 +445,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .installer-actions{display:flex;gap:4px;flex-shrink:0;}
 .installer-short-badge{font-size:10px;padding:2px 6px;border-radius:3px;background:rgba(34,197,94,0.1);color:#86efac;border:1px solid rgba(34,197,94,0.2);font-family:var(--mono);}
 .installer-short-badge.pending{background:var(--bg3);color:var(--text3);border-color:var(--border);}
-.qr-panel{display:none;padding:8px;border-top:1px solid var(--border);text-align:center;}
-.qr-panel.open{display:block;}
-.qr-panel canvas{border-radius:4px;}
+/* QR modal */
+#qr-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;align-items:center;justify-content:center;}
+#qr-modal.show{display:flex;}
+.qr-modal-card{background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:22px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;}
+.qr-url-label{font-size:10px;color:var(--text3);font-family:var(--mono);max-width:260px;word-break:break-all;}
 
 /* Settings page */
 .settings-block{border:1px solid var(--border);border-radius:8px;margin-bottom:16px;overflow:hidden;}
@@ -797,6 +799,18 @@ body.light{
   </div>
 </div>
 
+<div id="qr-modal">
+  <div class="qr-modal-card">
+    <div style="display:flex;align-items:center;width:100%;gap:10px;">
+      <span style="font-size:13px;font-weight:600;flex:1;text-align:left;">QR Code</span>
+      <div class="guide-close" onclick="closeQrModal()">&#10005;</div>
+    </div>
+    <div id="qr-modal-content"></div>
+    <div class="qr-url-label" id="qr-modal-url"></div>
+    <button class="btn-secondary btn-sm" onclick="copyText(document.getElementById('qr-modal-url').textContent,this)">Copy URL</button>
+  </div>
+</div>
+
 <div id="syncro-link-modal">
   <div class="modal-card" style="width:min(480px,92vw);">
     <h3>Link Syncro Customer</h3>
@@ -879,6 +893,7 @@ const isMobile=()=>window.innerWidth<=1024;
 const unseenChanges=new Map();
 const unseenToastTimers=new Map();
 const notifyStore=new Map();          // notifyId -> {techName,ts} — single source of truth
+const qrCache=new Map();              // url -> img element src (avoid re-fetching)
 const pendingClientChanges=new Map(); // clientId -> {changes:Array, techName:string}
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
@@ -969,7 +984,7 @@ function actionLabel(action){
     device_step_complete:'Completed device step',device_step_incomplete:'Unchecked device step',
     device_added:'Added device',device_removed:'Removed device',notes_updated:'Updated notes',
     customer_linked:'Linked Syncro customer',customer_unlinked:'Unlinked Syncro customer',
-    checklist_edited:'Edited checklist info'};
+    checklist_edited:'Edited checklist info',step_note:'Step note updated'};
   return map[action]||action;
 }
 function relTime(ts){
@@ -1645,7 +1660,7 @@ async function renderSettingsLog(){
     </select>
     <button class="btn-secondary btn-sm" onclick="renderSettingsLog()">Refresh</button>
   </div>
-  <div id="settings-log-timeline"><div style="color:var(--text3);font-size:11px;">Loading…</div></div>`;
+  <div id="settings-log-timeline" style="max-height:480px;overflow-y:auto;padding-right:4px;"><div style="color:var(--text3);font-size:11px;">Loading…</div></div>`;
   try{
     const r=await fetch('/api/logs?limit=500');
     window._settingsLogs=await r.json();
@@ -1900,17 +1915,60 @@ function renderInstallerBlock(rawUrl, containerId, storedShort, onShortened){
     <div class="installer-url-row">
       <span class="url-text" id="${containerId}-url">${displayUrl}</span>
       <div class="installer-actions">
-        <button class="copy-btn" id="${containerId}-copy" onclick="event.stopPropagation();copyText(document.getElementById('${containerId}-url').textContent,this)">Copy</button>
-        <button class="copy-btn" id="${containerId}-qr-btn" onclick="event.stopPropagation();toggleQR('${containerId}-qr',document.getElementById('${containerId}-url').textContent)">QR</button>
+        <button class="copy-btn" id="${containerId}-copy" onclick="event.stopPropagation();copyInstUrl('${containerId}',this)">Copy</button>
+        <button class="copy-btn" id="${containerId}-qr-btn" onclick="event.stopPropagation();openQrModal(document.getElementById('${containerId}-url').textContent)">QR</button>
       </div>
     </div>
-    <div class="qr-panel" id="${containerId}-qr"></div>
   </div>`;
-  // Auto-shorten if no cached short URL
-  if(!storedShort){
-    shortenUrl(rawUrl, containerId, onShortened);
-  }
+  if(!storedShort) shortenUrl(rawUrl, containerId, onShortened);
 }
+
+function copyInstUrl(containerId, btn){
+  const urlEl=document.getElementById(containerId+'-url');
+  const text=urlEl?urlEl.textContent.trim():'';
+  if(!text){showToast('No URL to copy','error');return;}
+  const done=()=>{
+    if(!btn) return;
+    const orig=btn.textContent;
+    btn.textContent='Copied!';btn.style.color='var(--success)';
+    setTimeout(()=>{btn.textContent=orig;btn.style.color='';},1500);
+  };
+  if(navigator.clipboard?.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(()=>{
+      legacyCopy(text);done();
+    });
+  } else {legacyCopy(text);done();}
+}
+function legacyCopy(text){
+  const ta=document.createElement('textarea');
+  ta.value=text;ta.style.cssText='position:fixed;opacity:0;top:0;left:0;';
+  document.body.appendChild(ta);ta.focus();ta.select();
+  try{document.execCommand('copy');}catch(_){}
+  document.body.removeChild(ta);
+}
+
+function openQrModal(url){
+  if(!url) return;
+  const modal=document.getElementById('qr-modal');
+  const content=document.getElementById('qr-modal-content');
+  document.getElementById('qr-modal-url').textContent=url;
+  modal.classList.add('show');
+  if(qrCache.has(url)){content.innerHTML=qrCache.get(url);return;}
+  content.innerHTML='<div style="width:220px;height:220px;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:11px;">Generating…</div>';
+  const src=`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(url)}`;
+  const img=new Image();
+  img.onload=()=>{
+    const html=`<img src="${src}" width="220" height="220" style="border-radius:6px;display:block;">`;
+    qrCache.set(url,html);
+    content.innerHTML=html;
+  };
+  img.onerror=()=>{content.innerHTML='<div style="color:var(--danger);font-size:11px;">Failed to generate QR code</div>';};
+  img.src=src;
+}
+function closeQrModal(){document.getElementById('qr-modal').classList.remove('show');}
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('qr-modal')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeQrModal();});
+});
 
 async function shortenUrl(rawUrl, containerId, onShortened){
   const urlEl=document.getElementById(`${containerId}-url`);
@@ -1926,17 +1984,6 @@ async function shortenUrl(rawUrl, containerId, onShortened){
   }
 }
 
-function toggleQR(panelId, url){
-  const panel=document.getElementById(panelId);
-  if(!panel) return;
-  const opening=!panel.classList.contains('open');
-  panel.classList.toggle('open',opening);
-  if(opening&&!panel.dataset.rendered){
-    panel.dataset.rendered='1';
-    // Simple QR using a free API
-    panel.innerHTML=`<img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(url)}" width="160" height="160" style="border-radius:4px;">`;
-  }
-}
 
 function renderDeviceGuide(clientId){
   const client=clients[clientId];
@@ -2395,9 +2442,13 @@ function toggleStepNote(stepId){
 
 async function saveStepNote(clientId,stepId,val){
   if(!clients[clientId].stepNotes) clients[clientId].stepNotes={};
+  const prev=clients[clientId].stepNotes[stepId]||'';
+  if(val===prev) return; // no change
   clients[clientId].stepNotes[stepId]=val;
   const btn=document.querySelector(`#step-${stepId} .step-note-btn`);
   if(btn) btn.classList.toggle('has-note',!!val);
+  const def=findStepById(stepId);
+  logAction('notes_updated',{stepTitle:def?.title||stepId,details:val?'Note added':'Note cleared',clientId});
   await saveClients();
 }
 
