@@ -94,6 +94,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 
 /* Views */
 .view{display:none;}.view.active{display:block;}
+#view-empty.active{display:flex;justify-content:center;padding:24px 28px;}
 
 /* Config */
 .config-card{max-width:440px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:22px;}
@@ -344,9 +345,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 
 /* Sidebar footer with gear + theme */
 .sidebar-bottom-bar{display:flex;align-items:center;gap:4px;padding:8px 10px;border-top:1px solid var(--border);flex-shrink:0;}
-.sidebar-icon-btn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);border-radius:5px;font-size:20px;transition:all 0.15s;background:none;border:none;}
+.sidebar-icon-btn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);border-radius:5px;font-size:20px;transition:all 0.15s;background:none;border:none;line-height:1;}
+.sidebar-icon-btn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;}
 .sidebar-bottom-sep{width:1px;height:22px;background:var(--border2);flex-shrink:0;margin:0 4px;}
 .sidebar-icon-btn:hover{color:var(--text);background:var(--bg3);}
+.sidebar-icon-btn.active{color:var(--accent);background:rgba(59,130,246,0.12);}
 .theme-pill{display:flex;background:var(--bg3);border:1px solid var(--border);border-radius:20px;overflow:hidden;margin-left:auto;}
 .theme-btn{padding:3px 8px;font-size:10px;color:var(--text3);cursor:pointer;background:none;border:none;border-radius:20px;transition:all 0.15s;}
 .theme-btn.active{background:var(--accent);color:white;}
@@ -705,7 +708,9 @@ body.light{
             </button>
           </div></div>
           <div class="sidebar-bottom-sep"></div>
-          <button class="sidebar-icon-btn" onclick="openSettings()" title="Settings">&#9881;</button>
+          <button class="sidebar-icon-btn" id="settings-btn" onclick="toggleSettings()" title="Settings">
+  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+</button>
         </div>
       </div>
     </div>
@@ -745,7 +750,7 @@ body.light{
           </div>
         </div>
 
-        <div id="view-empty" class="view" style="display:flex;justify-content:center;padding:24px 28px;"></div>
+        <div id="view-empty" class="view"></div>
 
         <div id="view-checklist" class="view">
           <div id="checklist-content"></div>
@@ -1190,12 +1195,32 @@ function switchSidebarNav(tab){
   }
 }
 
+let _preSettingsClientId=null;
+
 function openSettings(){
+  _preSettingsClientId=activeClientId;
   activeClientId=null;
   document.getElementById('mobile-title').textContent=config?.orgName||'System Alternatives';
+  document.getElementById('settings-btn')?.classList.add('active');
   showView('settings');
   renderSettingsView();
   renderSidebar();
+}
+function toggleSettings(){
+  const btn=document.getElementById('settings-btn');
+  if(btn?.classList.contains('active')){
+    // Settings is open — return to previous state
+    btn.classList.remove('active');
+    if(_preSettingsClientId&&clients[_preSettingsClientId]){
+      activeClientId=_preSettingsClientId;
+      loadClientChecklist(_preSettingsClientId);
+    } else {
+      showView('empty');
+    }
+    _preSettingsClientId=null;
+  } else {
+    openSettings();
+  }
 }
 
 // ─── Reference list ───────────────────────────────────────────────────────────
@@ -1639,13 +1664,13 @@ function renderDashboard(){
     {label:'Completed',value:complete,color:'var(--success)'},
     staleDays?{label:'Stale',value:stale,color:'var(--danger)'}:null
   ].filter(Boolean);
-  el.innerHTML=`<div style="max-width:760px;">
-    <div style="margin-bottom:22px;">
+  el.innerHTML=`<div style="max-width:760px;width:100%;">
+    <div style="margin-bottom:22px;text-align:center;">
       <h2 style="font-size:20px;font-weight:700;margin-bottom:3px;">${myName?'Welcome back, '+myName:'Welcome'}</h2>
       <p style="color:var(--text2);font-size:12px;">${config?.orgName||'System Alternatives'} — Onboarding Checklist</p>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:22px;">
-      ${stats.map(s=>`<div class="dash-stat">
+    <div style="display:flex;gap:10px;margin-bottom:22px;flex-wrap:wrap;">
+      ${stats.map(s=>`<div class="dash-stat" style="flex:1;min-width:110px;">
         <div class="dash-stat-value" style="color:${s.color};">${s.value}</div>
         <div class="dash-stat-label">${s.label}</div>
       </div>`).join('')}
@@ -2155,6 +2180,7 @@ function renderDeviceGuide(clientId){
 
 function loadClientChecklist(id){
   activeClientId=id;
+  document.getElementById('settings-btn')?.classList.remove('active');
   const client=clients[id];
   const phases=buildPhases(client);
   const prog=overallProgress(client);
