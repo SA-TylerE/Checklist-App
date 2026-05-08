@@ -398,7 +398,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .toast.info{background:#1e3a5f;color:#93c5fd;border:1px solid rgba(59,130,246,0.3);}
 
 /* Styled confirm dialog */
-#confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;align-items:center;justify-content:center;}
+#confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:600;align-items:center;justify-content:center;}
 #confirm-overlay.show{display:flex;}
 .confirm-card{background:var(--bg2);border:1px solid var(--border2);border-radius:9px;padding:20px;width:min(380px,90vw);}
 .confirm-card p{font-size:13px;color:var(--text);margin-bottom:16px;line-height:1.5;}
@@ -833,6 +833,7 @@ body.light{
   <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:10px;width:min(520px,94vw);max-height:82vh;display:flex;flex-direction:column;overflow:hidden;">
     <div style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;">
       <span style="font-size:14px;font-weight:700;">Manage Products</span>
+      <span id="pm-dirty-indicator" style="display:none;font-size:11px;color:var(--warn);margin-left:10px;">Unsaved changes</span>
       <button onclick="closeProductsModal()" style="margin-left:auto;background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:0 4px;line-height:1;">&times;</button>
     </div>
     <div style="flex:1;overflow-y:auto;padding:14px 16px;">
@@ -1422,6 +1423,7 @@ let editorExpandedNodes=new Set();
 let editorDrag=null;
 let editorDirty=false;
 let editorProductFilter='';
+let _editorSnapshot=null;
 
 function markDirty(){
   editorDirty=true;
@@ -1437,6 +1439,7 @@ async function editorSave(){
     if(editorTab==='procedures') await saveStepsJson();
     else await saveGuidesJson();
     editorDirty=false;
+    _editorSnapshot=null;
     const ind=document.getElementById('editor-dirty-indicator');
     if(ind) ind.style.display='none';
     if(btn) btn.classList.remove('dirty');
@@ -1444,6 +1447,7 @@ async function editorSave(){
 }
 function _doCloseEditor(){
   editorDirty=false;
+  _editorSnapshot=null;
   document.getElementById('editor-modal').classList.remove('show');
 }
 function settingsToggle(id){
@@ -1453,6 +1457,7 @@ function settingsToggle(id){
 
 // ─── Procedure editor ─────────────────────────────────────────────────────────
 function openEditorModal(tab){
+  _editorSnapshot={stepsData:JSON.parse(JSON.stringify(stepsData)),guides:JSON.parse(JSON.stringify(guides))};
   editorSelected=null;editorExpandedNodes=new Set();editorTreeFilter='';editorDirty=false;
   document.getElementById('editor-modal').classList.add('show');
   switchEditorTab(tab||'procedures');
@@ -1461,7 +1466,10 @@ function closeEditorModal(){
   if(!editorDirty){_doCloseEditor();return;}
   styledConfirm3('You have unsaved changes.',
     {label:'Save & Close',action:async()=>{await editorSave();_doCloseEditor();}},
-    {label:'Discard',action:()=>{editorDirty=false;_doCloseEditor();}},
+    {label:'Discard',action:()=>{
+      if(_editorSnapshot){stepsData=_editorSnapshot.stepsData;guides=_editorSnapshot.guides;}
+      editorDirty=false;_doCloseEditor();
+    }},
     {label:'Cancel',action:()=>{}}
   );
 }
@@ -1781,7 +1789,7 @@ let autoSaveStepsTimer=null;
 function autoSaveSteps(){clearTimeout(autoSaveStepsTimer);autoSaveStepsTimer=setTimeout(saveStepsJson,800);}
 async function saveStepsJson(){
   const r=await fetch('/api/steps',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(stepsData)});
-  if(!r.ok) showToast('Save failed — check server logs','error');
+  if(!r.ok){let msg='Failed to save procedures';try{const d=await r.json();if(d.error)msg=d.error;}catch(_){}showToast(msg,'error');}
 }
 function etAddPhase(){
   stepsData.phases.push({id:'phase-'+Date.now(),title:'New Phase',badge:'',steps:[]});
@@ -1832,7 +1840,7 @@ let autoSaveGuidesTimer=null;
 function autoSaveGuides(){clearTimeout(autoSaveGuidesTimer);autoSaveGuidesTimer=setTimeout(saveGuidesJson,800);}
 async function saveGuidesJson(){
   const r=await fetch('/api/guides',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(guides)});
-  if(!r.ok) showToast('Save failed — check server logs','error');
+  if(!r.ok){let msg='Failed to save guides';try{const d=await r.json();if(d.error)msg=d.error;}catch(_){}showToast(msg,'error');}
 }
 function etAddGuide(){
   const gid='guide-'+Date.now();
@@ -2124,29 +2132,57 @@ function startUpdatePolling(){
 // ─── Products modal ───────────────────────────────────────────────────────────
 let _pmProducts=[];
 let _pmDrag=null;
+let _pmDirty=false;
+function pmMarkDirty(){
+  _pmDirty=true;
+  const ind=document.getElementById('pm-dirty-indicator');
+  if(ind) ind.style.display='inline';
+}
 function openProductsModal(){
+  _pmDirty=false;
   _pmProducts=JSON.parse(JSON.stringify(getProducts()));
+  const ind=document.getElementById('pm-dirty-indicator');
+  if(ind) ind.style.display='none';
   document.getElementById('products-modal').classList.add('show');
   pmRender();
 }
-function closeProductsModal(){document.getElementById('products-modal').classList.remove('show');}
+function closeProductsModal(){
+  if(!_pmDirty){_doCloseProducts();return;}
+  styledConfirm3('Products have unsaved changes.',
+    {label:'Save & Close',action:async()=>{const ok=await pmSave();if(ok)_doCloseProducts();}},
+    {label:'Discard',action:()=>{_pmDirty=false;_doCloseProducts();}},
+    {label:'Cancel',action:()=>{}}
+  );
+}
+function _doCloseProducts(){
+  _pmDirty=false;
+  const ind=document.getElementById('pm-dirty-indicator');
+  if(ind) ind.style.display='none';
+  document.getElementById('products-modal').classList.remove('show');
+}
 function pmRender(){
   document.getElementById('pm-list').innerHTML=_pmProducts.map((p,i)=>`
     <div class="pm-row" data-pi="${i}" draggable="true"
       ondragstart="pmDragStart(event,${i})" ondragover="pmDragOver(event,${i})"
       ondragleave="pmDragLeave(event)" ondrop="pmDrop(event,${i})" ondragend="pmDragEnd(event)">
       <span class="pm-drag">⠿</span>
-      <span class="pm-id">${escHtml(p.id)}</span>
-      <input class="pm-label-input" value="${escHtml(p.label)}" placeholder="Label" oninput="_pmProducts[${i}].label=this.value">
+      <input class="pm-label-input" style="font-family:monospace;font-size:11px;color:var(--text2);max-width:100px;" value="${escHtml(p.id)}" placeholder="product-id"
+        oninput="_pmProducts[${i}].id=this.value.toLowerCase().replace(/[^a-z0-9-_]/g,'');pmMarkDirty()">
+      <input class="pm-label-input" data-lbl="${i}" value="${escHtml(p.label)}" placeholder="Product name"
+        oninput="_pmProducts[${i}].label=this.value;pmMarkDirty()">
       <button onclick="pmDelete(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;flex-shrink:0;padding:0 2px;" title="Remove">&#215;</button>
     </div>`).join('');
 }
 function pmAddProduct(){
-  const id='product-'+Date.now();
-  _pmProducts.push({id,label:'New Product',desc:''});
+  const shortId='p'+Date.now().toString().slice(-4);
+  _pmProducts.push({id:shortId,label:'',desc:''});
+  pmMarkDirty();
   pmRender();
+  const lblInputs=document.querySelectorAll('#pm-list [data-lbl]');
+  const last=lblInputs[lblInputs.length-1];
+  if(last){last.focus();}
 }
-function pmDelete(i){_pmProducts.splice(i,1);pmRender();}
+function pmDelete(i){_pmProducts.splice(i,1);pmMarkDirty();pmRender();}
 function pmDragStart(e,i){_pmDrag=i;e.dataTransfer.effectAllowed='move';}
 function pmDragOver(e,i){
   e.preventDefault();
@@ -2168,14 +2204,34 @@ function pmDrop(e,ti){
   let ins=si<ti?(upper?ti-1:ti):(upper?ti:ti+1);
   ins=Math.max(0,Math.min(ins,_pmProducts.length));
   _pmProducts.splice(ins,0,item);
-  pmRender();
+  pmMarkDirty();pmRender();
 }
 async function pmSave(){
-  appSettings.products=_pmProducts;
-  const updated={...appSettings};
-  const r=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(updated)});
-  if(r.ok){showToast('Products saved');closeProductsModal();buildProductsGrid();}
-  else showToast('Save failed','error');
+  const errors=[];
+  const seen=new Set();
+  _pmProducts.forEach((p,i)=>{
+    const id=(p.id||'').trim(),lbl=(p.label||'').trim();
+    if(!id) errors.push(`Product #${i+1} is missing an ID`);
+    else if(seen.has(id)) errors.push(`Duplicate product ID: "${id}"`);
+    else seen.add(id);
+    if(!lbl) errors.push(`Product #${i+1} is missing a name`);
+  });
+  if(errors.length){showToast(errors[0],'error');return false;}
+  appSettings.products=_pmProducts.map(p=>({...p,id:p.id.trim(),label:p.label.trim()}));
+  const r=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
+  if(r.ok){
+    _pmDirty=false;
+    const ind=document.getElementById('pm-dirty-indicator');
+    if(ind) ind.style.display='none';
+    showToast('Products saved');
+    buildProductsGrid();
+    return true;
+  }else{
+    let msg='Failed to save products';
+    try{const d=await r.json();if(d.error)msg=d.error;}catch(_){}
+    showToast(msg,'error');
+    return false;
+  }
 }
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('products-modal')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeProductsModal();});
