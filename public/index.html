@@ -455,6 +455,22 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .settings-block{border:1px solid var(--border);border-radius:8px;margin-bottom:16px;overflow:hidden;}
 .settings-block-header{padding:11px 16px;background:var(--bg3);font-size:13px;font-weight:600;border-bottom:1px solid var(--border);}
 .settings-block-body{padding:16px;}
+/* Content editor modal */
+#editor-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto;}
+#editor-modal.show{display:flex;}
+.editor-modal-card{background:var(--bg2);border:1px solid var(--border2);border-radius:10px;width:min(92vw,960px);display:flex;flex-direction:column;margin:auto;}
+.editor-modal-head{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.editor-modal-head h3{flex:1;font-size:15px;font-weight:600;}
+.editor-modal-tabs{display:flex;border-bottom:1px solid var(--border);padding:0 20px;flex-shrink:0;}
+.editor-modal-tabs .tab-btn{padding:10px 18px;font-size:12px;}
+.editor-modal-body{padding:16px 20px;max-height:calc(90vh - 110px);overflow-y:auto;}
+/* Dashboard stat cards */
+.dash-stat{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;cursor:default;}
+.dash-stat-value{font-size:30px;font-weight:700;line-height:1;}
+.dash-stat-label{font-size:11px;color:var(--text2);margin-top:4px;}
+.dash-row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:background 0.1s;}
+.dash-row:hover{background:var(--bg3);}
+.dash-section-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;}
 .field-hint{font-size:10px;color:var(--text3);margin-top:3px;line-height:1.4;}
 /* Syncro link card */
 .syncro-linked-card{display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:6px;}
@@ -729,13 +745,7 @@ body.light{
           </div>
         </div>
 
-        <div id="view-empty" class="view">
-          <div class="empty-state">
-            <div class="icon">\ud83d\udccb</div>
-            <h3>No client selected</h3>
-            <p>Select a client from the sidebar or create a new onboarding checklist.</p>
-          </div>
-        </div>
+        <div id="view-empty" class="view" style="padding:24px 28px;"></div>
 
         <div id="view-checklist" class="view">
           <div id="checklist-content"></div>
@@ -796,6 +806,23 @@ body.light{
       <div class="guide-close" onclick="closeLogModal()">&#10005;</div>
     </div>
     <div style="flex:1;overflow-y:auto;padding:14px 18px;" id="log-modal-body"></div>
+  </div>
+</div>
+
+<div id="editor-modal">
+  <div class="editor-modal-card">
+    <div class="editor-modal-head">
+      <h3>Content Editors</h3>
+      <div class="guide-close" onclick="closeEditorModal()">&#10005;</div>
+    </div>
+    <div class="editor-modal-tabs">
+      <button class="tab-btn active" id="editor-tab-procedures" onclick="switchEditorTab('procedures')">&#128221; Procedures</button>
+      <button class="tab-btn" id="editor-tab-guides" onclick="switchEditorTab('guides')">&#128196; Guides</button>
+    </div>
+    <div class="editor-modal-body">
+      <div class="tab-panel active" id="editor-panel-procedures"><div id="procedure-editor-body"></div></div>
+      <div class="tab-panel" id="editor-panel-guides"><div id="guide-editor-body"></div></div>
+    </div>
   </div>
 </div>
 
@@ -1569,6 +1596,87 @@ function deleteGuideStep(gid,si,gsi){
   renderGuideEditor();
 }
 
+// ─── Content editor modal ────────────────────────────────────────────────────
+function openEditorModal(tab){
+  document.getElementById('editor-modal').classList.add('show');
+  switchEditorTab(tab||'procedures');
+}
+function closeEditorModal(){document.getElementById('editor-modal').classList.remove('show');}
+function switchEditorTab(tab){
+  ['procedures','guides'].forEach(t=>{
+    document.getElementById('editor-tab-'+t)?.classList.toggle('active',t===tab);
+    document.getElementById('editor-panel-'+t)?.classList.toggle('active',t===tab);
+  });
+  if(tab==='procedures') renderProcedureEditor();
+  else renderGuideEditor();
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('editor-modal')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeEditorModal();});
+});
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+function renderDashboard(){
+  const el=document.getElementById('view-empty');
+  if(!el) return;
+  const myName=localStorage.getItem('myName')||'';
+  const clientList=Object.values(clients);
+  const now=Date.now();
+  const staleDays=appSettings.staleDays||0;
+  const total=clientList.length;
+  const inProgress=clientList.filter(c=>{const p=overallProgress(c);return p.done>0&&p.done<p.total;}).length;
+  const complete=clientList.filter(c=>{const p=overallProgress(c);return p.total>0&&p.done===p.total;}).length;
+  const stale=staleDays?clientList.filter(c=>{const lm=c.lastModified||c.createdAt||0;return((now-new Date(lm).getTime())/(864e5))>staleDays;}).length:0;
+  const dueSoon=clientList.filter(c=>{
+    if(!c.dueDate)return false;
+    const diff=Math.ceil((new Date(c.dueDate+' 12:00')-new Date())/(864e5));
+    return diff>=0&&diff<=7;
+  }).sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate));
+  const recent=clientList.filter(c=>c.lastModified||c.createdAt)
+    .sort((a,b)=>new Date(b.lastModified||b.createdAt)-new Date(a.lastModified||a.createdAt)).slice(0,6);
+  const stats=[
+    {label:'Total',value:total,color:'var(--accent)'},
+    {label:'In Progress',value:inProgress,color:'var(--warn)'},
+    {label:'Completed',value:complete,color:'var(--success)'},
+    staleDays?{label:'Stale',value:stale,color:'var(--danger)'}:null
+  ].filter(Boolean);
+  el.innerHTML=`<div style="max-width:760px;">
+    <div style="margin-bottom:22px;">
+      <h2 style="font-size:20px;font-weight:700;margin-bottom:3px;">${myName?'Welcome back, '+myName:'Welcome'}</h2>
+      <p style="color:var(--text2);font-size:12px;">${config?.orgName||'System Alternatives'} — Onboarding Checklist</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:22px;">
+      ${stats.map(s=>`<div class="dash-stat">
+        <div class="dash-stat-value" style="color:${s.color};">${s.value}</div>
+        <div class="dash-stat-label">${s.label}</div>
+      </div>`).join('')}
+    </div>
+    ${dueSoon.length?`<div style="margin-bottom:20px;">
+      <div class="dash-section-label">Due within 7 days</div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        ${dueSoon.map(c=>{const diff=Math.ceil((new Date(c.dueDate+' 12:00')-new Date())/(864e5));const cls=diff===0?'overdue':diff<=2?'warn':'ok';return`<div class="dash-row" onclick="selectClient('${c.id}')">
+          <span style="flex:1;font-size:12px;font-weight:500;">${c.name}</span>
+          <span class="due-badge ${cls}">${diff===0?'Today':diff+'d left'}</span>
+        </div>`;}).join('')}
+      </div></div>`:''}
+    ${recent.length?`<div>
+      <div class="dash-section-label">Recent checklists</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;">
+        ${recent.map(c=>{const p=overallProgress(c);const pct=p.total?Math.round(p.done/p.total*100):0;return`<div class="dash-row" onclick="selectClient('${c.id}')">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.name}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:1px;">${c.tech}</div>
+          </div>
+          <span style="font-size:11px;color:var(--text3);flex-shrink:0;">${pct}%</span>
+        </div>`;}).join('')}
+      </div></div>`:''}
+    ${!total?`<div style="text-align:center;padding:48px 20px;">
+      <div style="font-size:13px;font-weight:500;color:var(--text2);margin-bottom:6px;">No checklists yet</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:18px;">Create your first client onboarding checklist to get started.</div>
+      <button class="btn-primary" onclick="newClientFromSidebar()">+ New Checklist</button>
+    </div>`:''}
+  </div>`;
+}
+
 // ─── Settings ─────────────────────────────────────────────────────────────────
 function renderSettingsView(){
   document.getElementById('settings-content').innerHTML=`
@@ -1579,12 +1687,14 @@ function renderSettingsView(){
         <div class="settings-block-body" id="cfg-section-body"></div>
       </div>
       <div class="settings-block">
-        <div class="settings-block-header">Procedure Editor</div>
-        <div class="settings-block-body" id="procedure-editor-body"></div>
-      </div>
-      <div class="settings-block">
-        <div class="settings-block-header">Guide Editor</div>
-        <div class="settings-block-body" id="guide-editor-body"></div>
+        <div class="settings-block-header">Content Editors</div>
+        <div class="settings-block-body">
+          <p style="font-size:12px;color:var(--text2);margin-bottom:14px;">Edit the procedure steps and in-app guide content shown in checklists.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button class="btn-primary" onclick="openEditorModal('procedures')">&#128221; Edit Procedures</button>
+            <button class="btn-secondary" onclick="openEditorModal('guides')">&#128196; Edit Guides</button>
+          </div>
+        </div>
       </div>
       <div class="settings-block">
         <div class="settings-block-header">Activity Log</div>
@@ -1592,8 +1702,6 @@ function renderSettingsView(){
       </div>
     </div>`;
   renderConfigSection();
-  renderProcedureEditor();
-  renderGuideEditor();
   renderSettingsLog();
 }
 
@@ -3163,6 +3271,7 @@ function showView(name){
     if(dd) dd.value=defaultDue.toISOString().slice(0,10);
     buildProductsGrid();
   }
+  if(name==='empty') renderDashboard();
   if(name!=='checklist')document.getElementById('mobile-title').textContent=config?.orgName||'System Alternatives';
 }
 function showAlert(id,type,msg){const el=document.getElementById(id);if(el)el.innerHTML=`<div class="alert alert-${type}">${msg}</div>`;}
