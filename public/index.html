@@ -256,8 +256,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .freetext-block{margin:3px 0 3px 23px;border:1px solid var(--border);border-radius:6px;overflow:hidden;}
 .freetext-header{display:flex;align-items:center;gap:6px;padding:6px 9px;cursor:pointer;background:var(--bg3);user-select:none;}
 .freetext-header:hover{background:var(--bg4);}
-.freetext-header span{font-size:10px;font-weight:500;color:var(--text2);flex:1;}
-.freetext-icon{font-size:9px;color:var(--text3);transition:transform 0.15s;}
+.freetext-header span:not(.freetext-icon){font-size:10px;font-weight:500;color:var(--text2);flex:1;}
+.freetext-icon{font-size:9px;color:var(--text3);transition:transform 0.15s;flex-shrink:0;margin-left:auto;}
 .freetext-block.open .freetext-icon{transform:rotate(90deg);}
 .freetext-body{display:none;padding:7px;}
 .freetext-block.open .freetext-body{display:block;}
@@ -867,13 +867,23 @@ body.light{
       <input id="glog-client-filter" placeholder="Filter by client…" oninput="applyGlobalLogFilter()" style="flex:1;min-width:120px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 9px;color:var(--text);font-size:12px;outline:none;">
       <select id="glog-action-filter" onchange="applyGlobalLogFilter()" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:12px;outline:none;">
         <option value="">All actions</option>
-        <option value="step_complete">Step completed</option>
-        <option value="step_incomplete">Step unchecked</option>
-        <option value="checklist_created">Checklist created</option>
-        <option value="checklist_deleted">Checklist deleted</option>
-        <option value="checklist_edited">Checklist edited</option>
-        <option value="device_added">Device added</option>
-        <option value="device_removed">Device removed</option>
+        <optgroup label="Checklist">
+          <option value="step_complete">Step completed</option>
+          <option value="step_incomplete">Step unchecked</option>
+          <option value="checklist_created">Checklist created</option>
+          <option value="checklist_deleted">Checklist deleted</option>
+          <option value="checklist_edited">Checklist edited</option>
+          <option value="device_added">Device added</option>
+          <option value="device_removed">Device removed</option>
+          <option value="notes_updated">Notes updated</option>
+          <option value="customer_linked">Customer linked</option>
+        </optgroup>
+        <optgroup label="Settings">
+          <option value="config_saved">Configuration saved</option>
+          <option value="products_saved">Products saved</option>
+          <option value="procedures_saved">Procedures saved</option>
+          <option value="guides_saved">Guides saved</option>
+        </optgroup>
       </select>
       <button class="btn-secondary btn-sm" onclick="loadGlobalLog()">Refresh</button>
     </div>
@@ -1122,12 +1132,16 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 
 function actionLabel(action){
-  const map={checklist_created:'Created checklist',checklist_deleted:'Deleted checklist',checklist_edited:'Edited checklist',
+  const map={
+    checklist_created:'Created checklist',checklist_deleted:'Deleted checklist',checklist_edited:'Edited checklist',
     step_complete:'Completed step',step_incomplete:'Unchecked step',substep_complete:'Completed substep',substep_incomplete:'Unchecked substep',
     device_step_complete:'Completed device step',device_step_incomplete:'Unchecked device step',
     device_added:'Added device',device_removed:'Removed device',notes_updated:'Updated notes',
     customer_linked:'Linked Syncro customer',customer_unlinked:'Unlinked Syncro customer',
-    checklist_edited:'Edited checklist info',step_note:'Step note updated'};
+    step_note:'Step note updated',
+    procedures_saved:'Saved procedures',guides_saved:'Saved guides',
+    config_saved:'Saved configuration',products_saved:'Saved products',
+  };
   return map[action]||action;
 }
 function relTime(ts){
@@ -1141,6 +1155,7 @@ function logDotColor(action){
   if(['checklist_created','device_added','customer_linked'].includes(action)) return 'var(--success)';
   if(['checklist_deleted','device_removed','customer_unlinked'].includes(action)) return 'var(--danger)';
   if(['checklist_edited','notes_updated','step_note'].includes(action)) return 'var(--warn)';
+  if(['procedures_saved','guides_saved','config_saved','products_saved'].includes(action)) return 'var(--text2)';
   return 'var(--accent)';
 }
 function renderLogTimeline(container,logs){
@@ -1818,7 +1833,8 @@ let autoSaveStepsTimer=null;
 function autoSaveSteps(){clearTimeout(autoSaveStepsTimer);autoSaveStepsTimer=setTimeout(saveStepsJson,800);}
 async function saveStepsJson(){
   const r=await fetch('/api/steps',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(stepsData)});
-  if(!r.ok){let msg='Failed to save procedures';try{const d=await r.json();if(d.error)msg=d.error;}catch(_){}showToast(msg,'error');}
+  if(r.ok){logAction('procedures_saved',{clientId:null,clientName:null,details:`${stepsData.phases?.length||0} phases`});}
+  else{let msg='Failed to save procedures';try{const d=await r.json();if(d.error)msg=d.error;}catch(_){}showToast(msg,'error');}
 }
 function etAddPhase(){
   stepsData.phases.push({id:'phase-'+Date.now(),title:'New Phase',badge:'',steps:[]});
@@ -1869,7 +1885,8 @@ let autoSaveGuidesTimer=null;
 function autoSaveGuides(){clearTimeout(autoSaveGuidesTimer);autoSaveGuidesTimer=setTimeout(saveGuidesJson,800);}
 async function saveGuidesJson(){
   const r=await fetch('/api/guides',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(guides)});
-  if(!r.ok){let msg='Failed to save guides';try{const d=await r.json();if(d.error)msg=d.error;}catch(_){}showToast(msg,'error');}
+  if(r.ok){logAction('guides_saved',{clientId:null,clientName:null,details:`${Object.keys(guides).length} guides`});}
+  else{let msg='Failed to save guides';try{const d=await r.json();if(d.error)msg=d.error;}catch(_){}showToast(msg,'error');}
 }
 function etAddGuide(){
   const gid='guide-'+Date.now();
@@ -2119,6 +2136,7 @@ async function saveAllConfig(){
     appSettings={staleDays,dueDays,defaultDueOffset,urlTemplates};
     document.querySelectorAll('.sidebar-top-brand').forEach(el=>el.textContent=orgName||'System Alternatives');
     renderSidebar();
+    logAction('config_saved',{clientId:null,clientName:null,details:`org: ${orgName}`});
     showToast('Configuration saved');
   }else{
     showToast('Save failed','error');
@@ -2253,6 +2271,7 @@ async function pmSave(){
     _pmDirty=false;
     const ind=document.getElementById('pm-dirty-indicator');
     if(ind) ind.style.display='none';
+    logAction('products_saved',{clientId:null,clientName:null,details:`${appSettings.products?.length||0} products`});
     showToast('Products saved');
     buildProductsGrid();
     return true;
@@ -2290,7 +2309,10 @@ function applyGlobalLogFilter(){
   const af=document.getElementById('glog-action-filter')?.value||'';
   const filtered=logs.filter(l=>{
     if(af&&l.action!==af)return false;
-    if(cf&&!(l.clientName||'').toLowerCase().includes(cf)&&!(l.tech||'').toLowerCase().includes(cf))return false;
+    if(cf){
+      const searchable=[(l.clientName||''),(l.tech||''),(l.details||'')].join(' ').toLowerCase();
+      if(!searchable.includes(cf))return false;
+    }
     return true;
   });
   renderLogTimeline(document.getElementById('global-log-timeline'),filtered.slice(0,200));
@@ -2886,7 +2908,7 @@ function renderEditProducts(clientId){
   const client=clients[clientId];
   return `<div class="edit-products-block" id="edit-products-block">
     <h4>Edit Products</h4>
-    <div class="products-grid">${PRODUCTS.map(p=>{
+    <div class="products-grid">${getProducts().map(p=>{
       const checked=client.products.includes(p.id);
       return `<label class="product-toggle ${checked?'selected':''}" id="ep-tog-${p.id}">
         <input type="checkbox" id="ep-${p.id}" ${checked?'checked':''} onchange="toggleEditProduct('${p.id}')">
@@ -2902,7 +2924,7 @@ function renderEditProducts(clientId){
 }
 function toggleEditProduct(id){const c=document.getElementById(`ep-${id}`);document.getElementById(`ep-tog-${id}`).classList.toggle('selected',c.checked);}
 async function saveEditProducts(clientId){
-  const newProds=PRODUCTS.filter(p=>document.getElementById(`ep-${p.id}`)?.checked).map(p=>p.id);
+  const newProds=getProducts().filter(p=>document.getElementById(`ep-${p.id}`)?.checked).map(p=>p.id);
   if(!newProds.length){alert('Select at least one product.');return;}
   clients[clientId].products=newProds;
   await saveClients();loadClientChecklist(clientId);
@@ -2946,7 +2968,7 @@ function openEditClientModal(clientId){
   const offset=appSettings.defaultDueOffset||90;
 
   // Build products checklist
-  const prodHtml=PRODUCTS.map(p=>`
+  const prodHtml=getProducts().map(p=>`
     <label class="product-toggle ${client.products.includes(p.id)?'selected':''}" id="eptog-${p.id}">
       <input type="checkbox" id="epcheck-${p.id}" ${client.products.includes(p.id)?'checked':''}
         onchange="editClientMarkDirty();document.getElementById('eptog-${p.id}').classList.toggle('selected',this.checked)">
@@ -3018,7 +3040,7 @@ async function saveEditClient(){
   client.name=document.getElementById('edit-name').value.trim()||client.name;
   client.tech=document.getElementById('edit-tech').value.trim()||'Unassigned';
   client.dueDate=document.getElementById('edit-duedate').value||null;
-  client.products=PRODUCTS.filter(p=>document.getElementById(`epcheck-${p.id}`)?.checked).map(p=>p.id);
+  client.products=getProducts().filter(p=>document.getElementById(`epcheck-${p.id}`)?.checked).map(p=>p.id);
   if(editSyncroState!==undefined){
     client.syncroCustomerName=editSyncroState?.business_name||null;
     client.syncroCustomerId=editSyncroState?.id||null;
@@ -3782,7 +3804,7 @@ async function createClientChecklist(){
   const name=document.getElementById('wiz-clientname').value.trim();
   const tech=document.getElementById('wiz-tech').value.trim();
   if(!name){showAlert('wizard-alert','error','Checklist name is required.');return;}
-  const selectedProds=PRODUCTS.filter(p=>document.getElementById(`pcheck-${p.id}`)?.checked).map(p=>p.id);
+  const selectedProds=getProducts().filter(p=>document.getElementById(`pcheck-${p.id}`)?.checked).map(p=>p.id);
   if(!selectedProds.length){showAlert('wizard-alert','error','Select at least one product.');return;}
   const dueDate=document.getElementById('wiz-duedate')?.value||null;
   const id='client-'+Date.now();
