@@ -1965,10 +1965,14 @@ async function saveAllConfig(){
 let updateAvailable=false;
 function setUpdateAvailable(avail){
   updateAvailable=avail;
-  const btn=document.getElementById('settings-btn');
-  btn?.classList.toggle('update-dot',avail);
+  document.getElementById('settings-btn')?.classList.toggle('update-dot',avail);
   const badge=document.getElementById('update-section-badge');
   if(badge) badge.style.display=avail?'inline-block':'none';
+  const applyBtn=document.getElementById('apply-update-btn');
+  if(applyBtn) applyBtn.style.display=avail?'':'none';
+  const statusEl=document.getElementById('update-status');
+  if(statusEl&&avail&&!statusEl.innerHTML.trim())
+    statusEl.innerHTML=`<span style="color:var(--warn);">&#9679; Update available</span>`;
 }
 async function pollForUpdates(){
   try{
