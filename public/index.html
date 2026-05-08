@@ -35,7 +35,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .sidebar-top{display:flex;align-items:center;height:40px;border-bottom:1px solid var(--border);flex-shrink:0;}
 .sidebar-toggle{width:36px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:16px;flex-shrink:0;transition:color 0.15s;}
 .sidebar-toggle:hover{color:var(--text);}
-.sidebar-top-brand{font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:10px;flex:1;}
+.sidebar-top-brand{font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:10px;flex:1;cursor:pointer;transition:color 0.15s;}
+.sidebar-top-brand:hover{color:var(--accent);}
 .sidebar-inner{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
 .sidebar-sub{font-size:10px;color:var(--text3);letter-spacing:0.06em;text-transform:uppercase;padding:10px 14px 4px;}
 .sidebar-search{padding:4px 12px 8px;}
@@ -530,6 +531,10 @@ body.light .syncro-linked-name{color:#1e40af;}
 /* Unified notification dot — rendered by renderAllDots() on [data-notify-id] elements */
 @keyframes dotPulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.3;transform:scale(0.6);}}
 .notify-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-left:6px;vertical-align:middle;flex-shrink:0;pointer-events:none;animation:dotPulse 1.5s ease-in-out infinite;transition:opacity 0.35s;}
+/* App update banner */
+#update-banner{display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:var(--accent);color:#fff;font-size:12px;font-weight:600;padding:9px 16px;text-align:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.35);animation:bannerSlide 0.3s ease;}
+@keyframes bannerSlide{from{transform:translateY(-100%);}to{transform:translateY(0);}}
+#update-banner:hover{background:#2563eb;}
 /* Clear updates button */
 .clear-updates-btn{font-size:10px;padding:2px 8px;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text3);cursor:pointer;white-space:nowrap;transition:all 0.15s;}
 .clear-updates-btn:hover{border-color:var(--border2);color:var(--text);}
@@ -657,6 +662,7 @@ body.light{
 </style>
 </head>
 <body>
+<div id="update-banner" onclick="location.reload()" title="Click to reload and apply update">&#10227; A new version is available — click to reload</div>
 <div id="app">
   <div id="mobile-header">
     <div class="mh-menu" onclick="toggleMobileSidebar()">&#9776;</div>
@@ -668,7 +674,7 @@ body.light{
       <div class="sidebar-top">
         <div class="sidebar-toggle" onclick="toggleSidebar()">&#9776;</div>
         <div class="sidebar-inner" style="flex-direction:row;align-items:center;padding-right:8px;overflow:visible;flex:1;min-width:0;">
-          <div class="sidebar-top-brand">System Alternatives</div>
+          <div class="sidebar-top-brand" onclick="goToDashboard()" title="Back to dashboard">System Alternatives</div>
         </div>
       </div>
       <div class="sidebar-inner">
@@ -1026,12 +1032,18 @@ function relTime(ts){
   if(diff<86400000)return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   return d.toLocaleDateString([],{month:'short',day:'numeric'})+'  '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
 }
+function logDotColor(action){
+  if(['checklist_created','device_added','customer_linked'].includes(action)) return 'var(--success)';
+  if(['checklist_deleted','device_removed','customer_unlinked'].includes(action)) return 'var(--danger)';
+  if(['checklist_edited','notes_updated','step_note'].includes(action)) return 'var(--warn)';
+  return 'var(--accent)';
+}
 function renderLogTimeline(container,logs){
   if(!logs.length){container.innerHTML='<div style="color:var(--text3);font-size:11px;padding:8px 0;">No activity recorded yet.</div>';return;}
   container.innerHTML=`<div class="log-timeline">${logs.map(l=>`
     <div class="log-entry">
       <div class="log-time">${relTime(l.ts)}</div>
-      <div class="log-dot-col"><div class="log-dot-mark"></div><div class="log-dot-line"></div></div>
+      <div class="log-dot-col"><div class="log-dot-mark" style="background:${logDotColor(l.action)}"></div><div class="log-dot-line"></div></div>
       <div class="log-content">
         <span class="log-tech">${escHtml(l.tech||'Unknown')}</span>
         <span class="log-action-text"> — ${actionLabel(l.action)}</span>
@@ -1204,6 +1216,13 @@ function openSettings(){
   document.getElementById('settings-btn')?.classList.add('active');
   showView('settings');
   renderSettingsView();
+  renderSidebar();
+}
+function goToDashboard(){
+  document.getElementById('settings-btn')?.classList.remove('active');
+  activeClientId=null;
+  _preSettingsClientId=null;
+  showView('empty');
   renderSidebar();
 }
 function toggleSettings(){
@@ -1722,6 +1741,17 @@ function renderSettingsView(){
         </div>
       </div>
       <div class="settings-block">
+        <div class="settings-block-header">Updates</div>
+        <div class="settings-block-body" id="update-section-body">
+          <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Check GitHub for new commits and pull them. The server restarts automatically after an update (requires systemd <code>Restart=always</code>).</p>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <button class="btn-secondary" onclick="checkForUpdates()">Check for Updates</button>
+            <button class="btn-primary" id="apply-update-btn" onclick="applyUpdate()" style="display:none;">Apply Update &amp; Restart</button>
+          </div>
+          <div id="update-status" style="margin-top:12px;font-size:12px;color:var(--text2);"></div>
+        </div>
+      </div>
+      <div class="settings-block">
         <div class="settings-block-header">Activity Log</div>
         <div class="settings-block-body" id="settings-log-body"></div>
       </div>
@@ -1838,6 +1868,55 @@ async function saveAllConfig(){
     showToast('Configuration saved');
   }else{
     showToast('Save failed','error');
+  }
+}
+
+async function checkForUpdates(){
+  const statusEl=document.getElementById('update-status');
+  const applyBtn=document.getElementById('apply-update-btn');
+  if(!statusEl) return;
+  statusEl.textContent='Checking…';
+  applyBtn&&(applyBtn.style.display='none');
+  try{
+    const r=await fetch('/api/update/status');
+    const d=await r.json();
+    if(d.error){statusEl.innerHTML=`<span style="color:var(--danger);">Error: ${escHtml(d.error)}</span>`;return;}
+    if(d.upToDate){
+      statusEl.innerHTML=`<span style="color:var(--success);">&#10003; Up to date</span>`;
+    }else{
+      statusEl.innerHTML=`<span style="color:var(--warn);">${d.commits.length} new commit${d.commits.length>1?'s':''} available:</span>
+        <ul style="margin:6px 0 0 16px;padding:0;font-size:11px;color:var(--text2);">${d.commits.map(c=>`<li>${escHtml(c)}</li>`).join('')}</ul>`;
+      if(applyBtn) applyBtn.style.display='';
+    }
+  }catch(e){statusEl.innerHTML=`<span style="color:var(--danger);">Failed: ${escHtml(e.message)}</span>`;}
+}
+async function applyUpdate(){
+  const statusEl=document.getElementById('update-status');
+  const applyBtn=document.getElementById('apply-update-btn');
+  if(!confirm('Pull latest changes and restart the server?')) return;
+  if(applyBtn) applyBtn.disabled=true;
+  statusEl&&(statusEl.textContent='Pulling…');
+  try{
+    const r=await fetch('/api/update',{method:'POST'});
+    const d=await r.json();
+    if(d.ok){
+      statusEl&&(statusEl.innerHTML=`<span style="color:var(--success);">Done! Waiting for server to restart…</span>`);
+      showToast('Update applied — reloading when ready','info');
+      await new Promise(r=>setTimeout(r,1500));
+      const deadline=Date.now()+30000;
+      const poll=async()=>{
+        if(Date.now()>deadline){statusEl&&(statusEl.innerHTML=`<span style="color:var(--warn);">Server taking longer than expected — <a href="" style="color:var(--accent);">reload manually</a></span>`);return;}
+        try{const h=await fetch('/api/health',{cache:'no-store'});if(h.ok){location.reload();return;}}catch(_){} // no-store on index.html means reload always fetches fresh
+        setTimeout(poll,1000);
+      };
+      poll();
+    }else{
+      statusEl&&(statusEl.innerHTML=`<span style="color:var(--danger);">Error: ${escHtml(d.error||'Unknown error')}</span>`);
+      if(applyBtn) applyBtn.disabled=false;
+    }
+  }catch(e){
+    statusEl&&(statusEl.innerHTML=`<span style="color:var(--danger);">Failed: ${escHtml(e.message)}</span>`);
+    if(applyBtn) applyBtn.disabled=false;
   }
 }
 
@@ -3117,6 +3196,10 @@ function connectSSE(){
   sseSource.addEventListener('config-updated',e=>{
     const cfg=JSON.parse(e.data);
     if(cfg.syncroToken) config={syncroToken:cfg.syncroToken,syncroSubdomain:cfg.syncroSubdomain};
+  });
+  sseSource.addEventListener('app-updated',()=>{
+    const banner=document.getElementById('update-banner');
+    if(banner) banner.style.display='block';
   });
   sseSource.onerror=()=>{ sseSource.close(); setTimeout(connectSSE,5000); };
 }

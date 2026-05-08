@@ -2,6 +2,7 @@ const express  = require('express');
 const fs       = require('fs');
 const path     = require('path');
 const os       = require('os');
+const { exec } = require('child_process');
 
 const app        = express();
 const PORT       = 3001;
@@ -13,6 +14,10 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const MAX_LOGS   = 5000;
 
 app.use(express.json({ limit: '5mb' }));
+app.get(['/', '/index.html'], (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+});
 app.use(express.static(PUBLIC_DIR));
 
 // ── SSE ───────────────────────────────────────────────────────────────────────
@@ -214,6 +219,24 @@ app.post('/api/logs',(req,res)=>{
     atomicWrite(LOG_FILE,JSON.stringify(logs));
     res.json({ok:true});
   }catch(e){res.status(500).json({error:e.message});}
+});
+
+// Update checker
+app.get('/api/update/status', (req, res) => {
+  exec('git fetch && git log HEAD..@{u} --oneline', { cwd: __dirname }, (err, stdout, stderr) => {
+    if (err) return res.json({ error: stderr || err.message, commits: [] });
+    const commits = stdout.trim() ? stdout.trim().split('\n') : [];
+    res.json({ upToDate: commits.length === 0, commits });
+  });
+});
+
+app.post('/api/update', (req, res) => {
+  exec('git pull', { cwd: __dirname }, (err, stdout, stderr) => {
+    if (err) return res.status(500).json({ error: stderr || err.message });
+    res.json({ ok: true, output: stdout });
+    pushEvent('app-updated', {}, 'server');
+    setTimeout(() => process.exit(0), 800);
+  });
 });
 
 // Health
