@@ -1871,6 +1871,12 @@ async function saveAllConfig(){
   }
 }
 
+function renderUpdateHint(hint){
+  return hint?`<div style="margin-top:8px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:6px;padding:8px 10px;font-size:11px;color:var(--text2);">
+    <strong style="color:var(--danger);">Fix required:</strong> ${escHtml(hint)}
+    <button onclick="navigator.clipboard.writeText(${JSON.stringify(hint)}).then(()=>showToast('Copied'))" style="margin-left:8px;font-size:10px;padding:1px 7px;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text3);cursor:pointer;">Copy</button>
+  </div>`:'';
+}
 async function checkForUpdates(){
   const statusEl=document.getElementById('update-status');
   const applyBtn=document.getElementById('apply-update-btn');
@@ -1880,11 +1886,14 @@ async function checkForUpdates(){
   try{
     const r=await fetch('/api/update/status');
     const d=await r.json();
-    if(d.error){statusEl.innerHTML=`<span style="color:var(--danger);">Error: ${escHtml(d.error)}</span>`;return;}
+    if(d.error){
+      statusEl.innerHTML=`<span style="color:var(--danger);">Error: ${escHtml(d.error)}</span>${renderUpdateHint(d.hint)}`;
+      return;
+    }
     if(d.upToDate){
       statusEl.innerHTML=`<span style="color:var(--success);">&#10003; Up to date</span>`;
     }else{
-      statusEl.innerHTML=`<span style="color:var(--warn);">${d.commits.length} new commit${d.commits.length>1?'s':''} available:</span>
+      statusEl.innerHTML=`<span style="color:var(--warn);">${d.commits.length} update${d.commits.length>1?'s':''} available:</span>
         <ul style="margin:6px 0 0 16px;padding:0;font-size:11px;color:var(--text2);">${d.commits.map(c=>`<li>${escHtml(c)}</li>`).join('')}</ul>`;
       if(applyBtn) applyBtn.style.display='';
     }
@@ -1911,7 +1920,7 @@ async function applyUpdate(){
       };
       poll();
     }else{
-      statusEl&&(statusEl.innerHTML=`<span style="color:var(--danger);">Error: ${escHtml(d.error||'Unknown error')}</span>`);
+      statusEl&&(statusEl.innerHTML=`<span style="color:var(--danger);">Error: ${escHtml(d.error||'Unknown error')}</span>${renderUpdateHint(d.hint)}`);
       if(applyBtn) applyBtn.disabled=false;
     }
   }catch(e){

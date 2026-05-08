@@ -223,17 +223,37 @@ app.post('/api/logs',(req,res)=>{
 
 // Update checker
 const gitSafe = `git -c safe.directory=${__dirname}`;
+const svcUser = os.userInfo().username;
+
+function gitHint(stderr) {
+  if (!stderr) return null;
+  if (stderr.includes('Permission denied') || stderr.includes('cannot open') || stderr.includes('unable to write'))
+    return `Fix ownership: sudo chown -R ${svcUser} ${__dirname}`;
+  if (stderr.includes('Authentication failed') || stderr.includes('could not read Username') || stderr.includes('invalid credentials'))
+    return 'Git authentication failed. Ensure the remote URL embeds a token (HTTPS) or the service user has an SSH key configured.';
+  if (stderr.includes('Could not resolve host') || stderr.includes('unable to connect'))
+    return 'Cannot reach GitHub. Check network/firewall from the server.';
+  return null;
+}
+
 app.get('/api/update/status', (req, res) => {
-  exec(`${gitSafe} fetch && ${gitSafe} log HEAD..@{u} --oneline`, { cwd: __dirname }, (err, stdout, stderr) => {
-    if (err) return res.json({ error: stderr || err.message, commits: [] });
-    const commits = stdout.trim() ? stdout.trim().split('\n') : [];
-    res.json({ upToDate: commits.length === 0, commits });
+  // Use ls-remote (read-only, no writes to .git) then compare with local HEAD
+  exec(`${gitSafe} rev-parse HEAD`, { cwd: __dirname }, (e1, localOut, se1) => {
+    if (e1) return res.json({ error: se1 || e1.message, hint: gitHint(se1 || e1.message), commits: [] });
+    exec(`${gitSafe} ls-remote origin HEAD`, { cwd: __dirname }, (e2, remoteOut, se2) => {
+      if (e2) return res.json({ error: se2 || e2.message, hint: gitHint(se2 || e2.message), commits: [] });
+      const local  = localOut.trim();
+      const remote = remoteOut.trim().split(/\s+/)[0] || '';
+      if (!remote) return res.json({ error: 'Could not read remote HEAD — is origin configured?', commits: [] });
+      if (local === remote) return res.json({ upToDate: true, commits: [] });
+      res.json({ upToDate: false, commits: [`Remote is ahead (${remote.slice(0,7)} vs local ${local.slice(0,7)})`] });
+    });
   });
 });
 
 app.post('/api/update', (req, res) => {
-  exec(`${gitSafe} pull`, { cwd: __dirname }, (err, stdout, stderr) => {
-    if (err) return res.status(500).json({ error: stderr || err.message });
+  exec('sudo /usr/local/bin/checklist-git-pull', (err, stdout, stderr) => {
+    if (err) return res.status(500).json({ error: stderr || err.message, hint: gitHint(stderr || err.message) });
     res.json({ ok: true, output: stdout });
     pushEvent('app-updated', {}, 'server');
     setTimeout(() => process.exit(0), 800);
