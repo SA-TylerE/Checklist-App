@@ -353,6 +353,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .sidebar-bottom-sep{width:1px;height:22px;background:var(--border2);flex-shrink:0;margin:0 4px;}
 .sidebar-icon-btn:hover{color:var(--text);background:var(--bg3);}
 .sidebar-icon-btn.active{color:var(--accent);background:rgba(59,130,246,0.12);}
+.sidebar-icon-btn.update-dot{position:relative;}
+.sidebar-icon-btn.update-dot::after{content:'';position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:var(--warn);border:2px solid var(--bg2);}
+/* Global log modal */
+#global-log-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:500;align-items:center;justify-content:center;}
+#global-log-modal.show{display:flex;}
+.global-log-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;width:min(720px,96vw);max-height:82vh;display:flex;flex-direction:column;overflow:hidden;}
 .theme-pill{display:flex;background:var(--bg3);border:1px solid var(--border);border-radius:20px;overflow:hidden;margin-left:auto;}
 .theme-btn{padding:3px 8px;font-size:10px;color:var(--text3);cursor:pointer;background:none;border:none;border-radius:20px;transition:all 0.15s;}
 .theme-btn.active{background:var(--accent);color:white;}
@@ -797,6 +803,29 @@ body.light{
 
 <div id="overlay-bg" onclick="closeOverlays()"></div>
 <div id="toast-container"></div>
+<div id="global-log-modal">
+  <div class="global-log-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <span style="font-size:14px;font-weight:700;">Activity Log</span>
+      <button onclick="closeGlobalLogModal()" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;line-height:1;padding:2px 6px;">&times;</button>
+    </div>
+    <div style="padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:8px;flex-wrap:wrap;">
+      <input id="glog-client-filter" placeholder="Filter by client…" oninput="applyGlobalLogFilter()" style="flex:1;min-width:120px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 9px;color:var(--text);font-size:12px;outline:none;">
+      <select id="glog-action-filter" onchange="applyGlobalLogFilter()" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:12px;outline:none;">
+        <option value="">All actions</option>
+        <option value="step_complete">Step completed</option>
+        <option value="step_incomplete">Step unchecked</option>
+        <option value="checklist_created">Checklist created</option>
+        <option value="checklist_deleted">Checklist deleted</option>
+        <option value="checklist_edited">Checklist edited</option>
+        <option value="device_added">Device added</option>
+        <option value="device_removed">Device removed</option>
+      </select>
+      <button class="btn-secondary btn-sm" onclick="loadGlobalLog()">Refresh</button>
+    </div>
+    <div id="global-log-timeline" style="flex:1;overflow-y:auto;padding:8px 16px;"><div style="color:var(--text3);font-size:11px;">Loading…</div></div>
+  </div>
+</div>
 <div id="summary-modal">
   <div class="summary-card">
     <h3>Onboarding Summary</h3>
@@ -1756,23 +1785,25 @@ function renderSettingsView(){
         </div>
       </div>
       <div class="settings-block">
-        <div class="settings-block-header">Updates</div>
+        <div class="settings-block-header">Updates <span id="update-section-badge" style="display:${updateAvailable?'inline-block':'none'};margin-left:8px;font-size:10px;font-weight:600;background:var(--warn);color:#000;padding:1px 7px;border-radius:10px;vertical-align:middle;">Available</span></div>
         <div class="settings-block-body" id="update-section-body">
-          <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Check GitHub for new commits and pull them. The server restarts automatically after an update (requires systemd <code>Restart=always</code>).</p>
+          <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Check for and apply updates from GitHub. The server will restart automatically when an update is applied.</p>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-            <button class="btn-secondary" onclick="checkForUpdates()">Check for Updates</button>
-            <button class="btn-primary" id="apply-update-btn" onclick="applyUpdate()" style="display:none;">Apply Update &amp; Restart</button>
+            <button class="btn-secondary" onclick="checkForUpdates()">Check Now</button>
+            <button class="btn-primary" id="apply-update-btn" onclick="applyUpdate()" style="display:${updateAvailable?'':'none'};">Apply Update &amp; Restart</button>
           </div>
-          <div id="update-status" style="margin-top:12px;font-size:12px;color:var(--text2);"></div>
+          <div id="update-status" style="margin-top:12px;font-size:12px;color:var(--text2);">${updateAvailable?'<span style="color:var(--warn);">&#9679; Update available</span>':''}</div>
         </div>
       </div>
       <div class="settings-block">
         <div class="settings-block-header">Activity Log</div>
-        <div class="settings-block-body" id="settings-log-body"></div>
+        <div class="settings-block-body">
+          <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">View a full history of checklist activity across all clients.</p>
+          <button class="btn-secondary" onclick="openGlobalLogModal()">View Activity Log</button>
+        </div>
       </div>
     </div>`;
   renderConfigSection();
-  renderSettingsLog();
 }
 
 function renderConfigSection(){
@@ -1886,6 +1917,64 @@ async function saveAllConfig(){
   }
 }
 
+// ─── Update polling ───────────────────────────────────────────────────────────
+let updateAvailable=false;
+function setUpdateAvailable(avail){
+  updateAvailable=avail;
+  const btn=document.getElementById('settings-btn');
+  btn?.classList.toggle('update-dot',avail);
+  const badge=document.getElementById('update-section-badge');
+  if(badge) badge.style.display=avail?'inline-block':'none';
+}
+async function pollForUpdates(){
+  try{
+    const r=await fetch('/api/update/status');
+    const d=await r.json();
+    if(!d.error&&!d.upToDate&&!updateAvailable){
+      setUpdateAvailable(true);
+      showToast('A new update is available — open Settings to apply','info');
+    } else if(d.upToDate){
+      setUpdateAvailable(false);
+    }
+  }catch(_){}
+}
+function startUpdatePolling(){
+  pollForUpdates();
+  setInterval(pollForUpdates,30*60*1000);
+}
+
+// ─── Global log modal ─────────────────────────────────────────────────────────
+async function openGlobalLogModal(){
+  document.getElementById('global-log-modal').classList.add('show');
+  await loadGlobalLog();
+}
+function closeGlobalLogModal(){
+  document.getElementById('global-log-modal').classList.remove('show');
+}
+async function loadGlobalLog(){
+  const el=document.getElementById('global-log-timeline');
+  if(el) el.innerHTML='<div style="color:var(--text3);font-size:11px;">Loading…</div>';
+  try{
+    const r=await fetch('/api/logs?limit=500');
+    window._globalLogs=await r.json();
+    applyGlobalLogFilter();
+  }catch(e){if(el)el.innerHTML=`<div style="color:#fca5a5;font-size:11px;">Failed: ${e.message}</div>`;}
+}
+function applyGlobalLogFilter(){
+  const logs=window._globalLogs||[];
+  const cf=(document.getElementById('glog-client-filter')?.value||'').toLowerCase();
+  const af=document.getElementById('glog-action-filter')?.value||'';
+  const filtered=logs.filter(l=>{
+    if(af&&l.action!==af)return false;
+    if(cf&&!(l.clientName||'').toLowerCase().includes(cf)&&!(l.tech||'').toLowerCase().includes(cf))return false;
+    return true;
+  });
+  renderLogTimeline(document.getElementById('global-log-timeline'),filtered.slice(0,200));
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('global-log-modal')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeGlobalLogModal();});
+});
+
 function renderUpdateHint(hint){
   return hint?`<div style="margin-top:8px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:6px;padding:8px 10px;font-size:11px;color:var(--text2);">
     <strong style="color:var(--danger);">Fix required:</strong> ${escHtml(hint)}
@@ -1924,6 +2013,7 @@ async function applyUpdate(){
     const r=await fetch('/api/update',{method:'POST'});
     const d=await r.json();
     if(d.ok){
+      setUpdateAvailable(false);
       statusEl&&(statusEl.innerHTML=`<span style="color:var(--success);">Done! Waiting for server to restart…</span>`);
       showToast('Update applied — reloading when ready','info');
       await new Promise(r=>setTimeout(r,1500));
@@ -3413,6 +3503,7 @@ function showAlert(id,type,msg){const el=document.getElementById(id);if(el)el.in
 applyTheme(currentTheme);
 loadConfig();
 connectSSE();
+startUpdatePolling();
 </script>
 </body>
 </html>
