@@ -134,6 +134,22 @@ app.get('/api/syncro/search', (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// URL shortener proxy — browser can't call is.gd directly due to CORS
+app.get('/api/shorten', (req, res) => {
+  const url = req.query.url;
+  if (!url) return res.status(400).json({ error: 'Missing url parameter' });
+  const target = `https://is.gd/create.php?format=simple&url=${encodeURIComponent(url)}`;
+  https.get(target, apiRes => {
+    let data = '';
+    apiRes.on('data', chunk => data += chunk);
+    apiRes.on('end', () => {
+      const short = data.trim();
+      if (!short || short.startsWith('Error:')) return res.status(400).json({ error: short || 'Shortening failed' });
+      res.json({ short });
+    });
+  }).on('error', e => res.status(500).json({ error: e.message }));
+});
+
 // Clients read/write
 app.get('/api/clients', (req, res) => {
   try { res.json(JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))); }

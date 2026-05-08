@@ -1481,7 +1481,8 @@ async function editorSave(){
     if(editorTab==='procedures') await saveStepsJson();
     else await saveGuidesJson();
     editorDirty=false;
-    _editorSnapshot=null;
+    // Refresh snapshot to current saved state so further edits can be detected
+    _editorSnapshot={stepsData:JSON.parse(JSON.stringify(stepsData)),guides:JSON.parse(JSON.stringify(guides))};
     editorDirtyNodes.clear();
     if(btn){
       btn.style.display='none';
@@ -2559,8 +2560,8 @@ async function saveDevInstUrl(clientId, devId, devType){
   if(btn){btn.textContent='Saving…';btn.disabled=true;}
   let shortUrl=null;
   try{
-    const r=await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(raw)}`);
-    if(r.ok){const s=(await r.text()).trim();if(s!==raw)shortUrl=s;}
+    const r=await fetch(`/api/shorten?url=${encodeURIComponent(raw)}`);
+    if(r.ok){const d=await r.json();if(d.short&&d.short!==raw)shortUrl=d.short;}
   }catch(_){}
   const c=clients[clientId];
   if(!c?.devices?.[devId]) return;
@@ -2650,11 +2651,12 @@ document.addEventListener('DOMContentLoaded',()=>{
 async function shortenUrl(rawUrl, containerId, onShortened){
   const urlEl=document.getElementById(`${containerId}-url`);
   try{
-    const r=await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(rawUrl)}`);
+    const r=await fetch(`/api/shorten?url=${encodeURIComponent(rawUrl)}`);
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
-    const short=(await r.text()).trim();
-    if(urlEl) urlEl.textContent=short;
-    if(onShortened) onShortened(short);
+    const d=await r.json();
+    if(!d.short) throw new Error(d.error||'No short URL returned');
+    if(urlEl) urlEl.textContent=d.short;
+    if(onShortened) onShortened(d.short);
   }catch(e){
     // Leave raw URL displayed — silent fail, no need to alarm the user
     console.warn('TinyURL failed:', e.message);
@@ -3318,11 +3320,12 @@ async function shortenModalUrl(){
   if(!raw){showToast('Enter a URL first','error');return;}
   const btn=event.target;btn.textContent='...';
   try{
-    const r=await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(raw)}`);
-    const short=(await r.text()).trim();
-    modalShortUrl=short;
+    const r=await fetch(`/api/shorten?url=${encodeURIComponent(raw)}`);
+    const d=await r.json();
+    if(!d.short) throw new Error(d.error||'Shortening failed');
+    modalShortUrl=d.short;
     const el=document.getElementById('modal-short-url');
-    if(el){el.textContent=short;el.style.display='block';}
+    if(el){el.textContent=d.short;el.style.display='block';}
     btn.textContent='Shorten';showToast('Shortened');
   }catch(e){btn.textContent='Shorten';showToast('Failed','error');}
 }
