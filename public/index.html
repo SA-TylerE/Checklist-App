@@ -467,15 +467,57 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .settings-block{border:1px solid var(--border);border-radius:8px;margin-bottom:16px;overflow:hidden;}
 .settings-block-header{padding:11px 16px;background:var(--bg3);font-size:13px;font-weight:600;border-bottom:1px solid var(--border);}
 .settings-block-body{padding:16px;}
-/* Content editor modal */
-#editor-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;align-items:center;justify-content:center;padding:20px;}
+/* Content editor modal — full-screen split pane */
+#editor-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:400;align-items:stretch;justify-content:stretch;}
 #editor-modal.show{display:flex;}
-.editor-modal-card{background:var(--bg2);border:1px solid var(--border2);border-radius:10px;width:min(92vw,960px);height:86vh;display:flex;flex-direction:column;overflow:hidden;}
-.editor-modal-head{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;}
-.editor-modal-head h3{flex:1;font-size:15px;font-weight:600;}
-.editor-modal-tabs{display:flex;border-bottom:1px solid var(--border);padding:0 20px;flex-shrink:0;}
-.editor-modal-tabs .tab-btn{padding:10px 18px;font-size:12px;}
-.editor-modal-body{flex:1;min-height:0;overflow-y:auto;padding:16px 20px;}
+.editor-modal-card{background:var(--bg2);width:100vw;height:100dvh;display:grid;grid-template-rows:48px 1fr;overflow:hidden;}
+.editor-modal-head{display:flex;align-items:center;padding:0 16px;border-bottom:1px solid var(--border);flex-shrink:0;gap:0;}
+.editor-modal-tabs{display:flex;gap:0;margin-right:auto;}
+.editor-modal-tabs .tab-btn{padding:0 20px;height:48px;font-size:12px;border-radius:0;border-bottom:2px solid transparent;}
+.editor-modal-tabs .tab-btn.active{border-bottom-color:var(--accent);}
+.editor-split{display:grid;grid-template-columns:280px 1fr;overflow:hidden;height:100%;}
+.editor-tree-pane{border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+.editor-tree-search{padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.editor-tree-search input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 9px;color:var(--text);font-size:12px;outline:none;}
+.editor-tree-search input:focus{border-color:var(--accent);}
+.editor-tree-body{flex:1;overflow-y:auto;padding:4px 0;}
+.editor-tree-footer{padding:8px 10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:4px;flex-shrink:0;}
+.editor-form-pane{overflow-y:auto;padding:24px 28px;}
+/* Tree rows */
+.et-row{display:flex;align-items:center;gap:4px;padding:5px 8px;cursor:pointer;font-size:12px;border-radius:5px;margin:1px 4px;user-select:none;transition:background 0.1s;border-top:2px solid transparent;border-bottom:2px solid transparent;}
+.et-row:hover{background:var(--bg3);}
+.et-row.active{background:rgba(59,130,246,0.12);color:var(--accent);}
+.et-row.drag-over-before{border-top-color:var(--accent);}
+.et-row.drag-over-after{border-bottom-color:var(--accent);}
+.et-drag{cursor:grab;color:var(--text3);font-size:12px;flex-shrink:0;padding:0 2px;line-height:1;}
+.et-drag:active{cursor:grabbing;}
+.et-arrow{width:14px;font-size:9px;color:var(--text3);flex-shrink:0;text-align:center;transition:transform 0.15s;display:inline-block;}
+.et-arrow.open{transform:rotate(90deg);}
+.et-arrow.et-no-child{visibility:hidden;}
+.et-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.et-section-hdr{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;padding:12px 12px 4px;user-select:none;}
+.et-add-btn{font-size:11px;color:var(--accent);background:none;border:1px solid var(--accent);border-radius:4px;cursor:pointer;padding:4px 10px;text-align:left;}
+.et-add-btn:hover{background:rgba(59,130,246,0.1);}
+/* Form pane */
+.ef-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text2);margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+.ef-empty{height:100%;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:13px;}
+.ef-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;}
+.ef-grid.full{grid-template-columns:1fr;}
+.ef-field{display:flex;flex-direction:column;gap:5px;}
+.ef-field label{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;}
+.ef-field input,.ef-field textarea{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 9px;color:var(--text);font-size:12px;outline:none;font-family:var(--sans);}
+.ef-field textarea{resize:vertical;min-height:80px;line-height:1.5;}
+.ef-field textarea.ef-mono{font-family:var(--mono,monospace);font-size:11px;}
+.ef-field input:focus,.ef-field textarea:focus{border-color:var(--accent);}
+.ef-hint{font-size:10px;color:var(--text3);line-height:1.4;margin-top:2px;}
+.ef-divider{border:none;border-top:1px solid var(--border);margin:18px 0;}
+.ef-actions{display:flex;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);flex-wrap:wrap;}
+.ef-tags{display:flex;gap:12px;flex-wrap:wrap;}
+.ef-tag{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer;}
+.ef-del-btn{padding:6px 14px;background:none;border:1px solid var(--danger);color:var(--danger);border-radius:6px;font-size:12px;cursor:pointer;opacity:0.8;}
+.ef-del-btn:hover{opacity:1;background:rgba(239,68,68,0.08);}
+.ef-add-btn{padding:6px 14px;background:none;border:1px solid var(--accent);color:var(--accent);border-radius:6px;font-size:12px;cursor:pointer;}
+.ef-add-btn:hover{background:rgba(59,130,246,0.08);}
 /* Dashboard stat cards */
 .dash-stat{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;cursor:default;}
 .dash-stat-value{font-size:30px;font-weight:700;line-height:1;}
@@ -492,36 +534,6 @@ body.light .syncro-linked-name{color:#1e40af;}
 #syncro-link-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;align-items:center;justify-content:center;}
 #syncro-link-modal.show{display:flex;}
 
-/* Editor rows */
-.editor-list{display:flex;flex-direction:column;gap:6px;}
-.editor-item{border:1px solid var(--border);border-radius:6px;overflow:hidden;}
-.editor-item-header{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg3);cursor:pointer;}
-.editor-item-header:hover{background:var(--bg4);}
-.editor-item-label{flex:1;font-size:12px;font-weight:500;}
-.editor-item-body{display:none;padding:10px;border-top:1px solid var(--border);}
-.editor-item.open .editor-item-body{display:block;}
-.editor-field{margin-bottom:8px;}
-.editor-field label{display:block;font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:3px;}
-.editor-field input,.editor-field textarea,.editor-field select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text);font-size:12px;font-family:var(--sans);outline:none;}
-.editor-field input:focus,.editor-field textarea:focus,.editor-field select:focus{border-color:var(--accent);}
-.editor-field textarea{resize:vertical;min-height:52px;}
-.editor-sub-list{margin-top:8px;display:flex;flex-direction:column;gap:4px;}
-.editor-sub-item{border:1px solid var(--border);border-radius:4px;overflow:hidden;}
-.editor-sub-header{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--bg4);cursor:pointer;font-size:11px;}
-.editor-sub-header:hover{background:var(--bg3);}
-.editor-sub-label{flex:1;font-weight:500;}
-.editor-sub-body{display:none;padding:8px;border-top:1px solid var(--border);}
-.editor-sub-item.open .editor-sub-body{display:block;}
-.editor-row-actions{display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap;}
-.editor-drag-btn{font-size:12px;color:var(--text3);cursor:grab;padding:2px 4px;background:var(--bg3);border:1px solid var(--border);border-radius:3px;}
-.editor-del-btn{font-size:10px;color:var(--danger);cursor:pointer;padding:2px 7px;background:none;border:1px solid var(--danger);border-radius:3px;opacity:0.7;}
-.editor-del-btn:hover{opacity:1;}
-.editor-add-btn{font-size:11px;padding:4px 10px;background:none;border:1px solid var(--accent);color:var(--accent);border-radius:4px;cursor:pointer;}
-.editor-add-btn:hover{background:rgba(59,130,246,0.1);}
-.editor-save-btn{padding:5px 14px;background:var(--accent);color:white;border:none;border-radius:5px;font-size:12px;cursor:pointer;font-weight:500;}
-.editor-save-btn:hover{opacity:0.85;}
-.editor-tag-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
-.editor-tag-check{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text2);cursor:pointer;}
 .config-field-row{display:flex;gap:8px;align-items:flex-end;margin-bottom:10px;}
 .config-field-row .editor-field{flex:1;margin-bottom:0;}
 
@@ -861,16 +873,23 @@ body.light{
 <div id="editor-modal">
   <div class="editor-modal-card">
     <div class="editor-modal-head">
-      <h3>Content Editors</h3>
-      <div class="guide-close" onclick="closeEditorModal()">&#10005;</div>
+      <div class="editor-modal-tabs">
+        <button class="tab-btn active" id="editor-tab-procedures" onclick="switchEditorTab('procedures')">&#128221; Procedures</button>
+        <button class="tab-btn" id="editor-tab-guides" onclick="switchEditorTab('guides')">&#128196; Guides</button>
+      </div>
+      <button onclick="closeEditorModal()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:0 4px;line-height:1;" title="Close editor">&times;</button>
     </div>
-    <div class="editor-modal-tabs">
-      <button class="tab-btn active" id="editor-tab-procedures" onclick="switchEditorTab('procedures')">&#128221; Procedures</button>
-      <button class="tab-btn" id="editor-tab-guides" onclick="switchEditorTab('guides')">&#128196; Guides</button>
-    </div>
-    <div class="editor-modal-body">
-      <div class="tab-panel active" id="editor-panel-procedures"><div id="procedure-editor-body"></div></div>
-      <div class="tab-panel" id="editor-panel-guides"><div id="guide-editor-body"></div></div>
+    <div class="editor-split">
+      <div class="editor-tree-pane">
+        <div class="editor-tree-search">
+          <input id="editor-tree-search" placeholder="Search..." oninput="filterEditorTree(this.value)">
+        </div>
+        <div class="editor-tree-body" id="editor-tree-body"></div>
+        <div class="editor-tree-footer" id="editor-tree-footer"></div>
+      </div>
+      <div class="editor-form-pane" id="editor-form-pane">
+        <div class="ef-empty">Select an item from the tree to edit</div>
+      </div>
     </div>
   </div>
 </div>
@@ -1336,371 +1355,396 @@ function renderReferenceView(phase,highlightStepId){
   showView('reference');
 }
 
-// ─── Editor helpers ───────────────────────────────────────────────────────────
-function editorSaveOpen(container){
-  const open=[];
-  container.querySelectorAll('.editor-item.open,.editor-sub-item.open').forEach(el=>{
-    if(el.id) open.push(el.id);
-  });
-  return open;
-}
-function editorRestoreOpen(container,open){
-  open.forEach(id=>{
-    const el=container.querySelector('#'+id);
-    if(el) el.classList.add('open');
-  });
-}
-function editorToggle(id){
-  const el=document.getElementById(id);
-  if(el) el.classList.toggle('open');
-}
+// ─── Content editor (split-pane) ─────────────────────────────────────────────
+let editorTab='procedures';
+let editorSelected=null;
+let editorTreeFilter='';
+let editorExpandedNodes=new Set();
+let editorDrag=null;
 function settingsToggle(id){
   const el=document.getElementById(id);
   if(el) el.classList.toggle('open');
 }
 
 // ─── Procedure editor ─────────────────────────────────────────────────────────
-function renderProcedureEditor(){
-  const container=document.getElementById('procedure-editor-body');
-  const open=editorSaveOpen(container);
-  const phases=stepsData.phases||[];
-  const devSteps=stepsData.device_steps||[];
-
-  let html=`<div class="editor-list" id="phases-list">`;
-  phases.forEach((phase,pi)=>{
-    html+=`<div class="editor-item" id="pe-phase-${phase.id}">
-      <div class="editor-item-header" onclick="editorToggle('pe-phase-${phase.id}')">
-        <span class="editor-item-label">${phase.title}</span>
-        <button class="editor-del-btn" onclick="event.stopPropagation();deletePhase(${pi})">Remove</button>
-        <span style="font-size:9px;color:var(--text3);">&#9654;</span>
-      </div>
-      <div class="editor-item-body">
-        <div class="editor-field"><label>Phase Title</label>
-          <input value="${phase.title}" onchange="stepsData.phases[${pi}].title=this.value;autoSaveSteps()">
-        </div>
-        <div class="editor-field"><label>Badge</label>
-          <input value="${phase.badge||''}" onchange="stepsData.phases[${pi}].badge=this.value;autoSaveSteps()">
-        </div>
-        <div class="editor-field"><label>Product ID (leave blank = always shown)</label>
-          <input value="${phase.product||''}" onchange="stepsData.phases[${pi}].product=this.value||undefined;autoSaveSteps()">
-        </div>
-        <div style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;margin:10px 0 6px;">Steps</div>
-        <div class="editor-sub-list" id="pe-steps-${phase.id}">
-          ${phase.steps.map((s,si)=>renderStepEditorRow(pi,si,s)).join('')}
-        </div>
-        <div class="editor-row-actions">
-          <button class="editor-add-btn" onclick="addStep(${pi})">+ Add Step</button>
-        </div>
-      </div>
-    </div>`;
-  });
-  html+=`</div>
-  <div class="editor-row-actions" style="margin-top:10px;">
-    <button class="editor-add-btn" onclick="addPhase()">+ Add Phase</button>
-  </div>
-  <div style="margin-top:14px;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">Device Steps</div>
-  <div class="editor-list" id="dev-steps-list">
-    ${devSteps.map((s,i)=>renderDevStepEditorRow(i,s)).join('')}
-  </div>
-  <div class="editor-row-actions" style="margin-top:8px;">
-    <button class="editor-add-btn" onclick="addDevStep()">+ Add Device Step</button>
-  </div>`;
-
-  container.innerHTML=html;
-  editorRestoreOpen(container,open);
-}
-
-function renderStepEditorRow(pi,si,s){
-  const tags=['required','verify','optional'];
-  const tagChecks=tags.map(t=>`<label class="editor-tag-check">
-    <input type="checkbox" ${(s.tags||[]).includes(t)?'checked':''} onchange="toggleStepTag(${pi},${si},'${t}',this.checked)"> ${t}
-  </label>`).join('');
-  return `<div class="editor-sub-item" id="pe-step-${s.id}">
-    <div class="editor-sub-header" onclick="editorToggle('pe-step-${s.id}')">
-      <span class="editor-sub-label">${s.title}</span>
-      <button class="editor-del-btn" onclick="event.stopPropagation();deleteStep(${pi},${si})">Remove</button>
-      <span style="font-size:9px;color:var(--text3);">&#9654;</span>
-    </div>
-    <div class="editor-sub-body">
-      <div class="editor-field"><label>Title</label>
-        <input value="${s.title.replace(/"/g,'&quot;')}" onchange="stepsData.phases[${pi}].steps[${si}].title=this.value;autoSaveSteps();document.querySelector('#pe-step-${s.id} .editor-sub-label').textContent=this.value">
-      </div>
-      <div class="editor-field"><label>Detail</label>
-        <textarea onchange="stepsData.phases[${pi}].steps[${si}].detail=this.value;autoSaveSteps()">${s.detail||''}</textarea>
-      </div>
-      <div class="editor-field"><label>Guide ID</label>
-        <input value="${s.guide||''}" onchange="stepsData.phases[${pi}].steps[${si}].guide=this.value||undefined;autoSaveSteps()">
-      </div>
-      <div class="editor-field"><label>Tags</label>
-        <div class="editor-tag-row">${tagChecks}</div>
-      </div>
-      ${s.substeps?`<div style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 4px;">Substeps</div>
-      <div class="editor-sub-list">
-        ${s.substeps.map((sub,subi)=>renderSubstepEditorRow(pi,si,subi,sub)).join('')}
-      </div>
-      <div class="editor-row-actions"><button class="editor-add-btn" onclick="addSubstep(${pi},${si})">+ Add Substep</button></div>`
-      :`<div class="editor-row-actions"><button class="editor-add-btn" onclick="addSubstep(${pi},${si})">+ Add Substep</button></div>`}
-    </div>
-  </div>`;
-}
-
-function renderSubstepEditorRow(pi,si,subi,sub){
-  return `<div class="editor-sub-item" id="pe-sub-${sub.id}">
-    <div class="editor-sub-header" onclick="editorToggle('pe-sub-${sub.id}')">
-      <span class="editor-sub-label">${sub.title}</span>
-      <button class="editor-del-btn" onclick="event.stopPropagation();deleteSubstep(${pi},${si},${subi})">Remove</button>
-      <span style="font-size:9px;color:var(--text3);">&#9654;</span>
-    </div>
-    <div class="editor-sub-body">
-      <div class="editor-field"><label>Title</label>
-        <input value="${sub.title.replace(/"/g,'&quot;')}" onchange="stepsData.phases[${pi}].steps[${si}].substeps[${subi}].title=this.value;autoSaveSteps();document.querySelector('#pe-sub-${sub.id} .editor-sub-label').textContent=this.value">
-      </div>
-      <div class="editor-field"><label>Detail</label>
-        <textarea onchange="stepsData.phases[${pi}].steps[${si}].substeps[${subi}].detail=this.value;autoSaveSteps()">${sub.detail||''}</textarea>
-      </div>
-    </div>
-  </div>`;
-}
-
-function renderDevStepEditorRow(i,s){
-  return `<div class="editor-sub-item" id="pe-devstep-${s.id}">
-    <div class="editor-sub-header" onclick="editorToggle('pe-devstep-${s.id}')">
-      <span class="editor-sub-label">${s.title}</span>
-      <button class="editor-del-btn" onclick="event.stopPropagation();deleteDevStep(${i})">Remove</button>
-      <span style="font-size:9px;color:var(--text3);">&#9654;</span>
-    </div>
-    <div class="editor-sub-body">
-      <div class="editor-field"><label>Title</label>
-        <input value="${s.title.replace(/"/g,'&quot;')}" onchange="stepsData.device_steps[${i}].title=this.value;autoSaveSteps();document.querySelector('#pe-devstep-${s.id} .editor-sub-label').textContent=this.value">
-      </div>
-      <div class="editor-field"><label>Detail</label>
-        <textarea onchange="stepsData.device_steps[${i}].detail=this.value;autoSaveSteps()">${s.detail||''}</textarea>
-      </div>
-      <div class="editor-field"><label>Options</label>
-        <div class="editor-tag-row">
-          <label class="editor-tag-check"><input type="checkbox" ${s.installer_url?'checked':''} onchange="stepsData.device_steps[${i}].installer_url=this.checked||undefined;autoSaveSteps()"> Show installer URL</label>
-          <label class="editor-tag-check"><input type="checkbox" ${s.vpn_selector?'checked':''} onchange="stepsData.device_steps[${i}].vpn_selector=this.checked||undefined;autoSaveSteps()"> VPN selector</label>
-        </div>
-      </div>
-    </div>
-  </div>`;
-}
-
-// Procedure editor mutations
-let autoSaveStepsTimer=null;
-function autoSaveSteps(){
-  clearTimeout(autoSaveStepsTimer);
-  autoSaveStepsTimer=setTimeout(saveStepsJson,800);
-}
-async function saveStepsJson(){
-  const r=await fetch('/api/steps',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(stepsData)});
-  if(r.ok) showToast('Procedures saved');
-  else showToast('Save failed','error');
-}
-function addPhase(){
-  const id='phase-'+Date.now();
-  stepsData.phases.push({id,title:'New Phase',badge:'',steps:[]});
-  renderProcedureEditor();
-  showToast('Phase added');
-}
-function deletePhase(pi){
-  styledConfirm(`Delete phase "${stepsData.phases[pi].title}"?`,()=>{
-    stepsData.phases.splice(pi,1);
-    saveStepsJson();
-    renderProcedureEditor();
-  });
-}
-function addStep(pi){
-  const id='s-'+Date.now();
-  stepsData.phases[pi].steps.push({id,title:'New Step',detail:'',tags:[]});
-  saveStepsJson();
-  renderProcedureEditor();
-}
-function deleteStep(pi,si){
-  styledConfirm(`Delete step "${stepsData.phases[pi].steps[si].title}"?`,()=>{
-    stepsData.phases[pi].steps.splice(si,1);
-    saveStepsJson();
-    renderProcedureEditor();
-  });
-}
-function addSubstep(pi,si){
-  const id='sub-'+Date.now();
-  if(!stepsData.phases[pi].steps[si].substeps) stepsData.phases[pi].steps[si].substeps=[];
-  stepsData.phases[pi].steps[si].substeps.push({id,title:'New Substep',detail:''});
-  saveStepsJson();
-  renderProcedureEditor();
-}
-function deleteSubstep(pi,si,subi){
-  stepsData.phases[pi].steps[si].substeps.splice(subi,1);
-  saveStepsJson();
-  renderProcedureEditor();
-}
-function toggleStepTag(pi,si,tag,checked){
-  const tags=stepsData.phases[pi].steps[si].tags||[];
-  if(checked&&!tags.includes(tag)) tags.push(tag);
-  else if(!checked) tags.splice(tags.indexOf(tag),1);
-  stepsData.phases[pi].steps[si].tags=tags;
-  autoSaveSteps();
-}
-function addDevStep(){
-  const id='dv-'+Date.now();
-  stepsData.device_steps.push({id,title:'New Device Step',detail:''});
-  saveStepsJson();
-  renderProcedureEditor();
-}
-function deleteDevStep(i){
-  styledConfirm(`Delete device step "${stepsData.device_steps[i].title}"?`,()=>{
-    stepsData.device_steps.splice(i,1);
-    saveStepsJson();
-    renderProcedureEditor();
-  });
-}
-
-// ─── Guide editor ─────────────────────────────────────────────────────────────
-function renderGuideEditor(){
-  const container=document.getElementById('guide-editor-body');
-  const open=editorSaveOpen(container);
-  const guideIds=Object.keys(guides);
-
-  let html=`<div class="editor-list">`;
-  guideIds.forEach(gid=>{
-    const g=guides[gid];
-    html+=`<div class="editor-item" id="ge-guide-${gid}">
-      <div class="editor-item-header" onclick="editorToggle('ge-guide-${gid}')">
-        <span class="editor-item-label">${g.title}</span>
-        <button class="editor-del-btn" onclick="event.stopPropagation();deleteGuide('${gid}')">Remove</button>
-        <span style="font-size:9px;color:var(--text3);">&#9654;</span>
-      </div>
-      <div class="editor-item-body">
-        <div class="editor-field"><label>Guide ID (key)</label>
-          <input value="${gid}" disabled style="opacity:0.5;cursor:not-allowed;">
-        </div>
-        <div class="editor-field"><label>Title</label>
-          <input value="${g.title.replace(/"/g,'&quot;')}" onchange="guides['${gid}'].title=this.value;autoSaveGuides();document.querySelector('#ge-guide-${gid} .editor-item-label').textContent=this.value">
-        </div>
-        <div style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;margin:10px 0 6px;">Sections</div>
-        <div class="editor-sub-list" id="ge-sections-${gid}">
-          ${(g.sections||[]).map((sec,si)=>renderSectionEditorRow(gid,si,sec)).join('')}
-        </div>
-        <div class="editor-row-actions">
-          <button class="editor-add-btn" onclick="addGuideSection('${gid}')">+ Add Section</button>
-        </div>
-      </div>
-    </div>`;
-  });
-  html+=`</div>
-  <div class="editor-row-actions" style="margin-top:10px;">
-    <button class="editor-add-btn" onclick="addGuide()">+ Add Guide</button>
-  </div>`;
-
-  container.innerHTML=html;
-  editorRestoreOpen(container,open);
-}
-
-function renderSectionEditorRow(gid,si,sec){
-  return `<div class="editor-sub-item" id="ge-sec-${gid}-${si}">
-    <div class="editor-sub-header" onclick="editorToggle('ge-sec-${gid}-${si}')">
-      <span class="editor-sub-label">${sec.title}</span>
-      <button class="editor-del-btn" onclick="event.stopPropagation();deleteGuideSection('${gid}',${si})">Remove</button>
-      <span style="font-size:9px;color:var(--text3);">&#9654;</span>
-    </div>
-    <div class="editor-sub-body">
-      <div class="editor-field"><label>Section Title</label>
-        <input value="${sec.title.replace(/"/g,'&quot;')}" onchange="guides['${gid}'].sections[${si}].title=this.value;autoSaveGuides();document.querySelector('#ge-sec-${gid}-${si} .editor-sub-label').textContent=this.value">
-      </div>
-      <div style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.04em;margin:8px 0 4px;">Steps</div>
-      <div class="editor-sub-list">
-        ${(sec.steps||[]).map((gs,gsi)=>renderGuideStepEditorRow(gid,si,gsi,gs)).join('')}
-      </div>
-      <div class="editor-row-actions">
-        <button class="editor-add-btn" onclick="addGuideStep('${gid}',${si})">+ Add Step</button>
-      </div>
-    </div>
-  </div>`;
-}
-
-function renderGuideStepEditorRow(gid,si,gsi,gs){
-  return `<div class="editor-sub-item" id="ge-gs-${gid}-${si}-${gsi}">
-    <div class="editor-sub-header" onclick="editorToggle('ge-gs-${gid}-${si}-${gsi}')">
-      <span class="editor-sub-label">${gs.h||gs.n||'Step'}</span>
-      <button class="editor-del-btn" onclick="event.stopPropagation();deleteGuideStep('${gid}',${si},${gsi})">Remove</button>
-      <span style="font-size:9px;color:var(--text3);">&#9654;</span>
-    </div>
-    <div class="editor-sub-body">
-      <div class="editor-field"><label>Heading</label>
-        <input value="${(gs.h||'').replace(/"/g,'&quot;')}" onchange="guides['${gid}'].sections[${si}].steps[${gsi}].h=this.value;autoSaveGuides();document.querySelector('#ge-gs-${gid}-${si}-${gsi} .editor-sub-label').textContent=this.value">
-      </div>
-      <div class="editor-field"><label>Body</label>
-        <textarea onchange="guides['${gid}'].sections[${si}].steps[${gsi}].b=this.value;autoSaveGuides()">${gs.b||''}</textarea>
-      </div>
-    </div>
-  </div>`;
-}
-
-let autoSaveGuidesTimer=null;
-function autoSaveGuides(){
-  clearTimeout(autoSaveGuidesTimer);
-  autoSaveGuidesTimer=setTimeout(saveGuidesJson,800);
-}
-async function saveGuidesJson(){
-  const r=await fetch('/api/guides',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(guides)});
-  if(r.ok) showToast('Guides saved');
-  else showToast('Save failed','error');
-}
-function addGuide(){
-  const id='guide-'+Date.now();
-  guides[id]={title:'New Guide',sections:[]};
-  saveGuidesJson();
-  renderGuideEditor();
-}
-function deleteGuide(gid){
-  styledConfirm(`Delete guide "${guides[gid].title}"?`,()=>{
-    delete guides[gid];
-    saveGuidesJson();
-    renderGuideEditor();
-  });
-}
-function addGuideSection(gid){
-  if(!guides[gid].sections) guides[gid].sections=[];
-  guides[gid].sections.push({title:'New Section',steps:[]});
-  saveGuidesJson();
-  renderGuideEditor();
-}
-function deleteGuideSection(gid,si){
-  guides[gid].sections.splice(si,1);
-  saveGuidesJson();
-  renderGuideEditor();
-}
-function addGuideStep(gid,si){
-  const n=(guides[gid].sections[si].steps||[]).length+1;
-  if(!guides[gid].sections[si].steps) guides[gid].sections[si].steps=[];
-  guides[gid].sections[si].steps.push({n,h:'New Step',b:''});
-  saveGuidesJson();
-  renderGuideEditor();
-}
-function deleteGuideStep(gid,si,gsi){
-  guides[gid].sections[si].steps.splice(gsi,1);
-  saveGuidesJson();
-  renderGuideEditor();
-}
-
-// ─── Content editor modal ────────────────────────────────────────────────────
 function openEditorModal(tab){
+  editorSelected=null;editorExpandedNodes=new Set();editorTreeFilter='';
   document.getElementById('editor-modal').classList.add('show');
   switchEditorTab(tab||'procedures');
 }
 function closeEditorModal(){document.getElementById('editor-modal').classList.remove('show');}
 function switchEditorTab(tab){
-  ['procedures','guides'].forEach(t=>{
-    document.getElementById('editor-tab-'+t)?.classList.toggle('active',t===tab);
-    document.getElementById('editor-panel-'+t)?.classList.toggle('active',t===tab);
-  });
-  if(tab==='procedures') renderProcedureEditor();
-  else renderGuideEditor();
+  editorTab=tab;editorSelected=null;
+  ['procedures','guides'].forEach(t=>document.getElementById('editor-tab-'+t)?.classList.toggle('active',t===tab));
+  const s=document.getElementById('editor-tree-search');
+  if(s){s.value='';editorTreeFilter='';}
+  renderEditorView();
 }
-document.addEventListener('DOMContentLoaded',()=>{
-  document.getElementById('editor-modal')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeEditorModal();});
-});
+function filterEditorTree(val){editorTreeFilter=(val||'').toLowerCase();renderEditorView();}
+function renderEditorView(){renderEditorTree();renderEditorForm();}
+
+function etToggle(key){
+  editorExpandedNodes.has(key)?editorExpandedNodes.delete(key):editorExpandedNodes.add(key);
+  const b=document.getElementById('editor-tree-body'),sc=b?.scrollTop||0;
+  renderEditorTree();if(b)b.scrollTop=sc;
+}
+function etSelect(node){
+  editorSelected=node;
+  if(node.type==='step') editorExpandedNodes.add('phase:'+node.pi);
+  if(node.type==='substep'){editorExpandedNodes.add('phase:'+node.pi);editorExpandedNodes.add(`step:${node.pi}:${node.si}`);}
+  if(node.type==='section') editorExpandedNodes.add('guide:'+node.gid);
+  if(node.type==='guide-step'){editorExpandedNodes.add('guide:'+node.gid);editorExpandedNodes.add(`section:${node.gid}:${node.secI}`);}
+  const b=document.getElementById('editor-tree-body'),sc=b?.scrollTop||0;
+  renderEditorTree();if(b)b.scrollTop=sc;
+  renderEditorForm();
+}
+function etNodeKey(n){
+  if(n.type==='phase') return 'phase:'+n.pi;
+  if(n.type==='step') return `step:${n.pi}:${n.si}`;
+  if(n.type==='substep') return `substep:${n.pi}:${n.si}:${n.subi}`;
+  if(n.type==='device-step') return 'ds:'+n.di;
+  if(n.type==='guide') return 'guide:'+n.gid;
+  if(n.type==='section') return `sec:${n.gid}:${n.secI}`;
+  if(n.type==='guide-step') return `gs:${n.gid}:${n.secI}:${n.gsI}`;
+  return '';
+}
+function etSelMatch(s,n){
+  if(!s||s.type!==n.type) return false;
+  if(n.type==='phase') return s.pi===n.pi;
+  if(n.type==='step') return s.pi===n.pi&&s.si===n.si;
+  if(n.type==='substep') return s.pi===n.pi&&s.si===n.si&&s.subi===n.subi;
+  if(n.type==='device-step') return s.di===n.di;
+  if(n.type==='guide') return s.gid===n.gid;
+  if(n.type==='section') return s.gid===n.gid&&s.secI===n.secI;
+  if(n.type==='guide-step') return s.gid===n.gid&&s.secI===n.secI&&s.gsI===n.gsI;
+  return false;
+}
+
+function renderEditorTree(){
+  const body=document.getElementById('editor-tree-body');
+  const footer=document.getElementById('editor-tree-footer');
+  if(!body||!footer) return;
+  const f=editorTreeFilter,sel=editorSelected;
+  function match(t){return !f||t.toLowerCase().includes(f);}
+  function row(node,label,depth,hasChildren){
+    const key=etNodeKey(node);
+    const isOpen=editorExpandedNodes.has(key);
+    const isSel=etSelMatch(sel,node);
+    const nd=JSON.stringify(node).replace(/'/g,'&#39;');
+    return `<div class="et-row${isSel?' active':''}" style="padding-left:${depth*14+8}px"
+      data-node='${nd}' draggable="true"
+      onclick="etSelect(JSON.parse(this.dataset.node))"
+      ondragstart="etDragStart(event,this)" ondragover="etDragOver(event,this)"
+      ondragleave="etDragLeave(event)" ondrop="etDrop(event,this)" ondragend="etDragEnd(this)">
+      <span class="et-drag" onclick="event.stopPropagation()">⠿</span>
+      <span class="et-arrow${isOpen?' open':''}${hasChildren?'':' et-no-child'}" onclick="event.stopPropagation();etToggle('${key}')">▶</span>
+      <span class="et-label">${escHtml(label)}</span>
+    </div>`;
+  }
+  let html='';
+  if(editorTab==='procedures'){
+    const phases=stepsData.phases||[],devs=stepsData.device_steps||[];
+    phases.forEach((ph,pi)=>{
+      const phShow=match(ph.title)||ph.steps.some(s=>match(s.title)||((s.substeps||[]).some(sub=>match(sub.title))));
+      if(!phShow) return;
+      const open=editorExpandedNodes.has('phase:'+pi);
+      html+=row({type:'phase',pi},ph.title,0,ph.steps.length>0);
+      if(open) ph.steps.forEach((s,si)=>{
+        if(f&&!match(s.title)&&!((s.substeps||[]).some(sub=>match(sub.title)))) return;
+        const sOpen=editorExpandedNodes.has(`step:${pi}:${si}`);
+        html+=row({type:'step',pi,si},s.title,1,(s.substeps||[]).length>0);
+        if(sOpen)(s.substeps||[]).forEach((sub,subi)=>{
+          if(f&&!match(sub.title)) return;
+          html+=row({type:'substep',pi,si,subi},sub.title,2,false);
+        });
+      });
+    });
+    if(!f||devs.some(s=>match(s.title))){
+      html+=`<div class="et-section-hdr">Device Steps</div>`;
+      devs.forEach((s,di)=>{if(!f||match(s.title)) html+=row({type:'device-step',di},s.title,0,false);});
+    }
+    footer.innerHTML=`<button class="et-add-btn" onclick="etAddPhase()">+ Add Phase</button>
+      <button class="et-add-btn" onclick="etAddDevStep()">+ Add Device Step</button>`;
+  } else {
+    Object.entries(guides).forEach(([gid,g],gi)=>{
+      const gShow=match(g.title)||(g.sections||[]).some(s=>match(s.title)||((s.steps||[]).some(gs=>match(gs.h||''))));
+      if(!gShow) return;
+      const open=editorExpandedNodes.has('guide:'+gid);
+      html+=row({type:'guide',gid,gi},g.title,0,(g.sections||[]).length>0);
+      if(open)(g.sections||[]).forEach((sec,secI)=>{
+        if(f&&!match(sec.title)&&!((sec.steps||[]).some(gs=>match(gs.h||'')))) return;
+        const sOpen=editorExpandedNodes.has(`sec:${gid}:${secI}`);
+        html+=row({type:'section',gid,secI},sec.title,1,(sec.steps||[]).length>0);
+        if(sOpen)(sec.steps||[]).forEach((gs,gsI)=>{
+          if(f&&!match(gs.h||'')) return;
+          html+=row({type:'guide-step',gid,secI,gsI},gs.h||('Step '+(gsI+1)),2,false);
+        });
+      });
+    });
+    footer.innerHTML=`<button class="et-add-btn" onclick="etAddGuide()">+ Add Guide</button>`;
+  }
+  body.innerHTML=html;
+}
+
+function renderEditorForm(){
+  const pane=document.getElementById('editor-form-pane');
+  if(!pane) return;
+  const sel=editorSelected;
+  if(!sel){pane.innerHTML='<div class="ef-empty">Select an item from the tree to edit</div>';return;}
+  const H=t=>`<div class="ef-header">${t}</div>`;
+  const fld=(lbl,inp,hint='')=>`<div class="ef-field">${lbl?`<label>${lbl}</label>`:''}${inp}${hint?`<div class="ef-hint">${hint}</div>`:''}</div>`;
+  const inp=(v,h,ph='')=>`<input value="${escHtml(v||'')}" placeholder="${ph}" oninput="${h};etLiveLabel(this.value)">`;
+  const inp2=(v,h,ph='')=>`<input value="${escHtml(v||'')}" placeholder="${ph}" oninput="${h}">`;
+  const ta=(v,h,ph='',mono=false)=>`<textarea placeholder="${ph}" oninput="${h}"${mono?' class="ef-mono"':''}>${escHtml(v||'')}</textarea>`;
+  let html='';
+  if(sel.type==='phase'){
+    const p=stepsData.phases[sel.pi];if(!p){pane.innerHTML='<div class="ef-empty">Not found</div>';return;}
+    html+=H('Phase');
+    html+=`<div class="ef-grid full">${fld('Title',inp(p.title,`stepsData.phases[${sel.pi}].title=this.value;autoSaveSteps()`))}</div>`;
+    html+=`<div class="ef-grid">${fld('Badge',inp2(p.badge,`stepsData.phases[${sel.pi}].badge=this.value;autoSaveSteps()`,'e.g. ORG SETUP'))}${fld('Product ID',inp2(p.product,`stepsData.phases[${sel.pi}].product=this.value||undefined;autoSaveSteps()`,'leave blank = always shown'))}</div>`;
+    html+=`<hr class="ef-divider"><div style="font-size:12px;color:var(--text2);margin-bottom:12px;">${p.steps.length} step${p.steps.length!==1?'s':''} — select a step in the tree to edit it.</div>`;
+    html+=`<div class="ef-actions"><button class="ef-add-btn" onclick="etAddStep(${sel.pi})">+ Add Step</button><button class="ef-del-btn" onclick="etDeletePhase(${sel.pi})">Delete Phase</button></div>`;
+  } else if(sel.type==='step'){
+    const s=stepsData.phases[sel.pi]?.steps[sel.si];if(!s){pane.innerHTML='<div class="ef-empty">Not found</div>';return;}
+    const tgs=['required','verify','optional'];
+    html+=H(`Step — ${escHtml(stepsData.phases[sel.pi].title)}`);
+    html+=`<div class="ef-grid full">${fld('Title',inp(s.title,`stepsData.phases[${sel.pi}].steps[${sel.si}].title=this.value;autoSaveSteps()`))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Detail',ta(s.detail,`stepsData.phases[${sel.pi}].steps[${sel.si}].detail=this.value;autoSaveSteps()`,'Supporting detail shown below the step title'))}</div>`;
+    html+=`<div class="ef-grid">${fld('Guide ID',inp2(s.guide,`stepsData.phases[${sel.pi}].steps[${sel.si}].guide=this.value||undefined;autoSaveSteps()`,'e.g. duo-eam'),'References a guide from guides.json')}</div>`;
+    html+=`<hr class="ef-divider"><div class="ef-field"><label>Tags</label><div class="ef-tags">${tgs.map(t=>`<label class="ef-tag"><input type="checkbox" ${(s.tags||[]).includes(t)?'checked':''} onchange="etToggleTag(${sel.pi},${sel.si},-1,'${t}',this.checked)"> ${t}</label>`).join('')}</div></div>`;
+    html+=`<div class="ef-actions"><button class="ef-add-btn" onclick="etAddSubstep(${sel.pi},${sel.si})">+ Add Substep</button><button class="ef-del-btn" onclick="etDeleteStep(${sel.pi},${sel.si})">Delete Step</button></div>`;
+  } else if(sel.type==='substep'){
+    const sub=stepsData.phases[sel.pi]?.steps[sel.si]?.substeps?.[sel.subi];if(!sub){pane.innerHTML='<div class="ef-empty">Not found</div>';return;}
+    const tgs=['required','verify','optional'];
+    html+=H(`Substep — ${escHtml(stepsData.phases[sel.pi].steps[sel.si].title)}`);
+    html+=`<div class="ef-grid full">${fld('Title',inp(sub.title,`stepsData.phases[${sel.pi}].steps[${sel.si}].substeps[${sel.subi}].title=this.value;autoSaveSteps()`))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Detail',ta(sub.detail,`stepsData.phases[${sel.pi}].steps[${sel.si}].substeps[${sel.subi}].detail=this.value;autoSaveSteps()`))}</div>`;
+    html+=`<hr class="ef-divider"><div class="ef-field"><label>Tags</label><div class="ef-tags">${tgs.map(t=>`<label class="ef-tag"><input type="checkbox" ${(sub.tags||[]).includes(t)?'checked':''} onchange="etToggleTag(${sel.pi},${sel.si},${sel.subi},'${t}',this.checked)"> ${t}</label>`).join('')}</div></div>`;
+    html+=`<div class="ef-actions"><button class="ef-del-btn" onclick="etDeleteSubstep(${sel.pi},${sel.si},${sel.subi})">Delete Substep</button></div>`;
+  } else if(sel.type==='device-step'){
+    const s=stepsData.device_steps?.[sel.di];if(!s){pane.innerHTML='<div class="ef-empty">Not found</div>';return;}
+    html+=H('Device Step');
+    html+=`<div class="ef-grid full">${fld('Title',inp(s.title,`stepsData.device_steps[${sel.di}].title=this.value;autoSaveSteps()`))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Detail',ta(s.detail,`stepsData.device_steps[${sel.di}].detail=this.value;autoSaveSteps()`))}</div>`;
+    html+=`<hr class="ef-divider"><div class="ef-field"><label>Options</label><div class="ef-tags">
+      <label class="ef-tag"><input type="checkbox" ${s.installer_url?'checked':''} onchange="stepsData.device_steps[${sel.di}].installer_url=this.checked||undefined;autoSaveSteps()"> Show installer URL</label>
+      <label class="ef-tag"><input type="checkbox" ${s.vpn_selector?'checked':''} onchange="stepsData.device_steps[${sel.di}].vpn_selector=this.checked||undefined;autoSaveSteps()"> VPN selector</label>
+    </div></div>`;
+    html+=`<div class="ef-actions"><button class="ef-del-btn" onclick="etDeleteDevStep(${sel.di})">Delete Device Step</button></div>`;
+  } else if(sel.type==='guide'){
+    const g=guides[sel.gid];if(!g){pane.innerHTML='<div class="ef-empty">Not found</div>';return;}
+    html+=H('Guide');
+    html+=`<div class="ef-grid full">${fld('Guide ID (read-only)',`<input value="${escHtml(sel.gid)}" disabled style="opacity:0.5;cursor:not-allowed;">`)}</div>`;
+    html+=`<div class="ef-grid full">${fld('Title',inp(g.title,`guides['${sel.gid}'].title=this.value;autoSaveGuides()`))}</div>`;
+    html+=`<hr class="ef-divider"><div style="font-size:12px;color:var(--text2);margin-bottom:12px;">${(g.sections||[]).length} section${(g.sections||[]).length!==1?'s':''} — select a section in the tree to edit it.</div>`;
+    html+=`<div class="ef-actions"><button class="ef-add-btn" onclick="etAddSection('${sel.gid}')">+ Add Section</button><button class="ef-del-btn" onclick="etDeleteGuide('${sel.gid}')">Delete Guide</button></div>`;
+  } else if(sel.type==='section'){
+    const sec=guides[sel.gid]?.sections?.[sel.secI];if(!sec){pane.innerHTML='<div class="ef-empty">Not found</div>';return;}
+    html+=H(`Section — ${escHtml(guides[sel.gid].title)}`);
+    html+=`<div class="ef-grid full">${fld('Title',inp(sec.title,`guides['${sel.gid}'].sections[${sel.secI}].title=this.value;autoSaveGuides()`))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Info Note',ta(sec.note,`guides['${sel.gid}'].sections[${sel.secI}].note=this.value||undefined;autoSaveGuides()`,'Blue info box shown above steps (optional)'))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Warning',ta(sec.warn,`guides['${sel.gid}'].sections[${sel.secI}].warn=this.value||undefined;autoSaveGuides()`,'Red warning box shown above steps (optional)'))}</div>`;
+    html+=`<div class="ef-actions"><button class="ef-add-btn" onclick="etAddGuideStep('${sel.gid}',${sel.secI})">+ Add Guide Step</button><button class="ef-del-btn" onclick="etDeleteSection('${sel.gid}',${sel.secI})">Delete Section</button></div>`;
+  } else if(sel.type==='guide-step'){
+    const gs=guides[sel.gid]?.sections?.[sel.secI]?.steps?.[sel.gsI];if(!gs){pane.innerHTML='<div class="ef-empty">Not found</div>';return;}
+    const lnk=gs.link||{};
+    html+=H(`Guide Step — ${escHtml(guides[sel.gid].sections[sel.secI].title)}`);
+    html+=`<div class="ef-grid full">${fld('Heading',inp(gs.h,`guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].h=this.value;autoSaveGuides()`))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Body',ta(gs.b,`guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].b=this.value;autoSaveGuides()`,'Main description text'))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Code Block',ta(gs.code,`guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].code=this.value||undefined;autoSaveGuides()`,'Optional — displayed as a formatted code block',true),'Displayed as monospace code in the guide')}</div>`;
+    html+=`<div class="ef-grid">${fld('Link Label',inp2(lnk.text,`(guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].link=guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].link||{}).text=this.value||undefined;autoSaveGuides()`,'Button label'))}${fld('Link URL',inp2(lnk.url,`(guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].link=guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].link||{}).url=this.value||undefined;autoSaveGuides()`,'https://...'))}</div>`;
+    html+=`<div class="ef-actions"><button class="ef-del-btn" onclick="etDeleteGuideStep('${sel.gid}',${sel.secI},${sel.gsI})">Delete Guide Step</button></div>`;
+  }
+  pane.innerHTML=html;
+}
+function etLiveLabel(val){
+  const el=document.querySelector('#editor-tree-body .et-row.active .et-label');
+  if(el) el.textContent=val;
+}
+
+// ─── Drag-to-reorder ─────────────────────────────────────────────────────────
+function etDragStart(e,el){
+  editorDrag=JSON.parse(el.dataset.node);
+  e.dataTransfer.effectAllowed='move';
+  setTimeout(()=>el.style.opacity='0.4',0);
+}
+function etDragOver(e,el){
+  e.preventDefault();
+  const tgt=JSON.parse(el.dataset.node);
+  if(!etDragCompat(editorDrag,tgt)) return;
+  const upper=e.clientY<el.getBoundingClientRect().top+el.getBoundingClientRect().height/2;
+  el.classList.toggle('drag-over-before',upper);
+  el.classList.toggle('drag-over-after',!upper);
+}
+function etDragLeave(e){
+  if(e.currentTarget.contains(e.relatedTarget)) return;
+  e.currentTarget.classList.remove('drag-over-before','drag-over-after');
+}
+function etDragEnd(el){
+  el.style.opacity='';
+  document.querySelectorAll('.et-row').forEach(r=>r.classList.remove('drag-over-before','drag-over-after'));
+  editorDrag=null;
+}
+function etDrop(e,el){
+  e.preventDefault();
+  el.classList.remove('drag-over-before','drag-over-after');el.style.opacity='';
+  const tgt=JSON.parse(el.dataset.node);
+  const src=editorDrag;editorDrag=null;
+  if(!src||!etDragCompat(src,tgt)) return;
+  const upper=e.clientY<el.getBoundingClientRect().top+el.getBoundingClientRect().height/2;
+  const si=etIdx(src),ti=etIdx(tgt);
+  if(si===ti) return;
+  if(src.type==='guide'){
+    const ids=Object.keys(guides);
+    const [id]=ids.splice(si,1);
+    let ins=si<ti?(upper?ti-1:ti):(upper?ti:ti+1);
+    ins=Math.max(0,Math.min(ins,ids.length));
+    ids.splice(ins,0,id);
+    const ng={};ids.forEach(k=>ng[k]=guides[k]);
+    Object.keys(guides).forEach(k=>delete guides[k]);Object.assign(guides,ng);
+    if(editorSelected?.type==='guide') editorSelected.gi=ins;
+    const b=document.getElementById('editor-tree-body'),sc=b?.scrollTop||0;
+    saveGuidesJson();renderEditorTree();if(b)b.scrollTop=sc;
+    return;
+  }
+  const arr=etArr(src);if(!arr) return;
+  const [item]=arr.splice(si,1);
+  let ins=si<ti?(upper?ti-1:ti):(upper?ti:ti+1);
+  ins=Math.max(0,Math.min(ins,arr.length));
+  arr.splice(ins,0,item);
+  if(editorSelected&&etDragCompat(editorSelected,src)){
+    const oi=etIdx(editorSelected);
+    if(oi===si) etSetIdx(editorSelected,ins);
+    else if(si<ti&&oi>si&&oi<=ins) etSetIdx(editorSelected,oi-1);
+    else if(si>ti&&oi>=ins&&oi<si) etSetIdx(editorSelected,oi+1);
+  }
+  const b=document.getElementById('editor-tree-body'),sc=b?.scrollTop||0;
+  if(['guide','section','guide-step'].includes(src.type)) saveGuidesJson(); else saveStepsJson();
+  renderEditorTree();if(b)b.scrollTop=sc;
+}
+function etDragCompat(s,t){
+  if(!s||!t||s.type!==t.type) return false;
+  if(s.type==='phase'||s.type==='device-step'||s.type==='guide') return true;
+  if(s.type==='step') return s.pi===t.pi;
+  if(s.type==='substep') return s.pi===t.pi&&s.si===t.si;
+  if(s.type==='section') return s.gid===t.gid;
+  if(s.type==='guide-step') return s.gid===t.gid&&s.secI===t.secI;
+  return false;
+}
+function etArr(n){
+  if(n.type==='phase') return stepsData.phases;
+  if(n.type==='step') return stepsData.phases[n.pi].steps;
+  if(n.type==='substep') return stepsData.phases[n.pi].steps[n.si].substeps;
+  if(n.type==='device-step') return stepsData.device_steps;
+  if(n.type==='section') return guides[n.gid].sections;
+  if(n.type==='guide-step') return guides[n.gid].sections[n.secI].steps;
+  return null;
+}
+function etIdx(n){
+  if(n.type==='phase') return n.pi;if(n.type==='step') return n.si;
+  if(n.type==='substep') return n.subi;if(n.type==='device-step') return n.di;
+  if(n.type==='guide') return n.gi;if(n.type==='section') return n.secI;
+  if(n.type==='guide-step') return n.gsI;return 0;
+}
+function etSetIdx(n,v){
+  if(n.type==='phase') n.pi=v;else if(n.type==='step') n.si=v;
+  else if(n.type==='substep') n.subi=v;else if(n.type==='device-step') n.di=v;
+  else if(n.type==='guide') n.gi=v;else if(n.type==='section') n.secI=v;
+  else if(n.type==='guide-step') n.gsI=v;
+}
+
+// ─── Editor mutations ─────────────────────────────────────────────────────────
+let autoSaveStepsTimer=null;
+function autoSaveSteps(){clearTimeout(autoSaveStepsTimer);autoSaveStepsTimer=setTimeout(saveStepsJson,800);}
+async function saveStepsJson(){
+  const r=await fetch('/api/steps',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(stepsData)});
+  if(r.ok) showToast('Procedures saved'); else showToast('Save failed','error');
+}
+function etAddPhase(){
+  stepsData.phases.push({id:'phase-'+Date.now(),title:'New Phase',badge:'',steps:[]});
+  saveStepsJson();etSelect({type:'phase',pi:stepsData.phases.length-1});
+}
+function etDeletePhase(pi){
+  styledConfirm(`Delete phase "${stepsData.phases[pi].title}"?`,()=>{
+    stepsData.phases.splice(pi,1);editorSelected=null;saveStepsJson();renderEditorView();
+  });
+}
+function etAddStep(pi){
+  stepsData.phases[pi].steps.push({id:'s-'+Date.now(),title:'New Step',detail:'',tags:[]});
+  editorExpandedNodes.add('phase:'+pi);saveStepsJson();
+  etSelect({type:'step',pi,si:stepsData.phases[pi].steps.length-1});
+}
+function etDeleteStep(pi,si){
+  styledConfirm(`Delete step "${stepsData.phases[pi].steps[si].title}"?`,()=>{
+    stepsData.phases[pi].steps.splice(si,1);editorSelected={type:'phase',pi};saveStepsJson();renderEditorView();
+  });
+}
+function etAddSubstep(pi,si){
+  if(!stepsData.phases[pi].steps[si].substeps) stepsData.phases[pi].steps[si].substeps=[];
+  stepsData.phases[pi].steps[si].substeps.push({id:'sub-'+Date.now(),title:'New Substep',detail:''});
+  editorExpandedNodes.add('phase:'+pi);editorExpandedNodes.add(`step:${pi}:${si}`);saveStepsJson();
+  etSelect({type:'substep',pi,si,subi:stepsData.phases[pi].steps[si].substeps.length-1});
+}
+function etDeleteSubstep(pi,si,subi){
+  stepsData.phases[pi].steps[si].substeps.splice(subi,1);
+  editorSelected={type:'step',pi,si};saveStepsJson();renderEditorView();
+}
+function etToggleTag(pi,si,subi,tag,checked){
+  const obj=subi>=0?stepsData.phases[pi].steps[si].substeps[subi]:stepsData.phases[pi].steps[si];
+  if(!obj.tags) obj.tags=[];
+  if(checked&&!obj.tags.includes(tag)) obj.tags.push(tag);
+  else if(!checked){const i=obj.tags.indexOf(tag);if(i>=0)obj.tags.splice(i,1);}
+  autoSaveSteps();
+}
+function etAddDevStep(){
+  stepsData.device_steps.push({id:'dv-'+Date.now(),title:'New Device Step',detail:''});
+  saveStepsJson();etSelect({type:'device-step',di:stepsData.device_steps.length-1});
+}
+function etDeleteDevStep(di){
+  styledConfirm(`Delete device step "${stepsData.device_steps[di].title}"?`,()=>{
+    stepsData.device_steps.splice(di,1);editorSelected=null;saveStepsJson();renderEditorView();
+  });
+}
+let autoSaveGuidesTimer=null;
+function autoSaveGuides(){clearTimeout(autoSaveGuidesTimer);autoSaveGuidesTimer=setTimeout(saveGuidesJson,800);}
+async function saveGuidesJson(){
+  const r=await fetch('/api/guides',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(guides)});
+  if(r.ok) showToast('Guides saved'); else showToast('Save failed','error');
+}
+function etAddGuide(){
+  const gid='guide-'+Date.now();
+  guides[gid]={title:'New Guide',sections:[]};
+  const gi=Object.keys(guides).length-1;
+  saveGuidesJson();etSelect({type:'guide',gid,gi});
+}
+function etDeleteGuide(gid){
+  styledConfirm(`Delete guide "${guides[gid].title}"?`,()=>{
+    delete guides[gid];editorSelected=null;saveGuidesJson();renderEditorView();
+  });
+}
+function etAddSection(gid){
+  if(!guides[gid].sections) guides[gid].sections=[];
+  guides[gid].sections.push({title:'New Section',steps:[]});
+  editorExpandedNodes.add('guide:'+gid);saveGuidesJson();
+  etSelect({type:'section',gid,secI:guides[gid].sections.length-1});
+}
+function etDeleteSection(gid,secI){
+  guides[gid].sections.splice(secI,1);
+  editorSelected={type:'guide',gid,gi:Object.keys(guides).indexOf(gid)};
+  saveGuidesJson();renderEditorView();
+}
+function etAddGuideStep(gid,secI){
+  if(!guides[gid].sections[secI].steps) guides[gid].sections[secI].steps=[];
+  const n=guides[gid].sections[secI].steps.length+1;
+  guides[gid].sections[secI].steps.push({n,h:'New Step',b:''});
+  editorExpandedNodes.add('guide:'+gid);editorExpandedNodes.add(`sec:${gid}:${secI}`);saveGuidesJson();
+  etSelect({type:'guide-step',gid,secI,gsI:guides[gid].sections[secI].steps.length-1});
+}
+function etDeleteGuideStep(gid,secI,gsI){
+  guides[gid].sections[secI].steps.splice(gsI,1);
+  editorSelected={type:'section',gid,secI};saveGuidesJson();renderEditorView();
+}
+
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 function renderDashboard(){
