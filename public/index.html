@@ -621,7 +621,17 @@ body.light{
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
 
 /* Responsive — tablet + mobile (≤1024px) */
+/* Touch/tablet ergonomics — wider range since these are likely touch screens */
 @media(max-width:1024px){
+  .step-row{min-height:52px;}
+  .substep-item{min-height:44px;}
+  .device-step-item{min-height:44px;}
+  .tab-btn{padding:10px 18px;}
+  .device-entry-header{padding:12px 14px;}
+  .step-actions{opacity:1 !important;}
+}
+/* Mobile/overlay layout (≤900px) */
+@media(max-width:900px){
   #mobile-header{display:flex;}
   #sidebar{display:none;}
   #sidebar.mobile-overlay{
@@ -641,18 +651,14 @@ body.light{
   .guide-drag-handle{display:block;}
   #checklist-pane{padding:20px;}
   #overlay-bg{z-index:199;}
-  /* Touch targets */
-  .step-row{min-height:52px;}
-  .substep-item{min-height:44px;}
-  .device-step-item{min-height:44px;}
-  .tab-btn{padding:10px 18px;}
-  .device-entry-header{padding:12px 14px;}
-  /* Step action buttons always visible (no hover needed on touch) */
-  .step-actions{opacity:1 !important;}
 }
-/* Mobile only (≤768px) */
+/* Small mobile padding */
 @media(max-width:768px){
   #checklist-pane{padding:14px;}
+}
+/* Wide desktop — no toggle needed, sidebar always visible */
+@media(min-width:1280px){
+  .sidebar-toggle{display:none;}
 }
 @media(max-width:480px){
   .products-grid{grid-template-columns:1fr;}
@@ -927,7 +933,7 @@ let appSettings={
   }
 };
 let currentTheme=localStorage.getItem('theme')||'system';
-const isMobile=()=>window.innerWidth<=1024;
+const isMobile=()=>window.innerWidth<=900;
 const unseenChanges=new Map();
 const unseenToastTimers=new Map();
 const notifyStore=new Map();          // notifyId -> {techName,ts} — single source of truth
@@ -1170,7 +1176,10 @@ function toggleGuideSection(id){document.getElementById(id)?.classList.toggle('o
 })();
 
 // \u2500\u2500\u2500 Sidebar \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-function toggleSidebar(){document.getElementById('sidebar').classList.toggle('collapsed');}
+function toggleSidebar(){
+  if(window.innerWidth>=1280) return;
+  document.getElementById('sidebar').classList.toggle('collapsed');
+}
 function toggleMobileSidebar(){
   const sb=document.getElementById('sidebar');
   const ob=document.getElementById('overlay-bg');
@@ -1184,6 +1193,9 @@ function closeOverlays(){
   sb.classList.remove('mobile-overlay');
   document.getElementById('overlay-bg').classList.remove('show');
 }
+window.addEventListener('resize',()=>{
+  if(window.innerWidth>=1280) document.getElementById('sidebar').classList.remove('collapsed');
+});
 function newClientFromSidebar(){
   if(isMobile()) closeOverlays();
   showView('new-client');
