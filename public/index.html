@@ -359,6 +359,20 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 #global-log-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:500;align-items:center;justify-content:center;}
 #global-log-modal.show{display:flex;}
 .global-log-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;width:min(720px,96vw);max-height:82vh;display:flex;flex-direction:column;overflow:hidden;}
+/* Editor preview modal */
+#editor-preview-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:450;align-items:center;justify-content:center;}
+#editor-preview-modal.show{display:flex;}
+/* Products modal */
+#products-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:400;align-items:center;justify-content:center;}
+#products-modal.show{display:flex;}
+.pm-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;background:var(--bg3);}
+.pm-drag{cursor:grab;color:var(--text3);font-size:14px;flex-shrink:0;}
+.pm-drag:active{cursor:grabbing;}
+.pm-row.drag-over-before{border-top:2px solid var(--accent);}
+.pm-row.drag-over-after{border-bottom:2px solid var(--accent);}
+.pm-id{font-size:10px;color:var(--text3);font-family:monospace;flex-shrink:0;min-width:80px;}
+.pm-label-input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 7px;color:var(--text);font-size:12px;outline:none;}
+.pm-label-input:focus{border-color:var(--accent);}
 .theme-pill{display:flex;background:var(--bg3);border:1px solid var(--border);border-radius:20px;overflow:hidden;margin-left:auto;}
 .theme-btn{padding:3px 8px;font-size:10px;color:var(--text3);cursor:pointer;background:none;border:none;border-radius:20px;transition:all 0.15s;}
 .theme-btn.active{background:var(--accent);color:white;}
@@ -491,7 +505,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .et-row.drag-over-after{border-bottom-color:var(--accent);}
 .et-drag{cursor:grab;color:var(--text3);font-size:12px;flex-shrink:0;padding:0 2px;line-height:1;}
 .et-drag:active{cursor:grabbing;}
-.et-arrow{width:14px;font-size:9px;color:var(--text3);flex-shrink:0;text-align:center;transition:transform 0.15s;display:inline-block;}
+.et-arrow{width:14px;font-size:9px;color:var(--text3);flex-shrink:0;text-align:center;transition:transform 0.15s;display:inline-block;margin-left:auto;}
 .et-arrow.open{transform:rotate(90deg);}
 .et-arrow.et-no-child{visibility:hidden;}
 .et-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -815,6 +829,32 @@ body.light{
 
 <div id="overlay-bg" onclick="closeOverlays()"></div>
 <div id="toast-container"></div>
+<div id="products-modal">
+  <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:10px;width:min(520px,94vw);max-height:82vh;display:flex;flex-direction:column;overflow:hidden;">
+    <div style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <span style="font-size:14px;font-weight:700;">Manage Products</span>
+      <button onclick="closeProductsModal()" style="margin-left:auto;background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:0 4px;line-height:1;">&times;</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:14px 16px;">
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Drag to reorder. Changes apply to the new-client wizard and procedure editor.</p>
+      <div id="pm-list"></div>
+      <button class="btn-secondary" style="margin-top:8px;width:100%;" onclick="pmAddProduct()">+ Add Product</button>
+    </div>
+    <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;">
+      <button class="btn-secondary" onclick="closeProductsModal()">Cancel</button>
+      <button class="btn-primary" onclick="pmSave()">Save Products</button>
+    </div>
+  </div>
+</div>
+<div id="editor-preview-modal">
+  <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:10px;width:min(760px,94vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;">
+    <div style="display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <span style="font-size:14px;font-weight:700;">Preview</span>
+      <button onclick="document.getElementById('editor-preview-modal').classList.remove('show')" style="margin-left:auto;background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:0 4px;line-height:1;">&times;</button>
+    </div>
+    <div id="editor-preview-body" style="flex:1;overflow-y:auto;padding:16px 20px;"></div>
+  </div>
+</div>
 <div id="global-log-modal">
   <div class="global-log-card">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;">
@@ -858,7 +898,7 @@ body.light{
     </div>
   </div>
 </div>
-<div id="confirm-overlay"><div class="confirm-card"><p id="confirm-msg"></p><div class="confirm-actions"><button class="btn-secondary" id="confirm-cancel">Cancel</button><button class="btn-danger" id="confirm-ok">Confirm</button></div></div></div>
+<div id="confirm-overlay"><div class="confirm-card"><p id="confirm-msg"></p><div class="confirm-actions" id="confirm-btns"><button class="btn-secondary" id="confirm-cancel">Cancel</button><button class="btn-danger" id="confirm-ok">Confirm</button></div></div></div>
 
 <div id="log-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;align-items:center;justify-content:center;">
   <div class="modal-card" style="width:min(620px,94vw);max-height:82vh;display:flex;flex-direction:column;gap:0;padding:0;overflow:hidden;">
@@ -877,12 +917,19 @@ body.light{
         <button class="tab-btn active" id="editor-tab-procedures" onclick="switchEditorTab('procedures')">&#128221; Procedures</button>
         <button class="tab-btn" id="editor-tab-guides" onclick="switchEditorTab('guides')">&#128196; Guides</button>
       </div>
-      <button onclick="closeEditorModal()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:0 4px;line-height:1;" title="Close editor">&times;</button>
+      <div style="display:flex;align-items:center;gap:10px;margin-left:auto;">
+        <span id="editor-dirty-indicator" style="display:none;font-size:11px;color:var(--warn);">Unsaved changes</span>
+        <button id="editor-save-btn" onclick="editorSave()" class="btn-primary" style="padding:5px 14px;font-size:12px;">Save</button>
+        <button onclick="closeEditorModal()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:0 4px;line-height:1;" title="Close editor">&times;</button>
+      </div>
     </div>
     <div class="editor-split">
       <div class="editor-tree-pane">
         <div class="editor-tree-search">
           <input id="editor-tree-search" placeholder="Search..." oninput="filterEditorTree(this.value)">
+        </div>
+        <div style="padding:4px 10px;border-bottom:1px solid var(--border);flex-shrink:0;" id="editor-product-filter-wrap">
+          <select id="editor-product-filter" onchange="editorProductFilter=this.value;renderEditorTree()" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:4px 7px;color:var(--text);font-size:11px;outline:none;"></select>
         </div>
         <div class="editor-tree-body" id="editor-tree-body"></div>
         <div class="editor-tree-footer" id="editor-tree-footer"></div>
@@ -1115,15 +1162,24 @@ function renderLogTimeline(container,logs){
 function styledConfirm(msg,onOk){
   document.getElementById('confirm-msg').textContent=msg;
   const overlay=document.getElementById('confirm-overlay');
+  const btns=document.getElementById('confirm-btns');
+  btns.innerHTML=`<button class="btn-secondary" id="confirm-cancel">Cancel</button><button class="btn-danger" id="confirm-ok">Confirm</button>`;
   overlay.classList.add('show');
-  const ok=document.getElementById('confirm-ok');
-  const cancel=document.getElementById('confirm-cancel');
   const cleanup=()=>overlay.classList.remove('show');
-  ok.onclick=()=>{cleanup();onOk();};
-  cancel.onclick=cleanup;
+  document.getElementById('confirm-ok').onclick=()=>{cleanup();onOk();};
+  document.getElementById('confirm-cancel').onclick=cleanup;
+}
+function styledConfirm3(msg,...buttons){
+  document.getElementById('confirm-msg').textContent=msg;
+  const overlay=document.getElementById('confirm-overlay');
+  const btns=document.getElementById('confirm-btns');
+  const cleanup=()=>overlay.classList.remove('show');
+  btns.innerHTML=buttons.map((b,i)=>`<button class="${i===0?'btn-primary':i===buttons.length-1?'btn-secondary':'btn-secondary'}" data-ci="${i}">${b.label}</button>`).join('');
+  btns.querySelectorAll('button').forEach((btn,i)=>btn.onclick=()=>{cleanup();buttons[i].action();});
+  overlay.classList.add('show');
 }
 
-const PRODUCTS=[
+const DEFAULT_PRODUCTS=[
   {id:'syncro',label:'Syncro RMM',desc:'RMM agent & ticketing'},
   {id:'threatlocker',label:'Threatlocker',desc:'Application control'},
   {id:'huntress',label:'Huntress',desc:'EDR / ITDR / SIEM'},
@@ -1134,6 +1190,7 @@ const PRODUCTS=[
   {id:'easydmarc',label:'EasyDMARC',desc:'Email authentication'},
   {id:'syncrify',label:'Syncrify Backup',desc:'Endpoint backup'},
 ];
+function getProducts(){return appSettings.products||DEFAULT_PRODUCTS;}
 
 const VPN_OPTIONS=[
   {id:'syncrify-vpn-unifi',label:'Unifi'},
@@ -1329,29 +1386,31 @@ function openRefPhase(phaseId){
   if(phase) renderReferenceView(phase,null);
 }
 
-function renderReferenceView(phase,highlightStepId){
-  const content=document.getElementById('reference-content');
-  const steps=phase.steps;
-  content.innerHTML=`
+function buildReferenceHTML(phase,highlightStepId){
+  const steps=phase.steps||[];
+  return `
     <div style="margin-bottom:20px;">
-      <h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">${phase.title}</h2>
-      ${phase.badge?`<span class="phase-badge" style="font-size:10px;">${phase.badge}</span>`:''}
+      <h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">${escHtml(phase.title)}</h2>
+      ${phase.badge?`<span class="phase-badge" style="font-size:10px;">${escHtml(phase.badge)}</span>`:''}
     </div>
     ${steps.map((s,i)=>`
       <div style="margin-bottom:14px;padding:12px 14px;border:1px solid var(--border);border-radius:8px;${s.id===highlightStepId?'border-color:var(--accent);background:rgba(59,130,246,0.05);':''}">
         <div style="font-size:12px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:8px;">
           <span style="width:20px;height:20px;border-radius:50%;background:var(--bg3);color:var(--text2);font-size:10px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">${i+1}</span>
-          ${s.title}
+          ${escHtml(s.title)}
           ${s.guide?`<button class="btn-guide" onclick="openGuide('${s.guide}')">Guide &#x2197;</button>`:''}
         </div>
-        ${s.detail?`<div style="font-size:11px;color:var(--text2);margin-left:28px;line-height:1.5;">${s.detail}</div>`:''}
+        ${s.detail?`<div style="font-size:11px;color:var(--text2);margin-left:28px;line-height:1.5;">${escHtml(s.detail)}</div>`:''}
         ${s.tags?.length?`<div class="step-tags" style="margin-left:28px;margin-top:6px;">${s.tags.map(t=>`<span class="step-tag ${t}">${t}</span>`).join('')}</div>`:''}
         ${s.substeps?.length?`<div style="margin-left:28px;margin-top:8px;">`+s.substeps.map((sub,si)=>`
           <div style="margin-bottom:6px;padding:8px 10px;background:var(--bg3);border-radius:6px;">
-            <div style="font-size:11px;font-weight:500;margin-bottom:2px;">${si+1}. ${sub.title}</div>
-            ${sub.detail?`<div style="font-size:10px;color:var(--text2);">${sub.detail}</div>`:''}
+            <div style="font-size:11px;font-weight:500;margin-bottom:2px;">${si+1}. ${escHtml(sub.title)}</div>
+            ${sub.detail?`<div style="font-size:10px;color:var(--text2);">${escHtml(sub.detail)}</div>`:''}
           </div>`).join('')+'</div>':''}
       </div>`).join('')}`;
+}
+function renderReferenceView(phase,highlightStepId){
+  document.getElementById('reference-content').innerHTML=buildReferenceHTML(phase,highlightStepId);
   showView('reference');
 }
 
@@ -1361,6 +1420,32 @@ let editorSelected=null;
 let editorTreeFilter='';
 let editorExpandedNodes=new Set();
 let editorDrag=null;
+let editorDirty=false;
+let editorProductFilter='';
+
+function markDirty(){
+  editorDirty=true;
+  const ind=document.getElementById('editor-dirty-indicator');
+  if(ind) ind.style.display='inline';
+  const btn=document.getElementById('editor-save-btn');
+  if(btn) btn.classList.add('dirty');
+}
+async function editorSave(){
+  const btn=document.getElementById('editor-save-btn');
+  if(btn) btn.disabled=true;
+  try{
+    if(editorTab==='procedures') await saveStepsJson();
+    else await saveGuidesJson();
+    editorDirty=false;
+    const ind=document.getElementById('editor-dirty-indicator');
+    if(ind) ind.style.display='none';
+    if(btn) btn.classList.remove('dirty');
+  }finally{if(btn) btn.disabled=false;}
+}
+function _doCloseEditor(){
+  editorDirty=false;
+  document.getElementById('editor-modal').classList.remove('show');
+}
 function settingsToggle(id){
   const el=document.getElementById(id);
   if(el) el.classList.toggle('open');
@@ -1368,20 +1453,39 @@ function settingsToggle(id){
 
 // ─── Procedure editor ─────────────────────────────────────────────────────────
 function openEditorModal(tab){
-  editorSelected=null;editorExpandedNodes=new Set();editorTreeFilter='';
+  editorSelected=null;editorExpandedNodes=new Set();editorTreeFilter='';editorDirty=false;
   document.getElementById('editor-modal').classList.add('show');
   switchEditorTab(tab||'procedures');
 }
-function closeEditorModal(){document.getElementById('editor-modal').classList.remove('show');}
+function closeEditorModal(){
+  if(!editorDirty){_doCloseEditor();return;}
+  styledConfirm3('You have unsaved changes.',
+    {label:'Save & Close',action:async()=>{await editorSave();_doCloseEditor();}},
+    {label:'Discard',action:()=>{editorDirty=false;_doCloseEditor();}},
+    {label:'Cancel',action:()=>{}}
+  );
+}
 function switchEditorTab(tab){
-  editorTab=tab;editorSelected=null;
+  editorTab=tab;editorSelected=null;editorProductFilter='';
   ['procedures','guides'].forEach(t=>document.getElementById('editor-tab-'+t)?.classList.toggle('active',t===tab));
   const s=document.getElementById('editor-tree-search');
   if(s){s.value='';editorTreeFilter='';}
   renderEditorView();
 }
 function filterEditorTree(val){editorTreeFilter=(val||'').toLowerCase();renderEditorView();}
-function renderEditorView(){renderEditorTree();renderEditorForm();}
+function renderEditorView(){
+  const filterWrap=document.getElementById('editor-product-filter-wrap');
+  const filterSel=document.getElementById('editor-product-filter');
+  if(filterSel&&editorTab==='procedures'){
+    if(filterWrap) filterWrap.style.display='';
+    filterSel.innerHTML=`<option value="">All products</option>`+
+      getProducts().map(p=>`<option value="${p.id}"${editorProductFilter===p.id?' selected':''}>${escHtml(p.label)}</option>`).join('');
+  } else {
+    if(filterWrap) filterWrap.style.display='none';
+  }
+  renderEditorTree();
+  renderEditorForm();
+}
 
 function etToggle(key){
   editorExpandedNodes.has(key)?editorExpandedNodes.delete(key):editorExpandedNodes.add(key);
@@ -1437,14 +1541,15 @@ function renderEditorTree(){
       ondragstart="etDragStart(event,this)" ondragover="etDragOver(event,this)"
       ondragleave="etDragLeave(event)" ondrop="etDrop(event,this)" ondragend="etDragEnd(this)">
       <span class="et-drag" onclick="event.stopPropagation()">⠿</span>
-      <span class="et-arrow${isOpen?' open':''}${hasChildren?'':' et-no-child'}" onclick="event.stopPropagation();etToggle('${key}')">▶</span>
       <span class="et-label">${escHtml(label)}</span>
+      <span class="et-arrow${isOpen?' open':''}${hasChildren?'':' et-no-child'}" onclick="event.stopPropagation();etToggle('${key}')">▶</span>
     </div>`;
   }
   let html='';
   if(editorTab==='procedures'){
     const phases=stepsData.phases||[],devs=stepsData.device_steps||[];
     phases.forEach((ph,pi)=>{
+      if(editorProductFilter&&(ph.product||'')!==editorProductFilter) return;
       const phShow=match(ph.title)||ph.steps.some(s=>match(s.title)||((s.substeps||[]).some(sub=>match(sub.title))));
       if(!phShow) return;
       const open=editorExpandedNodes.has('phase:'+pi);
@@ -1500,62 +1605,80 @@ function renderEditorForm(){
   if(sel.type==='phase'){
     const p=stepsData.phases[sel.pi];if(!p){pane.innerHTML='<div class="ef-empty">Not found</div>';return;}
     html+=H('Phase');
-    html+=`<div class="ef-grid full">${fld('Title',inp(p.title,`stepsData.phases[${sel.pi}].title=this.value;autoSaveSteps()`))}</div>`;
-    html+=`<div class="ef-grid">${fld('Badge',inp2(p.badge,`stepsData.phases[${sel.pi}].badge=this.value;autoSaveSteps()`,'e.g. ORG SETUP'))}${fld('Product ID',inp2(p.product,`stepsData.phases[${sel.pi}].product=this.value||undefined;autoSaveSteps()`,'leave blank = always shown'))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Title',inp(p.title,`stepsData.phases[${sel.pi}].title=this.value;markDirty()`))}</div>`;
+    const prodOpts=`<option value="">Always shown</option>${getProducts().map(pr=>`<option value="${pr.id}"${(p.product||'')===pr.id?' selected':''}>${escHtml(pr.label)}</option>`).join('')}`;
+    html+=`<div class="ef-grid">${fld('Badge',inp2(p.badge,`stepsData.phases[${sel.pi}].badge=this.value;markDirty()`,'e.g. ORG SETUP'))}${fld('Product',`<select oninput="stepsData.phases[${sel.pi}].product=this.value||undefined;markDirty()" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 9px;color:var(--text);font-size:12px;outline:none;">${prodOpts}</select>`)}</div>`;
     html+=`<hr class="ef-divider"><div style="font-size:12px;color:var(--text2);margin-bottom:12px;">${p.steps.length} step${p.steps.length!==1?'s':''} — select a step in the tree to edit it.</div>`;
-    html+=`<div class="ef-actions"><button class="ef-add-btn" onclick="etAddStep(${sel.pi})">+ Add Step</button><button class="ef-del-btn" onclick="etDeletePhase(${sel.pi})">Delete Phase</button></div>`;
+    html+=`<div class="ef-actions"><button class="ef-add-btn" onclick="etAddStep(${sel.pi})">+ Add Step</button><button class="ef-add-btn" onclick="openEditorPreview()">Preview</button><button class="ef-del-btn" onclick="etDeletePhase(${sel.pi})">Delete Phase</button></div>`;
   } else if(sel.type==='step'){
     const s=stepsData.phases[sel.pi]?.steps[sel.si];if(!s){pane.innerHTML='<div class="ef-empty">Not found</div>';return;}
     const tgs=['required','verify','optional'];
     html+=H(`Step — ${escHtml(stepsData.phases[sel.pi].title)}`);
-    html+=`<div class="ef-grid full">${fld('Title',inp(s.title,`stepsData.phases[${sel.pi}].steps[${sel.si}].title=this.value;autoSaveSteps()`))}</div>`;
-    html+=`<div class="ef-grid full">${fld('Detail',ta(s.detail,`stepsData.phases[${sel.pi}].steps[${sel.si}].detail=this.value;autoSaveSteps()`,'Supporting detail shown below the step title'))}</div>`;
-    html+=`<div class="ef-grid">${fld('Guide ID',inp2(s.guide,`stepsData.phases[${sel.pi}].steps[${sel.si}].guide=this.value||undefined;autoSaveSteps()`,'e.g. duo-eam'),'References a guide from guides.json')}</div>`;
+    html+=`<div class="ef-grid full">${fld('Title',inp(s.title,`stepsData.phases[${sel.pi}].steps[${sel.si}].title=this.value;markDirty()`))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Detail',ta(s.detail,`stepsData.phases[${sel.pi}].steps[${sel.si}].detail=this.value;markDirty()`,'Supporting detail shown below the step title'))}</div>`;
+    html+=`<div class="ef-grid">${fld('Guide ID',inp2(s.guide,`stepsData.phases[${sel.pi}].steps[${sel.si}].guide=this.value||undefined;markDirty()`,'e.g. duo-eam'),'References a guide from guides.json')}</div>`;
     html+=`<hr class="ef-divider"><div class="ef-field"><label>Tags</label><div class="ef-tags">${tgs.map(t=>`<label class="ef-tag"><input type="checkbox" ${(s.tags||[]).includes(t)?'checked':''} onchange="etToggleTag(${sel.pi},${sel.si},-1,'${t}',this.checked)"> ${t}</label>`).join('')}</div></div>`;
     html+=`<div class="ef-actions"><button class="ef-add-btn" onclick="etAddSubstep(${sel.pi},${sel.si})">+ Add Substep</button><button class="ef-del-btn" onclick="etDeleteStep(${sel.pi},${sel.si})">Delete Step</button></div>`;
   } else if(sel.type==='substep'){
     const sub=stepsData.phases[sel.pi]?.steps[sel.si]?.substeps?.[sel.subi];if(!sub){pane.innerHTML='<div class="ef-empty">Not found</div>';return;}
     const tgs=['required','verify','optional'];
     html+=H(`Substep — ${escHtml(stepsData.phases[sel.pi].steps[sel.si].title)}`);
-    html+=`<div class="ef-grid full">${fld('Title',inp(sub.title,`stepsData.phases[${sel.pi}].steps[${sel.si}].substeps[${sel.subi}].title=this.value;autoSaveSteps()`))}</div>`;
-    html+=`<div class="ef-grid full">${fld('Detail',ta(sub.detail,`stepsData.phases[${sel.pi}].steps[${sel.si}].substeps[${sel.subi}].detail=this.value;autoSaveSteps()`))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Title',inp(sub.title,`stepsData.phases[${sel.pi}].steps[${sel.si}].substeps[${sel.subi}].title=this.value;markDirty()`))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Detail',ta(sub.detail,`stepsData.phases[${sel.pi}].steps[${sel.si}].substeps[${sel.subi}].detail=this.value;markDirty()`))}</div>`;
     html+=`<hr class="ef-divider"><div class="ef-field"><label>Tags</label><div class="ef-tags">${tgs.map(t=>`<label class="ef-tag"><input type="checkbox" ${(sub.tags||[]).includes(t)?'checked':''} onchange="etToggleTag(${sel.pi},${sel.si},${sel.subi},'${t}',this.checked)"> ${t}</label>`).join('')}</div></div>`;
     html+=`<div class="ef-actions"><button class="ef-del-btn" onclick="etDeleteSubstep(${sel.pi},${sel.si},${sel.subi})">Delete Substep</button></div>`;
   } else if(sel.type==='device-step'){
     const s=stepsData.device_steps?.[sel.di];if(!s){pane.innerHTML='<div class="ef-empty">Not found</div>';return;}
     html+=H('Device Step');
-    html+=`<div class="ef-grid full">${fld('Title',inp(s.title,`stepsData.device_steps[${sel.di}].title=this.value;autoSaveSteps()`))}</div>`;
-    html+=`<div class="ef-grid full">${fld('Detail',ta(s.detail,`stepsData.device_steps[${sel.di}].detail=this.value;autoSaveSteps()`))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Title',inp(s.title,`stepsData.device_steps[${sel.di}].title=this.value;markDirty()`))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Detail',ta(s.detail,`stepsData.device_steps[${sel.di}].detail=this.value;markDirty()`))}</div>`;
     html+=`<hr class="ef-divider"><div class="ef-field"><label>Options</label><div class="ef-tags">
-      <label class="ef-tag"><input type="checkbox" ${s.installer_url?'checked':''} onchange="stepsData.device_steps[${sel.di}].installer_url=this.checked||undefined;autoSaveSteps()"> Show installer URL</label>
-      <label class="ef-tag"><input type="checkbox" ${s.vpn_selector?'checked':''} onchange="stepsData.device_steps[${sel.di}].vpn_selector=this.checked||undefined;autoSaveSteps()"> VPN selector</label>
+      <label class="ef-tag"><input type="checkbox" ${s.installer_url?'checked':''} onchange="stepsData.device_steps[${sel.di}].installer_url=this.checked||undefined;markDirty()"> Show installer URL</label>
+      <label class="ef-tag"><input type="checkbox" ${s.vpn_selector?'checked':''} onchange="stepsData.device_steps[${sel.di}].vpn_selector=this.checked||undefined;markDirty()"> VPN selector</label>
     </div></div>`;
     html+=`<div class="ef-actions"><button class="ef-del-btn" onclick="etDeleteDevStep(${sel.di})">Delete Device Step</button></div>`;
   } else if(sel.type==='guide'){
     const g=guides[sel.gid];if(!g){pane.innerHTML='<div class="ef-empty">Not found</div>';return;}
     html+=H('Guide');
     html+=`<div class="ef-grid full">${fld('Guide ID (read-only)',`<input value="${escHtml(sel.gid)}" disabled style="opacity:0.5;cursor:not-allowed;">`)}</div>`;
-    html+=`<div class="ef-grid full">${fld('Title',inp(g.title,`guides['${sel.gid}'].title=this.value;autoSaveGuides()`))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Title',inp(g.title,`guides['${sel.gid}'].title=this.value;markDirty()`))}</div>`;
     html+=`<hr class="ef-divider"><div style="font-size:12px;color:var(--text2);margin-bottom:12px;">${(g.sections||[]).length} section${(g.sections||[]).length!==1?'s':''} — select a section in the tree to edit it.</div>`;
-    html+=`<div class="ef-actions"><button class="ef-add-btn" onclick="etAddSection('${sel.gid}')">+ Add Section</button><button class="ef-del-btn" onclick="etDeleteGuide('${sel.gid}')">Delete Guide</button></div>`;
+    html+=`<div class="ef-actions"><button class="ef-add-btn" onclick="etAddSection('${sel.gid}')">+ Add Section</button><button class="ef-add-btn" onclick="openEditorPreview()">Preview</button><button class="ef-del-btn" onclick="etDeleteGuide('${sel.gid}')">Delete Guide</button></div>`;
   } else if(sel.type==='section'){
     const sec=guides[sel.gid]?.sections?.[sel.secI];if(!sec){pane.innerHTML='<div class="ef-empty">Not found</div>';return;}
     html+=H(`Section — ${escHtml(guides[sel.gid].title)}`);
-    html+=`<div class="ef-grid full">${fld('Title',inp(sec.title,`guides['${sel.gid}'].sections[${sel.secI}].title=this.value;autoSaveGuides()`))}</div>`;
-    html+=`<div class="ef-grid full">${fld('Info Note',ta(sec.note,`guides['${sel.gid}'].sections[${sel.secI}].note=this.value||undefined;autoSaveGuides()`,'Blue info box shown above steps (optional)'))}</div>`;
-    html+=`<div class="ef-grid full">${fld('Warning',ta(sec.warn,`guides['${sel.gid}'].sections[${sel.secI}].warn=this.value||undefined;autoSaveGuides()`,'Red warning box shown above steps (optional)'))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Title',inp(sec.title,`guides['${sel.gid}'].sections[${sel.secI}].title=this.value;markDirty()`))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Info Note',ta(sec.note,`guides['${sel.gid}'].sections[${sel.secI}].note=this.value||undefined;markDirty()`,'Blue info box shown above steps (optional)'))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Warning',ta(sec.warn,`guides['${sel.gid}'].sections[${sel.secI}].warn=this.value||undefined;markDirty()`,'Red warning box shown above steps (optional)'))}</div>`;
     html+=`<div class="ef-actions"><button class="ef-add-btn" onclick="etAddGuideStep('${sel.gid}',${sel.secI})">+ Add Guide Step</button><button class="ef-del-btn" onclick="etDeleteSection('${sel.gid}',${sel.secI})">Delete Section</button></div>`;
   } else if(sel.type==='guide-step'){
     const gs=guides[sel.gid]?.sections?.[sel.secI]?.steps?.[sel.gsI];if(!gs){pane.innerHTML='<div class="ef-empty">Not found</div>';return;}
     const lnk=gs.link||{};
     html+=H(`Guide Step — ${escHtml(guides[sel.gid].sections[sel.secI].title)}`);
-    html+=`<div class="ef-grid full">${fld('Heading',inp(gs.h,`guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].h=this.value;autoSaveGuides()`))}</div>`;
-    html+=`<div class="ef-grid full">${fld('Body',ta(gs.b,`guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].b=this.value;autoSaveGuides()`,'Main description text'))}</div>`;
-    html+=`<div class="ef-grid full">${fld('Code Block',ta(gs.code,`guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].code=this.value||undefined;autoSaveGuides()`,'Optional — displayed as a formatted code block',true),'Displayed as monospace code in the guide')}</div>`;
-    html+=`<div class="ef-grid">${fld('Link Label',inp2(lnk.text,`(guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].link=guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].link||{}).text=this.value||undefined;autoSaveGuides()`,'Button label'))}${fld('Link URL',inp2(lnk.url,`(guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].link=guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].link||{}).url=this.value||undefined;autoSaveGuides()`,'https://...'))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Heading',inp(gs.h,`guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].h=this.value;markDirty()`))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Body',ta(gs.b,`guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].b=this.value;markDirty()`,'Main description text'))}</div>`;
+    html+=`<div class="ef-grid full">${fld('Code Block',ta(gs.code,`guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].code=this.value||undefined;markDirty()`,'Optional — displayed as a formatted code block',true),'Displayed as monospace code in the guide')}</div>`;
+    html+=`<div class="ef-grid">${fld('Link Label',inp2(lnk.text,`(guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].link=guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].link||{}).text=this.value||undefined;markDirty()`,'Button label'))}${fld('Link URL',inp2(lnk.url,`(guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].link=guides['${sel.gid}'].sections[${sel.secI}].steps[${sel.gsI}].link||{}).url=this.value||undefined;markDirty()`,'https://...'))}</div>`;
     html+=`<div class="ef-actions"><button class="ef-del-btn" onclick="etDeleteGuideStep('${sel.gid}',${sel.secI},${sel.gsI})">Delete Guide Step</button></div>`;
   }
   pane.innerHTML=html;
+}
+function openEditorPreview(){
+  const sel=editorSelected;
+  if(!sel) return;
+  const body=document.getElementById('editor-preview-body');
+  let html='';
+  if(['phase','step','substep'].includes(sel.type)){
+    const phase=stepsData.phases[sel.pi];
+    if(phase) html=buildReferenceHTML(phase, sel.type==='step'?stepsData.phases[sel.pi].steps[sel.si]?.id:null);
+  } else if(sel.type==='device-step'){
+    html=buildReferenceHTML({title:'Device Steps',steps:stepsData.device_steps},stepsData.device_steps[sel.di]?.id);
+  } else if(['guide','section','guide-step'].includes(sel.type)){
+    const g=guides[sel.gid];
+    if(g) html=`<div><h3 style="font-size:16px;font-weight:700;margin-bottom:14px;">${escHtml(g.title)}</h3>${renderGuideBody(g)}</div>`;
+  }
+  body.innerHTML=html||'<div style="color:var(--text3);padding:20px;">Nothing to preview</div>';
+  document.getElementById('editor-preview-modal').classList.add('show');
 }
 function etLiveLabel(val){
   const el=document.querySelector('#editor-tree-body .et-row.active .et-label');
@@ -1658,7 +1781,7 @@ let autoSaveStepsTimer=null;
 function autoSaveSteps(){clearTimeout(autoSaveStepsTimer);autoSaveStepsTimer=setTimeout(saveStepsJson,800);}
 async function saveStepsJson(){
   const r=await fetch('/api/steps',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(stepsData)});
-  if(r.ok) showToast('Procedures saved'); else showToast('Save failed','error');
+  if(!r.ok) showToast('Save failed — check server logs','error');
 }
 function etAddPhase(){
   stepsData.phases.push({id:'phase-'+Date.now(),title:'New Phase',badge:'',steps:[]});
@@ -1709,7 +1832,7 @@ let autoSaveGuidesTimer=null;
 function autoSaveGuides(){clearTimeout(autoSaveGuidesTimer);autoSaveGuidesTimer=setTimeout(saveGuidesJson,800);}
 async function saveGuidesJson(){
   const r=await fetch('/api/guides',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(guides)});
-  if(r.ok) showToast('Guides saved'); else showToast('Save failed','error');
+  if(!r.ok) showToast('Save failed — check server logs','error');
 }
 function etAddGuide(){
   const gid='guide-'+Date.now();
@@ -1817,6 +1940,13 @@ function renderSettingsView(){
       <div class="settings-block">
         <div class="settings-block-header">Configuration</div>
         <div class="settings-block-body" id="cfg-section-body"></div>
+      </div>
+      <div class="settings-block">
+        <div class="settings-block-header">Products</div>
+        <div class="settings-block-body">
+          <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Manage the product list used in the new-client wizard and procedure editor.</p>
+          <button class="btn-secondary" onclick="openProductsModal()">Manage Products</button>
+        </div>
       </div>
       <div class="settings-block">
         <div class="settings-block-header">Content Editors</div>
@@ -1990,6 +2120,66 @@ function startUpdatePolling(){
   pollForUpdates();
   setInterval(pollForUpdates,30*60*1000);
 }
+
+// ─── Products modal ───────────────────────────────────────────────────────────
+let _pmProducts=[];
+let _pmDrag=null;
+function openProductsModal(){
+  _pmProducts=JSON.parse(JSON.stringify(getProducts()));
+  document.getElementById('products-modal').classList.add('show');
+  pmRender();
+}
+function closeProductsModal(){document.getElementById('products-modal').classList.remove('show');}
+function pmRender(){
+  document.getElementById('pm-list').innerHTML=_pmProducts.map((p,i)=>`
+    <div class="pm-row" data-pi="${i}" draggable="true"
+      ondragstart="pmDragStart(event,${i})" ondragover="pmDragOver(event,${i})"
+      ondragleave="pmDragLeave(event)" ondrop="pmDrop(event,${i})" ondragend="pmDragEnd(event)">
+      <span class="pm-drag">⠿</span>
+      <span class="pm-id">${escHtml(p.id)}</span>
+      <input class="pm-label-input" value="${escHtml(p.label)}" placeholder="Label" oninput="_pmProducts[${i}].label=this.value">
+      <button onclick="pmDelete(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;flex-shrink:0;padding:0 2px;" title="Remove">&#215;</button>
+    </div>`).join('');
+}
+function pmAddProduct(){
+  const id='product-'+Date.now();
+  _pmProducts.push({id,label:'New Product',desc:''});
+  pmRender();
+}
+function pmDelete(i){_pmProducts.splice(i,1);pmRender();}
+function pmDragStart(e,i){_pmDrag=i;e.dataTransfer.effectAllowed='move';}
+function pmDragOver(e,i){
+  e.preventDefault();
+  document.querySelectorAll('.pm-row').forEach(r=>r.classList.remove('drag-over-before','drag-over-after'));
+  const el=e.currentTarget;
+  const upper=e.clientY<el.getBoundingClientRect().top+el.getBoundingClientRect().height/2;
+  el.classList.toggle('drag-over-before',upper);
+  el.classList.toggle('drag-over-after',!upper);
+}
+function pmDragLeave(e){if(!e.currentTarget.contains(e.relatedTarget))e.currentTarget.classList.remove('drag-over-before','drag-over-after');}
+function pmDragEnd(e){document.querySelectorAll('.pm-row').forEach(r=>r.classList.remove('drag-over-before','drag-over-after'));}
+function pmDrop(e,ti){
+  e.preventDefault();
+  document.querySelectorAll('.pm-row').forEach(r=>r.classList.remove('drag-over-before','drag-over-after'));
+  const si=_pmDrag;_pmDrag=null;
+  if(si==null||si===ti) return;
+  const upper=e.clientY<e.currentTarget.getBoundingClientRect().top+e.currentTarget.getBoundingClientRect().height/2;
+  const [item]=_pmProducts.splice(si,1);
+  let ins=si<ti?(upper?ti-1:ti):(upper?ti:ti+1);
+  ins=Math.max(0,Math.min(ins,_pmProducts.length));
+  _pmProducts.splice(ins,0,item);
+  pmRender();
+}
+async function pmSave(){
+  appSettings.products=_pmProducts;
+  const updated={...appSettings};
+  const r=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(updated)});
+  if(r.ok){showToast('Products saved');closeProductsModal();buildProductsGrid();}
+  else showToast('Save failed','error');
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('products-modal')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeProductsModal();});
+});
 
 // ─── Global log modal ─────────────────────────────────────────────────────────
 async function openGlobalLogModal(){
@@ -3383,7 +3573,7 @@ async function loadConfig(){
     if(stepsRes.ok) stepsData=await stepsRes.json();
     else console.warn('steps.json not found');
     const settingsRes=await fetch('/api/settings').catch(()=>null);
-    if(settingsRes&&settingsRes.ok) appSettings={...appSettings,...(await settingsRes.json())};
+    if(settingsRes&&settingsRes.ok){const sd=await settingsRes.json();appSettings={...appSettings,...sd};if(!sd.products) appSettings.products=DEFAULT_PRODUCTS;}
     await loadClients();renderSidebar();buildProductsGrid();showView('empty');
   }catch(e){showAlert('config-alert','error',`Failed to load: ${e.message}`);}
 }
@@ -3492,7 +3682,7 @@ function copyText(text,btn){
 
 // \u2500\u2500\u2500 Products grid \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 function buildProductsGrid(){
-  document.getElementById('products-grid').innerHTML=PRODUCTS.map(p=>`
+  document.getElementById('products-grid').innerHTML=getProducts().map(p=>`
     <label class="product-toggle" id="ptog-${p.id}">
       <input type="checkbox" id="pcheck-${p.id}" onchange="toggleProduct('${p.id}')">
       <div class="toggle-check"><svg width="9" height="7" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
