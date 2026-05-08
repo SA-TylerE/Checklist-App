@@ -2167,15 +2167,16 @@ function pmRender(){
       ondragleave="pmDragLeave(event)" ondrop="pmDrop(event,${i})" ondragend="pmDragEnd(event)">
       <span class="pm-drag">⠿</span>
       <input class="pm-label-input" style="font-family:monospace;font-size:11px;color:var(--text2);max-width:100px;" value="${escHtml(p.id)}" placeholder="product-id"
-        oninput="_pmProducts[${i}].id=this.value.toLowerCase().replace(/[^a-z0-9-_]/g,'');pmMarkDirty()">
+        oninput="_pmProducts[${i}].id=this.value.toLowerCase().replace(/[^a-z0-9-_]/g,'');pmMarkDirty()"
+        onfocus="this.setSelectionRange(this.value.length,this.value.length)">
       <input class="pm-label-input" data-lbl="${i}" value="${escHtml(p.label)}" placeholder="Product name"
-        oninput="_pmProducts[${i}].label=this.value;pmMarkDirty()">
+        oninput="_pmProducts[${i}].label=this.value;pmMarkDirty()"
+        onfocus="this.setSelectionRange(this.value.length,this.value.length)">
       <button onclick="pmDelete(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;flex-shrink:0;padding:0 2px;" title="Remove">&#215;</button>
     </div>`).join('');
 }
 function pmAddProduct(){
-  const shortId='p'+Date.now().toString().slice(-4);
-  _pmProducts.push({id:shortId,label:'',desc:''});
+  _pmProducts.push({id:'',label:'',desc:''});
   pmMarkDirty();
   pmRender();
   const lblInputs=document.querySelectorAll('#pm-list [data-lbl]');
