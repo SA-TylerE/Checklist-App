@@ -2,6 +2,7 @@ const express  = require('express');
 const fs       = require('fs');
 const path     = require('path');
 const os       = require('os');
+const https    = require('https');
 const { exec } = require('child_process');
 
 const app        = express();
@@ -19,6 +20,7 @@ app.get(['/', '/index.html'], (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 app.use(express.static(PUBLIC_DIR));
+
 
 // ── SSE ───────────────────────────────────────────────────────────────────────
 const sseClients = new Set();
@@ -38,6 +40,7 @@ function ensureDirs() {
   if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, '{}');
 }
 
+// Write to a temp file then rename — prevents partial writes from corrupting JSON if the process crashes mid-write.
 function atomicWrite(filePath, data) {
   const tmp = filePath + '.tmp.' + process.pid;
   fs.writeFileSync(tmp, data, 'utf8');
@@ -70,13 +73,15 @@ const todayStamp = new Date().toISOString().slice(0,10);
 if (!fs.readdirSync(BACKUP_DIR).some(f => f.includes(todayStamp))) doBackup(todayStamp);
 
 // ── Routes ────────────────────────────────────────────────────────────────────
-// Config read
+// Config read — token is NOT returned; client receives syncroTokenSet (bool) only.
 app.get('/api/config', (req, res) => {
   try {
     if (!fs.existsSync(CFG_FILE)) return res.status(404).json({ error: 'config.json not found' });
     const cfg = readCfg();
+    const token = cfg.syncro_api_token || '';
     res.json({
-      syncroToken:     cfg.syncro_api_token  || '',
+      syncroTokenSet:  !!token,
+      syncroTokenHint: token ? token.slice(0, 5) + '•••••••••••' : '',
       syncroSubdomain: cfg.syncro_subdomain  || '',
       staleDays:       cfg.stale_days        || 14,
       dueWarningDays:  cfg.due_warning_days  || 7,
@@ -92,7 +97,8 @@ app.put('/api/config', (req, res) => {
     const b   = req.body || {};
     const updated = {
       ...cur,
-      syncro_api_token: b.syncroToken     ?? cur.syncro_api_token,
+      // Only update token if a non-empty value is provided
+      syncro_api_token: b.syncroToken     || cur.syncro_api_token,
       syncro_subdomain: b.syncroSubdomain ?? cur.syncro_subdomain,
       stale_days:       b.staleDays       ?? cur.stale_days,
       due_warning_days: b.dueWarningDays  ?? cur.due_warning_days,
@@ -102,6 +108,30 @@ app.put('/api/config', (req, res) => {
     pushEvent('config-updated', {}, req.headers['x-source-id']);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: 'Failed to write config' }); }
+});
+
+// Syncro customer search — proxied server-side so the API token never reaches the browser.
+app.get('/api/syncro/search', (req, res) => {
+  try {
+    const cfg = readCfg();
+    const token = cfg.syncro_api_token;
+    const subdomain = cfg.syncro_subdomain;
+    if (!token || !subdomain) return res.status(400).json({ error: 'Syncro not configured' });
+    const q = encodeURIComponent(req.query.q || '');
+    const options = {
+      hostname: `${subdomain}.syncromsp.com`,
+      path: `/api/v1/customers?business_name=${q}`,
+      headers: { 'accept': 'application/json', 'Authorization': token },
+    };
+    https.get(options, apiRes => {
+      let data = '';
+      apiRes.on('data', chunk => data += chunk);
+      apiRes.on('end', () => {
+        try { res.status(apiRes.statusCode).json(JSON.parse(data)); }
+        catch(_) { res.status(500).json({ error: 'Invalid response from Syncro' }); }
+      });
+    }).on('error', e => res.status(500).json({ error: e.message }));
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // Clients read/write
@@ -222,6 +252,7 @@ app.post('/api/logs',(req,res)=>{
 });
 
 // Update checker
+// -c safe.directory bypasses Git's ownership check when the process user differs from the repo owner.
 const gitSafe = `git -c safe.directory=${__dirname}`;
 const svcUser = os.userInfo().username;
 

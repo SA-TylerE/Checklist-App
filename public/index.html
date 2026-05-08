@@ -8,7 +8,7 @@
 :root{
   --bg:#0e1117;--bg2:#161b25;--bg3:#1e2535;--bg4:#242d3d;
   --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.15);
-  --text:#e8eaf0;--text2:#8b92a5;--text3:#555e72;
+  --text:#e8eaf0;--text2:#8b92a5;--text3:#6e7a8f;
   --accent:#3b82f6;--accent2:#1d4ed8;
   --success:#22c55e;--warn:#f59e0b;--danger:#ef4444;
   --mono:'JetBrains Mono','Fira Code',monospace;
@@ -695,8 +695,16 @@ body.light{
 @media(min-width:1280px){
   .sidebar-toggle{display:none;}
 }
+/* Editor modal — stack vertically on mobile so the form pane isn't squished to ~95px */
+@media(max-width:768px){
+  .editor-split{grid-template-columns:1fr;grid-template-rows:auto 1fr;}
+  .editor-tree-pane{border-right:none;border-bottom:1px solid var(--border);max-height:38vh;}
+  .editor-form-pane{padding:14px 16px;}
+  .editor-tree-footer{flex-direction:row;flex-wrap:wrap;}
+}
 @media(max-width:480px){
   .products-grid{grid-template-columns:1fr;}
+  .phase-grid,.device-grid{grid-template-columns:1fr;}
   .checklist-header{flex-direction:column;gap:6px;}
   .header-actions{align-self:flex-end;}
 }
@@ -901,8 +909,8 @@ body.light{
   </div>
 </div>
 <div id="edit-client-modal">
-  <div class="edit-client-card">
-    <h3>Edit Client</h3>
+  <div class="edit-client-card" role="dialog" aria-modal="true" aria-labelledby="edit-client-title">
+    <h3 id="edit-client-title">Edit Client</h3>
     <div id="edit-client-body"></div>
     <div class="modal-actions" style="margin-top:16px;">
       <button class="btn-secondary" onclick="closeEditClientModal()">Cancel</button>
@@ -910,7 +918,7 @@ body.light{
     </div>
   </div>
 </div>
-<div id="confirm-overlay"><div class="confirm-card"><p id="confirm-msg"></p><div class="confirm-actions" id="confirm-btns"><button class="btn-secondary" id="confirm-cancel">Cancel</button><button class="btn-danger" id="confirm-ok">Confirm</button></div></div></div>
+<div id="confirm-overlay"><div class="confirm-card" role="alertdialog" aria-modal="true" aria-describedby="confirm-msg"><p id="confirm-msg"></p><div class="confirm-actions" id="confirm-btns"><button class="btn-secondary" id="confirm-cancel">Cancel</button><button class="btn-danger" id="confirm-ok">Confirm</button></div></div></div>
 
 <div id="log-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;align-items:center;justify-content:center;">
   <div class="modal-card" style="width:min(620px,94vw);max-height:82vh;display:flex;flex-direction:column;gap:0;padding:0;overflow:hidden;">
@@ -923,7 +931,7 @@ body.light{
 </div>
 
 <div id="editor-modal">
-  <div class="editor-modal-card">
+  <div class="editor-modal-card" role="dialog" aria-modal="true" aria-label="Content Editor">
     <div class="editor-modal-head">
       <div class="editor-modal-tabs">
         <button class="tab-btn active" id="editor-tab-procedures" onclick="switchEditorTab('procedures')">&#128221; Procedures</button>
@@ -1047,6 +1055,7 @@ const unseenChanges=new Map();
 const unseenToastTimers=new Map();
 const notifyStore=new Map();          // notifyId -> {techName,ts} — single source of truth
 const qrCache=new Map();              // url -> img element src (avoid re-fetching)
+// Two-phase notification: changes accumulate here from SSE events, then transfer into notifyStore when the client is opened.
 const pendingClientChanges=new Map(); // clientId -> {changes:Array, techName:string}
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
@@ -1066,7 +1075,8 @@ window.matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 function showToast(msg,type='success',duration=2800){
-  showRichToast({body:msg,type,duration,simple:true});
+  const prefix={error:'✗ ',warn:'⚠ ',info:'ℹ ',success:'✓ '}[type]||'';
+  showRichToast({body:prefix+msg,type,duration,simple:true});
 }
 function showRichToastFull({title,body,footer,type='info',duration=5000,clientId=null}){
   const c=document.getElementById('toast-container');
@@ -1439,7 +1449,7 @@ let editorExpandedNodes=new Set();
 let editorDrag=null;
 let editorDirty=false;
 let editorProductFilter='';
-let _editorSnapshot=null;
+let _editorSnapshot=null; // deep copy taken on editor open; restored on discard to prevent in-memory mutations persisting
 let editorDirtyNodes=new Set();
 
 function markDirty(){
@@ -1829,8 +1839,6 @@ function etSetIdx(n,v){
 }
 
 // ─── Editor mutations ─────────────────────────────────────────────────────────
-let autoSaveStepsTimer=null;
-function autoSaveSteps(){clearTimeout(autoSaveStepsTimer);autoSaveStepsTimer=setTimeout(saveStepsJson,800);}
 async function saveStepsJson(){
   const r=await fetch('/api/steps',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(stepsData)});
   if(r.ok){logAction('procedures_saved',{clientId:null,clientName:null,details:`${stepsData.phases?.length||0} phases`});}
@@ -1870,7 +1878,7 @@ function etToggleTag(pi,si,subi,tag,checked){
   if(!obj.tags) obj.tags=[];
   if(checked&&!obj.tags.includes(tag)) obj.tags.push(tag);
   else if(!checked){const i=obj.tags.indexOf(tag);if(i>=0)obj.tags.splice(i,1);}
-  autoSaveSteps();
+  markDirty();
 }
 function etAddDevStep(){
   stepsData.device_steps.push({id:'dv-'+Date.now(),title:'New Device Step',detail:''});
@@ -1881,8 +1889,6 @@ function etDeleteDevStep(di){
     stepsData.device_steps.splice(di,1);editorSelected=null;saveStepsJson();renderEditorView();
   });
 }
-let autoSaveGuidesTimer=null;
-function autoSaveGuides(){clearTimeout(autoSaveGuidesTimer);autoSaveGuidesTimer=setTimeout(saveGuidesJson,800);}
 async function saveGuidesJson(){
   const r=await fetch('/api/guides',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(guides)});
   if(r.ok){logAction('guides_saved',{clientId:null,clientName:null,details:`${Object.keys(guides).length} guides`});}
@@ -2045,7 +2051,8 @@ function renderConfigSection(){
         <input id="cfg-subdomain" value="${(config?.syncroSubdomain||'').replace(/"/g,'&quot;')}" placeholder="yourcompany">
       </div>
       <div class="field-group" style="margin:0;"><label>Syncro API Token</label>
-        <input id="cfg-token" type="password" value="${config?.syncroToken||''}" placeholder="••••••••">
+        <input id="cfg-token" type="password" placeholder="${config?.syncroTokenSet?'Leave blank to keep current token':'Paste API token'}">
+        ${config?.syncroTokenSet?`<div class="field-hint" style="color:var(--success);">&#10003; Token configured &mdash; <span style="font-family:var(--mono);letter-spacing:0.04em;">${escHtml(config.syncroTokenHint||'')}</span></div>`:'<div class="field-hint" style="color:var(--warn);">No token set</div>'}
       </div>
     </div>
     <div style="border-top:1px solid var(--border);margin:0 -16px;padding:14px 16px 0;">
@@ -2101,23 +2108,29 @@ async function renderSettingsLog(){
     applyLogFilter();
   }catch(e){document.getElementById('settings-log-timeline').innerHTML=`<div style="color:#fca5a5;font-size:11px;">Failed: ${e.message}</div>`;}
 }
+function filterLogEntries(logs,cf,af){
+  return logs.filter(l=>{
+    if(af&&l.action!==af)return false;
+    if(cf){
+      const s=[(l.clientName||''),(l.tech||''),(l.details||'')].join(' ').toLowerCase();
+      if(!s.includes(cf))return false;
+    }
+    return true;
+  });
+}
 function applyLogFilter(){
   const logs=window._settingsLogs||[];
   const cf=(document.getElementById('log-client-filter')?.value||'').toLowerCase();
   const af=document.getElementById('log-action-filter')?.value||'';
-  const filtered=logs.filter(l=>{
-    if(af&&l.action!==af)return false;
-    if(cf&&!(l.clientName||'').toLowerCase().includes(cf)&&!(l.tech||'').toLowerCase().includes(cf))return false;
-    return true;
-  });
-  renderLogTimeline(document.getElementById('settings-log-timeline'),filtered.slice(0,200));
+  renderLogTimeline(document.getElementById('settings-log-timeline'),filterLogEntries(logs,cf,af).slice(0,200));
 }
 
 async function saveAllConfig(){
   const orgName=document.getElementById('cfg-org').value.trim();
   const subdomain=document.getElementById('cfg-subdomain').value.trim();
   const token=document.getElementById('cfg-token').value.trim();
-  if(!subdomain||!token){showToast('Syncro subdomain and token are required','error');return;}
+  if(!subdomain){showToast('Syncro subdomain is required','error');return;}
+  if(!token&&!config?.syncroTokenSet){showToast('Syncro API token is required','error');return;}
   const staleDays=parseInt(document.getElementById('cfg-stale').value)||0;
   const dueDays=parseInt(document.getElementById('cfg-due').value)||3;
   const defaultDueOffset=parseInt(document.getElementById('cfg-offset').value)||90;
@@ -2132,7 +2145,7 @@ async function saveAllConfig(){
     fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({staleDays,dueDays,defaultDueOffset,urlTemplates})})
   ]);
   if(cfgR.ok&&setR.ok){
-    config={...config,syncroToken:token,syncroSubdomain:subdomain,orgName};
+    config={...config,syncroTokenSet:!!(token||config?.syncroTokenSet),syncroTokenHint:token?(token.slice(0,5)+'•••••••••••'):config?.syncroTokenHint||'',syncroSubdomain:subdomain,orgName};
     appSettings={staleDays,dueDays,defaultDueOffset,urlTemplates};
     document.querySelectorAll('.sidebar-top-brand').forEach(el=>el.textContent=orgName||'System Alternatives');
     renderSidebar();
@@ -2307,15 +2320,7 @@ function applyGlobalLogFilter(){
   const logs=window._globalLogs||[];
   const cf=(document.getElementById('glog-client-filter')?.value||'').toLowerCase();
   const af=document.getElementById('glog-action-filter')?.value||'';
-  const filtered=logs.filter(l=>{
-    if(af&&l.action!==af)return false;
-    if(cf){
-      const searchable=[(l.clientName||''),(l.tech||''),(l.details||'')].join(' ').toLowerCase();
-      if(!searchable.includes(cf))return false;
-    }
-    return true;
-  });
-  renderLogTimeline(document.getElementById('global-log-timeline'),filtered.slice(0,200));
+  renderLogTimeline(document.getElementById('global-log-timeline'),filterLogEntries(logs,cf,af).slice(0,200));
 }
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('global-log-modal')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeGlobalLogModal();});
@@ -2384,7 +2389,7 @@ function renderSidebar(filter){
   const sbFrom=captureBarWidths();
   const list=document.getElementById('client-list');
   const entries=Object.values(clients).filter(c=>!filter||c.name.toLowerCase().includes(filter.toLowerCase()));
-  if(!entries.length){list.innerHTML=`<div style="padding:10px;font-size:10px;color:var(--text3);text-align:center;">No clients yet</div>`;return;}
+  if(!entries.length){list.innerHTML=`<div style="padding:20px 12px;text-align:center;"><div style="font-size:24px;margin-bottom:10px;opacity:0.4;">📋</div><div style="font-size:12px;font-weight:500;color:var(--text2);margin-bottom:6px;">${filter?'No matches':'No checklists yet'}</div>${filter?'':`<div style="font-size:11px;color:var(--text3);margin-bottom:12px;">Create your first client to get started</div><button class="btn-new" onclick="newClientFromSidebar()">+ New Checklist</button>`}</div>`;return;}
   const now=Date.now();
   list.innerHTML=entries.map(c=>{
     const prog=overallProgress(c);
@@ -2554,7 +2559,7 @@ async function saveDevInstUrl(clientId, devId, devType){
   if(btn){btn.textContent='Saving…';btn.disabled=true;}
   let shortUrl=null;
   try{
-    const r=await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(raw)}`);
+    const r=await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(raw)}`);
     if(r.ok){const s=(await r.text()).trim();if(s!==raw)shortUrl=s;}
   }catch(_){}
   const c=clients[clientId];
@@ -2645,7 +2650,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 async function shortenUrl(rawUrl, containerId, onShortened){
   const urlEl=document.getElementById(`${containerId}-url`);
   try{
-    const r=await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(rawUrl)}`);
+    const r=await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(rawUrl)}`);
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
     const short=(await r.text()).trim();
     if(urlEl) urlEl.textContent=short;
@@ -3313,7 +3318,7 @@ async function shortenModalUrl(){
   if(!raw){showToast('Enter a URL first','error');return;}
   const btn=event.target;btn.textContent='...';
   try{
-    const r=await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(raw)}`);
+    const r=await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(raw)}`);
     const short=(await r.text()).trim();
     modalShortUrl=short;
     const el=document.getElementById('modal-short-url');
@@ -3347,7 +3352,21 @@ async function confirmAddDevice(){
   await saveClients();closeAddDeviceModal();refreshDeviceGuide(cid);
 }
 document.getElementById('add-device-modal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeAddDeviceModal();});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeGuide();closeAddDeviceModal();}});
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape') return;
+  // Close modals in z-index order (highest first)
+  if(document.getElementById('confirm-overlay')?.classList.contains('show')){document.getElementById('confirm-overlay').classList.remove('show');return;}
+  if(document.getElementById('editor-modal')?.classList.contains('show')){closeEditorModal();return;}
+  if(document.getElementById('products-modal')?.classList.contains('show')){closeProductsModal();return;}
+  if(document.getElementById('global-log-modal')?.classList.contains('show')){closeGlobalLogModal();return;}
+  if(document.getElementById('editor-preview-modal')?.classList.contains('show')){document.getElementById('editor-preview-modal').classList.remove('show');return;}
+  if(document.getElementById('qr-modal')?.classList.contains('show')){closeQrModal();return;}
+  if(document.getElementById('log-modal')?.style.display==='flex'){closeLogModal();return;}
+  if(document.getElementById('edit-client-modal')?.classList.contains('show')){closeEditClientModal();return;}
+  if(document.getElementById('syncro-link-modal')?.classList.contains('show')){closeSyncroLinkModal();return;}
+  closeGuide();
+  closeAddDeviceModal();
+});
 
 // \u2500\u2500\u2500 API \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 // ─── SSE live sync ────────────────────────────────────────────────────────────
@@ -3655,7 +3674,7 @@ function connectSSE(){
   });
   sseSource.addEventListener('config-updated',e=>{
     const cfg=JSON.parse(e.data);
-    if(cfg.syncroToken) config={syncroToken:cfg.syncroToken,syncroSubdomain:cfg.syncroSubdomain};
+    if(cfg.syncroSubdomain) config.syncroSubdomain=cfg.syncroSubdomain;
   });
   sseSource.addEventListener('app-updated',()=>{
     const banner=document.getElementById('update-banner');
@@ -3671,8 +3690,8 @@ async function loadConfig(){
     ]);
     if(!cfgRes.ok) throw new Error(`Config HTTP ${cfgRes.status}`);
     const cfg=await cfgRes.json();
-    if(!cfg.syncroToken||!cfg.syncroSubdomain) throw new Error('config.json missing required fields');
-    config={syncroToken:cfg.syncroToken,syncroSubdomain:cfg.syncroSubdomain,orgName:cfg.orgName||'System Alternatives'};
+    if(!cfg.syncroSubdomain) throw new Error('config.json missing required fields');
+    config={syncroTokenSet:cfg.syncroTokenSet||false,syncroTokenHint:cfg.syncroTokenHint||'',syncroSubdomain:cfg.syncroSubdomain,orgName:cfg.orgName||'System Alternatives'};
     const orgName=config.orgName;
     document.querySelectorAll('.sidebar-top-brand').forEach(el=>el.textContent=orgName);
     document.getElementById('mobile-title').textContent=orgName;
@@ -3724,11 +3743,11 @@ async function searchSyncroInModal(){
   const el=document.getElementById('slm-results');
   el.innerHTML='<span class="spinner"></span>';
   try{
-    const r=await fetch(`https://${config.syncroSubdomain}.syncromsp.com/api/v1/customers?business_name=${encodeURIComponent(q)}`,{headers:{'accept':'application/json','Authorization':config.syncroToken}});
+    const r=await fetch(`/api/syncro/search?q=${encodeURIComponent(q)}`);
     if(!r.ok)throw new Error(`HTTP ${r.status}`);
     const data=await r.json();const list=data.customers||[];
     if(!list.length){el.innerHTML='<div style="color:var(--text3);font-size:11px;padding:6px 0;">No customers found.</div>';return;}
-    el.innerHTML=list.map((c,i)=>`<div class="search-result-item" onclick="selectSyncroInModal(${i})"><span class="sri-name">${c.business_name}</span><span class="sri-id">ID: ${c.id}</span></div>`).join('');
+    el.innerHTML=list.map((c,i)=>`<div class="search-result-item" onclick="selectSyncroInModal(${i})"><span class="sri-name">${escHtml(c.business_name)}</span><span class="sri-id">ID: ${escHtml(String(c.id))}</span></div>`).join('');
     el._customers=list;
   }catch(e){el.innerHTML=`<div style="color:#fca5a5;font-size:11px;padding:6px 0;">Error: ${e.message}</div>`;}
 }
