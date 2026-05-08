@@ -222,8 +222,9 @@ app.post('/api/logs',(req,res)=>{
 });
 
 // Update checker
+const gitSafe = `git -c safe.directory=${__dirname}`;
 app.get('/api/update/status', (req, res) => {
-  exec('git fetch && git log HEAD..@{u} --oneline', { cwd: __dirname }, (err, stdout, stderr) => {
+  exec(`${gitSafe} fetch && ${gitSafe} log HEAD..@{u} --oneline`, { cwd: __dirname }, (err, stdout, stderr) => {
     if (err) return res.json({ error: stderr || err.message, commits: [] });
     const commits = stdout.trim() ? stdout.trim().split('\n') : [];
     res.json({ upToDate: commits.length === 0, commits });
@@ -231,7 +232,7 @@ app.get('/api/update/status', (req, res) => {
 });
 
 app.post('/api/update', (req, res) => {
-  exec('git pull', { cwd: __dirname }, (err, stdout, stderr) => {
+  exec(`${gitSafe} pull`, { cwd: __dirname }, (err, stdout, stderr) => {
     if (err) return res.status(500).json({ error: stderr || err.message });
     res.json({ ok: true, output: stdout });
     pushEvent('app-updated', {}, 'server');
