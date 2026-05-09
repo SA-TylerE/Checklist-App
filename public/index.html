@@ -371,8 +371,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .pm-row.drag-over-before{border-top:2px solid var(--accent);}
 .pm-row.drag-over-after{border-bottom:2px solid var(--accent);}
 .pm-id{font-size:10px;color:var(--text3);font-family:monospace;flex-shrink:0;min-width:80px;}
-.pm-label-input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 7px;color:var(--text);font-size:12px;outline:none;}
+.pm-label-input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 7px;color:var(--text);font-size:12px;outline:none;min-width:0;}
 .pm-label-input:focus{border-color:var(--accent);}
+/* On narrow screens the description wraps to its own line */
+@media(max-width:520px){
+  .pm-row{flex-wrap:wrap;}
+  .pm-desc-input{flex:1 1 100%;margin-left:22px;}
+}
 .theme-pill{display:flex;background:var(--bg3);border:1px solid var(--border);border-radius:20px;overflow:hidden;margin-left:auto;}
 .theme-btn{padding:3px 8px;font-size:10px;color:var(--text3);cursor:pointer;background:none;border:none;border-radius:20px;transition:all 0.15s;}
 .theme-btn.active{background:var(--accent);color:white;}
@@ -440,6 +445,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .step-note-btn.has-note{border-color:var(--warn);color:var(--warn);background:rgba(245,158,11,0.08);}
 /* Sidebar client item — dot in top-right corner */
 .client-item .notify-dot{position:absolute;top:6px;right:7px;margin:0;}
+/* Device step item — dot on right, vertically centred */
+.device-step-item .notify-dot{position:absolute;right:6px;top:50%;transform:translateY(-50%);margin:0;}
 .step-note-area{display:none;padding:6px 8px 6px 31px;}
 .step-item.note-open .step-note-area{display:block;}
 .step-note-area textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:6px;color:var(--text);font-size:11px;font-family:var(--sans);resize:vertical;min-height:52px;outline:none;}
@@ -1357,6 +1364,7 @@ function switchSidebarNav(tab){
 let _preSettingsClientId=null;
 
 function openSettings(){
+  if(isMobile()) closeOverlays();
   _preSettingsClientId=activeClientId;
   activeClientId=null;
   document.getElementById('mobile-title').textContent=config?.orgName||'System Alternatives';
@@ -1407,6 +1415,7 @@ function renderRefList(filter){
 function filterRefList(q){ renderRefList(q); }
 
 function openRefPhase(phaseId){
+  if(isMobile()) closeOverlays();
   activeRefPhaseId=phaseId;
   renderRefList(document.getElementById('ref-search-input')?.value||'');
   const phase=stepsData.phases.find(p=>p.id===phaseId);
@@ -2187,6 +2196,34 @@ function startUpdatePolling(){
   setInterval(pollForUpdates,30*60*1000);
 }
 
+// ─── Server restart detection ─────────────────────────────────────────────────
+let _serverStartedAt=null; // estimated server boot time based on uptime
+const _sessionStartedAt=Date.now(); // when this browser session loaded
+
+async function checkServerRestart(){
+  try{
+    const r=await fetch('/api/health',{cache:'no-store'});
+    if(!r.ok) return;
+    const h=await r.json();
+    const bootedAt=Date.now()-h.uptime*1000;
+    if(_serverStartedAt===null){
+      _serverStartedAt=bootedAt; // baseline on first check
+    } else if(bootedAt>_serverStartedAt+15000){
+      // Server booted significantly later than our stored baseline — it restarted
+      _serverStartedAt=bootedAt; // update so we don't keep re-showing
+      const banner=document.getElementById('update-banner');
+      if(banner){
+        banner.textContent='↺ Server was restarted — click to reload';
+        banner.style.display='block';
+      }
+    }
+  }catch(_){}
+}
+function startServerRestartPolling(){
+  checkServerRestart(); // baseline reading
+  setInterval(checkServerRestart,5*60*1000); // re-check every 5 min
+}
+
 // ─── Products modal ───────────────────────────────────────────────────────────
 let _pmProducts=[];
 let _pmDrag=null;
@@ -2230,7 +2267,7 @@ function pmRender(){
       <input class="pm-label-input" data-lbl="${i}" value="${escHtml(p.label)}" placeholder="Product name"
         oninput="_pmProducts[${i}].label=this.value;pmMarkDirty()"
         onfocus="this.setSelectionRange(this.value.length,this.value.length)">
-      <input class="pm-label-input" style="color:var(--text3);font-size:11px;" value="${escHtml(p.desc||'')}" placeholder="Description (optional)"
+      <input class="pm-label-input pm-desc-input" style="color:var(--text3);font-size:11px;" value="${escHtml(p.desc||'')}" placeholder="Description (optional)"
         oninput="_pmProducts[${i}].desc=this.value;pmMarkDirty()"
         onfocus="this.setSelectionRange(this.value.length,this.value.length)">
       <button onclick="pmDelete(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;flex-shrink:0;padding:0 2px;" title="Remove">&#215;</button>
@@ -3683,7 +3720,7 @@ function connectSSE(){
     const banner=document.getElementById('update-banner');
     if(banner) banner.style.display='block';
   });
-  sseSource.onerror=()=>{ sseSource.close(); setTimeout(connectSSE,5000); };
+  sseSource.onerror=()=>{ sseSource.close(); setTimeout(()=>{connectSSE();checkServerRestart();},5000); };
 }
 
 async function loadConfig(){
@@ -3872,6 +3909,7 @@ applyTheme(currentTheme);
 loadConfig();
 connectSSE();
 startUpdatePolling();
+startServerRestartPolling();
 </script>
 </body>
 </html>
