@@ -150,6 +150,22 @@ app.get('/api/shorten', (req, res) => {
   }).on('error', e => res.status(500).json({ error: e.message }));
 });
 
+// Sales quotes
+const SALES_QUOTES_FILE = path.join(__dirname, 'data', 'sales-quotes.json');
+app.get('/api/sales-quotes', (req, res) => {
+  try {
+    if (!fs.existsSync(SALES_QUOTES_FILE)) return res.json({});
+    res.json(JSON.parse(fs.readFileSync(SALES_QUOTES_FILE, 'utf8')));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+app.put('/api/sales-quotes', (req, res) => {
+  try {
+    if (!req.body || typeof req.body !== 'object') return res.status(400).json({ error: 'Invalid payload' });
+    atomicWrite(SALES_QUOTES_FILE, JSON.stringify(req.body, null, 2));
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // Clients read/write
 app.get('/api/clients', (req, res) => {
   try { res.json(JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))); }
