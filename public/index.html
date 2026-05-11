@@ -62,6 +62,20 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .quote-col-hdr{display:flex;gap:8px;padding:4px 12px 4px 14px;font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;}
 .profit-pos{color:var(--success);}
 .profit-neg{color:var(--danger);}
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+input[type=number]{-moz-appearance:textfield;}
+.quote-sticky-totals{position:sticky;top:0;z-index:10;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:10px 14px;flex-wrap:wrap;margin-bottom:12px;}
+.qst-item{display:flex;flex-direction:column;align-items:center;gap:1px;}
+.qst-label{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;}
+.qst-value{font-size:15px;font-weight:700;}
+.quote-line-note{width:100%;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text3);font-size:10px;font-family:var(--sans);padding:3px 0 3px 23px;outline:none;font-style:italic;display:block;}
+.quote-line-note:focus{color:var(--text2);border-bottom-color:var(--accent);}
+.quote-line-note::placeholder{color:var(--text3);opacity:0.6;}
+.quote-group-header{padding:5px 14px 3px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;background:var(--bg3);border-bottom:1px solid var(--border);}
+.quote-custom-label{flex:1;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:12px;font-family:var(--sans);outline:none;min-width:0;padding:0;}
+.quote-custom-label:focus{border-bottom-color:var(--accent);}
+.quote-billing-sel{cursor:pointer;background:var(--bg3);border:1px solid var(--border);border-radius:3px;padding:1px 4px;font-size:9px;color:var(--text3);outline:none;}
 /* Sales product expand in products modal */
 .pm-sales-expand{display:none;flex-wrap:wrap;gap:6px;padding:6px 0 2px 22px;border-top:1px solid var(--border);margin-top:6px;}
 .pm-row.sales-open .pm-sales-expand{display:flex;}
@@ -140,7 +154,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 
 /* Views */
 .view{display:none;}.view.active{display:block;}
-#view-empty.active{display:flex;justify-content:center;padding:24px 28px;}
+#view-empty.active,#view-sales.active{display:flex;justify-content:center;padding:24px 28px;}
 
 /* Config */
 .config-card{max-width:440px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:22px;}
@@ -755,14 +769,14 @@ body.light{
   <!-- Persistent app header — always visible across all sections and screen sizes -->
   <div id="app-header">
     <button class="ah-toggle" onclick="ahToggleSidebar()" aria-label="Toggle sidebar">&#9776;</button>
-    <span class="ah-brand" onclick="goToDashboard()" style="cursor:pointer;" title="Back to dashboard">SA Onboarding</span>
+    <span class="ah-brand" onclick="goToDashboard()" style="cursor:pointer;" title="Back to dashboard">SA</span>
     <nav class="ah-nav" role="navigation" aria-label="App sections">
       <button class="ah-nav-btn active" id="ah-btn-onboarding" onclick="switchSection('onboarding')">Onboarding</button>
       <button class="ah-nav-btn" id="ah-btn-sales" onclick="switchSection('sales')">Sales</button>
       <button class="ah-nav-btn" id="ah-btn-reference" onclick="switchSection('reference')">Reference</button>
     </nav>
     <div class="ah-right">
-      <button class="ah-name-btn" id="ah-name-display" onclick="toggleSettings()" title="Your name / settings" style="display:none;"></button>
+      <button class="ah-name-btn" id="ah-name-display" onclick="openNameModal()" title="Edit your name" style="display:none;"></button>
       <div class="theme-pill-wrap"><div class="theme-pill">
         <button class="theme-btn" id="theme-light" onclick="applyTheme('light')" title="Light">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/><line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/><line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/></svg>
@@ -945,8 +959,8 @@ body.light{
     <p style="font-size:12px;color:var(--text2);margin-bottom:14px;">Enter your name so activity logs show who made each change.</p>
     <input id="name-input" type="text" placeholder="Your name" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:13px;outline:none;font-family:var(--sans);" onkeydown="if(event.key==='Enter')setMyName(true)">
     <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;">
-      <button class="btn-secondary" onclick="setMyName(false)">Skip</button>
-      <button class="btn-primary" onclick="setMyName(true)">Continue</button>
+      <button class="btn-secondary" id="name-skip-btn" onclick="setMyName(false)">Skip</button>
+      <button class="btn-primary" onclick="setMyName(true)">Save</button>
     </div>
   </div>
 </div>
@@ -2096,11 +2110,19 @@ function etDeleteGuideStep(gid,secI,gsI){
 
 
 // ─── Name management ─────────────────────────────────────────────────────────
+function openNameModal(){
+  const existing=localStorage.getItem('myName')||'';
+  const title=document.getElementById('name-modal-title');
+  const input=document.getElementById('name-input');
+  const skipBtn=document.getElementById('name-skip-btn');
+  if(title) title.textContent=existing?'Edit Your Name':'Welcome';
+  if(input){input.value=existing;}
+  if(skipBtn) skipBtn.textContent=existing?'Cancel':'Skip';
+  const m=document.getElementById('name-modal');
+  if(m){m.style.display='flex';setTimeout(()=>{input?.focus();input?.select();},80);}
+}
 function checkFirstVisit(){
-  if(!localStorage.getItem('myName')){
-    const m=document.getElementById('name-modal');
-    if(m){m.style.display='flex';setTimeout(()=>document.getElementById('name-input')?.focus(),80);}
-  }
+  if(!localStorage.getItem('myName')) openNameModal();
   updateNameDisplay();
 }
 function setMyName(save){
@@ -2156,8 +2178,17 @@ let salesQuotes={};
 let activeSalesQuoteId=null;
 
 function getSalesProducts(){
-  const fromProducts=(appSettings.products||DEFAULT_PRODUCTS||[]).filter(p=>p.salesCategory);
-  return fromProducts.length?fromProducts:DEFAULT_SALES_PRODUCTS;
+  const src=(appSettings.products||DEFAULT_PRODUCTS||[]).filter(p=>p.salesCategory);
+  const source=src.length?src:DEFAULT_SALES_PRODUCTS;
+  const result=[];
+  source.forEach(p=>{
+    if(p.subItems?.length){
+      p.subItems.forEach(sub=>result.push({...sub,salesCategory:p.salesCategory,qtySource:p.qtySource||'',parentLabel:p.label,parentId:p.id}));
+    }else{
+      result.push(p);
+    }
+  });
+  return result;
 }
 
 async function loadSalesQuotes(){
@@ -2226,13 +2257,13 @@ async function createQuote(){
   const lineItems={};
   getSalesProducts().forEach(p=>{
     const qty=resolveQtySource(p.qtySource||'',nums);
-    lineItems[p.id]={enabled:qty>0,qty,unitPrice:p.defaultPrice};
+    lineItems[p.id]={enabled:qty>0,qty,unitPrice:p.defaultPrice,note:''};
   });
   salesQuotes[id]={
     id,name,contact:document.getElementById('qwiz-contact').value.trim(),
     tech:document.getElementById('qwiz-tech').value.trim()||localStorage.getItem('myName')||'Unassigned',
     createdAt:new Date().toISOString(),lastModified:new Date().toISOString(),
-    ...nums,nonManagedMachines:0,localBackupTB:0,cloudBackupTB:0,notes:'',lineItems
+    ...nums,nonManagedMachines:0,localBackupTB:0,cloudBackupTB:0,notes:'',lineItems,customItems:[]
   };
   await saveSalesQuotes();
   renderSalesSidebar();
@@ -2247,6 +2278,10 @@ function calcQuoteTotals(q){
     if(!li||!li.enabled)return;
     if(p.billing==='monthly'){monthlyClient+=li.qty*li.unitPrice;monthlySA+=li.qty*(p.saCost||0);}
     else{onetimeClient+=li.qty*li.unitPrice;}
+  });
+  (q.customItems||[]).forEach(c=>{
+    if(c.billing==='monthly')monthlyClient+=c.qty*c.unitPrice;
+    else onetimeClient+=c.qty*c.unitPrice;
   });
   return{monthlyClient,onetimeClient,monthlySA,profit:monthlyClient-monthlySA};
 }
@@ -2263,27 +2298,35 @@ function loadSalesQuote(id){
       <h2 style="font-size:18px;font-weight:700;">${escHtml(q.name)}</h2>
       <div style="font-size:11px;color:var(--text3);">${escHtml(q.tech)}${q.contact?' · '+escHtml(q.contact):''} · Created ${relTime(q.createdAt)}</div>
     </div>
-    <div class="header-actions">
-      <button class="btn-secondary btn-sm" onclick="editQuoteInfo('${id}')">Edit Info</button>
-      <button class="btn-secondary btn-sm" onclick="printQuote('${id}')">Print</button>
-      <button class="btn-secondary btn-sm" style="color:var(--danger);" onclick="deleteQuote('${id}')">Delete</button>
+    <div class="client-menu-wrap" id="qmenu-wrap-${id}">
+      <button class="client-menu-btn" onclick="toggleQuoteMenu('${id}')">&#8230;</button>
+      <div class="client-menu-dropdown" id="qmenu-${id}">
+        <button class="client-menu-item" onclick="closeQuoteMenu('${id}');editQuoteInfo('${id}')">Edit Info</button>
+        <button class="client-menu-item" onclick="closeQuoteMenu('${id}');printQuote('${id}')">Print / Export</button>
+        <button class="client-menu-item danger" onclick="closeQuoteMenu('${id}');deleteQuote('${id}')">Delete</button>
+      </div>
     </div>
+  </div>
+  <div class="quote-sticky-totals">
+    <div class="qst-item"><span class="qst-label">Monthly</span><span class="qst-value">$${totals.monthlyClient.toFixed(2)}</span></div>
+    <div class="qst-item"><span class="qst-label">One Time</span><span class="qst-value">$${totals.onetimeClient.toFixed(2)}</span></div>
+    <div class="qst-item"><span class="qst-label">SA Cost</span><span class="qst-value" style="color:var(--text3);">$${totals.monthlySA.toFixed(2)}</span></div>
+    <div class="qst-item"><span class="qst-label">Profit</span><span class="qst-value ${totals.profit>=0?'profit-pos':'profit-neg'}">$${totals.profit.toFixed(2)}</span></div>
   </div>
   <div class="quote-col-hdr">
     <div style="flex:1;"></div>
     <div style="width:60px;text-align:right;">Qty</div>
     <div style="width:78px;text-align:right;">$/Unit</div>
     <div style="width:78px;text-align:right;">Monthly</div>
-    <div style="width:78px;text-align:right;">One-Time</div>
+    <div style="width:78px;text-align:right;">One Time</div>
   </div>`;
   sections.forEach(sec=>{
     const sp=prods.filter(p=>p.salesCategory===sec.key);
-    if(!sp.length)return;
-    const secTotals=sp.reduce((acc,p)=>{
-      const li=q.lineItems?.[p.id];
-      if(li?.enabled){if(p.billing==='monthly')acc.mo+=li.qty*li.unitPrice;else acc.ot+=li.qty*li.unitPrice;}
-      return acc;
-    },{mo:0,ot:0});
+    const secCustom=(q.customItems||[]).filter(c=>c.category===sec.key);
+    if(!sp.length&&!secCustom.length)return;
+    const secTotals={mo:0,ot:0};
+    sp.forEach(p=>{const li=q.lineItems?.[p.id];if(li?.enabled){if(p.billing==='monthly')secTotals.mo+=li.qty*li.unitPrice;else secTotals.ot+=li.qty*li.unitPrice;}});
+    secCustom.forEach(c=>{if(c.billing==='monthly')secTotals.mo+=c.qty*c.unitPrice;else secTotals.ot+=c.qty*c.unitPrice;});
     html+=`<div class="quote-section">
       <div class="quote-section-header" onclick="this.closest('.quote-section').classList.toggle('collapsed')">
         <span>${sec.label}</span>
@@ -2291,29 +2334,74 @@ function loadSalesQuote(id){
         <span class="quote-section-toggle">▼</span>
       </div>
       <div class="quote-section-body">`;
+    // Group items: standalone vs grouped by parentId
+    const groups=[];const seenParents=new Set();
     sp.forEach(p=>{
-      const li=q.lineItems?.[p.id]||{enabled:false,qty:0,unitPrice:p.defaultPrice};
-      const on=li.enabled;
-      const mo=on&&p.billing==='monthly'?li.qty*li.unitPrice:0;
-      const ot=on&&p.billing==='onetime'?li.qty*li.unitPrice:0;
-      html+=`<div class="quote-line${on?'':' disabled'}">
-        <div class="quote-check${on?' on':''}" onclick="toggleSalesLine('${id}','${p.id}')">${on?'✓':''}</div>
-        <div class="quote-label">${escHtml(p.label)}</div>
-        <span class="quote-billing-tag">${p.billing==='onetime'?'one-time':'/mo'}</span>
-        <input class="quote-input" type="number" min="0" value="${li.qty}" onchange="updateSalesQty('${id}','${p.id}',this.value)" title="Quantity">
-        <input class="quote-input" type="number" min="0" step="0.01" value="${li.unitPrice.toFixed(2)}" onchange="updateSalesPrice('${id}','${p.id}',this.value)" title="Price per unit">
+      if(p.parentId){
+        if(!seenParents.has(p.parentId)){seenParents.add(p.parentId);groups.push({type:'group',parentId:p.parentId,parentLabel:p.parentLabel,items:sp.filter(pp=>pp.parentId===p.parentId)});}
+      }else{groups.push({type:'item',p});}
+    });
+    groups.forEach(g=>{
+      if(g.type==='group'){
+        html+=`<div class="quote-group-header">${escHtml(g.parentLabel)}</div>`;
+        g.items.forEach(p=>{
+          const li=q.lineItems?.[p.id]||{enabled:false,qty:0,unitPrice:p.defaultPrice||0,note:''};
+          const on=li.enabled;const mo=on&&p.billing==='monthly'?li.qty*li.unitPrice:0;const ot=on&&p.billing==='onetime'?li.qty*li.unitPrice:0;
+          html+=`<div style="padding-left:12px;"><div class="quote-line${on?'':' disabled'}">
+            <div class="quote-check${on?' on':''}" onclick="toggleSalesLine('${id}','${p.id}')">${on?'✓':''}</div>
+            <div class="quote-label">${escHtml(p.label)}</div>
+            <span class="quote-billing-tag">${p.billing==='onetime'?'One Time':'Monthly'}</span>
+            <input class="quote-input" type="number" min="0" value="${li.qty}" onchange="updateSalesQty('${id}','${p.id}',this.value)" title="Quantity">
+            <input class="quote-input" type="number" min="0" step="0.01" value="${(li.unitPrice||0).toFixed(2)}" onchange="updateSalesPrice('${id}','${p.id}',this.value)" title="Price per unit">
+            <div class="quote-col${mo>0?' active':''}">${mo>0?'$'+mo.toFixed(2):'-'}</div>
+            <div class="quote-col${ot>0?' active':''}">${ot>0?'$'+ot.toFixed(2):'-'}</div>
+          </div>
+          <input class="quote-line-note" placeholder="Add a note..." value="${escHtml(li.note||'')}" onblur="updateSalesNote('${id}','${p.id}',this.value)">
+          </div>`;
+        });
+      }else{
+        const p=g.p;
+        const li=q.lineItems?.[p.id]||{enabled:false,qty:0,unitPrice:p.defaultPrice||0,note:''};
+        const on=li.enabled;const mo=on&&p.billing==='monthly'?li.qty*li.unitPrice:0;const ot=on&&p.billing==='onetime'?li.qty*li.unitPrice:0;
+        html+=`<div><div class="quote-line${on?'':' disabled'}">
+          <div class="quote-check${on?' on':''}" onclick="toggleSalesLine('${id}','${p.id}')">${on?'✓':''}</div>
+          <div class="quote-label">${escHtml(p.label)}</div>
+          <span class="quote-billing-tag">${p.billing==='onetime'?'One Time':'Monthly'}</span>
+          <input class="quote-input" type="number" min="0" value="${li.qty}" onchange="updateSalesQty('${id}','${p.id}',this.value)" title="Quantity">
+          <input class="quote-input" type="number" min="0" step="0.01" value="${(li.unitPrice||0).toFixed(2)}" onchange="updateSalesPrice('${id}','${p.id}',this.value)" title="Price per unit">
+          <div class="quote-col${mo>0?' active':''}">${mo>0?'$'+mo.toFixed(2):'-'}</div>
+          <div class="quote-col${ot>0?' active':''}">${ot>0?'$'+ot.toFixed(2):'-'}</div>
+        </div>
+        <input class="quote-line-note" placeholder="Add a note..." value="${escHtml(li.note||'')}" onblur="updateSalesNote('${id}','${p.id}',this.value)">
+        </div>`;
+      }
+    });
+    // Custom items
+    secCustom.forEach(c=>{
+      const mo=c.billing==='monthly'?c.qty*c.unitPrice:0;const ot=c.billing==='onetime'?c.qty*c.unitPrice:0;
+      html+=`<div><div class="quote-line">
+        <div class="quote-check" style="visibility:hidden;"></div>
+        <input class="quote-custom-label" placeholder="Custom item..." value="${escHtml(c.label)}" onblur="updateCustomLabel('${id}','${c.id}',this.value)">
+        <select class="quote-billing-sel" onchange="updateCustomBilling('${id}','${c.id}',this.value)">
+          <option value="monthly" ${c.billing==='monthly'?'selected':''}>Monthly</option>
+          <option value="onetime" ${c.billing==='onetime'?'selected':''}>One Time</option>
+        </select>
+        <input class="quote-input" type="number" min="0" value="${c.qty}" onchange="updateCustomQty('${id}','${c.id}',this.value)" title="Quantity">
+        <input class="quote-input" type="number" min="0" step="0.01" value="${(c.unitPrice||0).toFixed(2)}" onchange="updateCustomPrice('${id}','${c.id}',this.value)" title="Price per unit">
         <div class="quote-col${mo>0?' active':''}">${mo>0?'$'+mo.toFixed(2):'-'}</div>
         <div class="quote-col${ot>0?' active':''}">${ot>0?'$'+ot.toFixed(2):'-'}</div>
+        <button onclick="deleteCustomQuoteLine('${id}','${c.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 4px;flex-shrink:0;" title="Remove">&#215;</button>
+      </div>
+      <input class="quote-line-note" placeholder="Add a note..." value="${escHtml(c.note||'')}" onblur="updateCustomNote('${id}','${c.id}',this.value)">
       </div>`;
     });
+    html+=`<div style="padding:6px 14px 8px;">
+      <button onclick="addCustomQuoteLine('${id}','${sec.key}')" style="background:none;border:1px dashed var(--border);border-radius:4px;color:var(--text3);cursor:pointer;font-size:11px;padding:4px 10px;width:100%;transition:border-color 0.15s,color 0.15s;"
+        onmouseenter="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+        onmouseleave="this.style.borderColor='';this.style.color=''">+ Add Item</button>
+    </div>`;
     html+=`</div></div>`;
   });
-  html+=`<div class="quote-totals">
-    <div class="quote-total-row"><span class="quote-total-label">Monthly (Client)</span><span style="font-weight:600;">$${totals.monthlyClient.toFixed(2)}</span></div>
-    <div class="quote-total-row"><span class="quote-total-label">One-Time (Client)</span><span style="font-weight:600;">$${totals.onetimeClient.toFixed(2)}</span></div>
-    <div class="quote-total-row"><span class="quote-total-label">Monthly SA Cost</span><span style="color:var(--text3);">$${totals.monthlySA.toFixed(2)}</span></div>
-    <div class="quote-total-row"><span class="quote-total-label">Monthly Profit</span><span class="${totals.profit>=0?'profit-pos':'profit-neg'}" style="font-weight:700;font-size:15px;">$${totals.profit.toFixed(2)}</span></div>
-  </div>`;
   document.getElementById('quote-content').innerHTML=html;
   showView('quote');
 }
@@ -2339,6 +2427,66 @@ async function updateSalesPrice(quoteId,productId,val){
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
   loadSalesQuote(quoteId);
+}
+async function updateSalesNote(quoteId,productId,val){
+  const q=salesQuotes[quoteId];if(!q||!q.lineItems?.[productId])return;
+  q.lineItems[productId].note=val;
+  q.lastModified=new Date().toISOString();
+  await saveSalesQuotes();
+}
+
+function toggleQuoteMenu(id){
+  const menu=document.getElementById(`qmenu-${id}`);
+  const isOpen=menu?.classList.contains('open');
+  document.querySelectorAll('.client-menu-dropdown.open').forEach(m=>m.classList.remove('open'));
+  if(!isOpen)menu?.classList.add('open');
+}
+function closeQuoteMenu(id){document.getElementById(`qmenu-${id}`)?.classList.remove('open');}
+
+async function addCustomQuoteLine(quoteId,category){
+  const q=salesQuotes[quoteId];if(!q)return;
+  if(!q.customItems)q.customItems=[];
+  q.customItems.push({id:'custom-'+Date.now(),label:'',category,qty:1,unitPrice:0,billing:'monthly',note:''});
+  q.lastModified=new Date().toISOString();
+  await saveSalesQuotes();
+  loadSalesQuote(quoteId);
+}
+async function deleteCustomQuoteLine(quoteId,customId){
+  const q=salesQuotes[quoteId];if(!q)return;
+  q.customItems=(q.customItems||[]).filter(c=>c.id!==customId);
+  q.lastModified=new Date().toISOString();
+  await saveSalesQuotes();
+  loadSalesQuote(quoteId);
+}
+async function updateCustomLabel(quoteId,customId,val){
+  const q=salesQuotes[quoteId];if(!q)return;
+  const c=(q.customItems||[]).find(c=>c.id===customId);if(!c)return;
+  c.label=val;q.lastModified=new Date().toISOString();
+  await saveSalesQuotes();
+}
+async function updateCustomQty(quoteId,customId,val){
+  const q=salesQuotes[quoteId];if(!q)return;
+  const c=(q.customItems||[]).find(c=>c.id===customId);if(!c)return;
+  c.qty=parseFloat(val)||0;q.lastModified=new Date().toISOString();
+  await saveSalesQuotes();loadSalesQuote(quoteId);
+}
+async function updateCustomPrice(quoteId,customId,val){
+  const q=salesQuotes[quoteId];if(!q)return;
+  const c=(q.customItems||[]).find(c=>c.id===customId);if(!c)return;
+  c.unitPrice=parseFloat(val)||0;q.lastModified=new Date().toISOString();
+  await saveSalesQuotes();loadSalesQuote(quoteId);
+}
+async function updateCustomBilling(quoteId,customId,val){
+  const q=salesQuotes[quoteId];if(!q)return;
+  const c=(q.customItems||[]).find(c=>c.id===customId);if(!c)return;
+  c.billing=val;q.lastModified=new Date().toISOString();
+  await saveSalesQuotes();loadSalesQuote(quoteId);
+}
+async function updateCustomNote(quoteId,customId,val){
+  const q=salesQuotes[quoteId];if(!q)return;
+  const c=(q.customItems||[]).find(c=>c.id===customId);if(!c)return;
+  c.note=val;q.lastModified=new Date().toISOString();
+  await saveSalesQuotes();
 }
 
 async function deleteQuote(id){
@@ -2420,17 +2568,39 @@ function printQuote(id){
 function renderSalesView(){
   const el=document.getElementById('sales-content');
   if(!el) return;
-  const quotes=Object.values(salesQuotes);
+  const myName=localStorage.getItem('myName')||'';
+  const quotes=Object.values(salesQuotes).sort((a,b)=>new Date(b.lastModified||b.createdAt)-new Date(a.lastModified||a.createdAt));
   const totalMRR=quotes.reduce((s,q)=>s+calcQuoteTotals(q).monthlyClient,0);
-  el.innerHTML=`<div style="max-width:900px;">
-    <h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">Sales Helper</h2>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:20px;">Build and export quotes for prospective clients.</p>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
-      <div class="dash-stat" style="flex:1;min-width:120px;"><div class="dash-stat-value" style="color:var(--accent);">${quotes.length}</div><div class="dash-stat-label">Quotes</div></div>
-      <div class="dash-stat" style="flex:1;min-width:120px;"><div class="dash-stat-value" style="color:var(--success);">$${totalMRR.toFixed(0)}</div><div class="dash-stat-label">Total MRR</div></div>
+  const totalProfit=quotes.reduce((s,q)=>s+calcQuoteTotals(q).profit,0);
+  const stats=[
+    {label:'Quotes',value:quotes.length,color:'var(--accent)'},
+    {label:'Total MRR',value:'$'+totalMRR.toFixed(0),color:'var(--success)'},
+    {label:'Profit',value:'$'+totalProfit.toFixed(0),color:totalProfit>=0?'var(--success)':'var(--danger)'},
+  ];
+  el.innerHTML=`<div style="max-width:760px;width:100%;">
+    <div style="margin-bottom:22px;text-align:center;">
+      <h2 style="font-size:20px;font-weight:700;margin-bottom:3px;">${myName?'Hey, '+myName:'Sales'}</h2>
+      <p style="color:var(--text2);font-size:12px;">${config?.orgName||'System Alternatives'} — Quote Builder</p>
     </div>
-    ${quotes.length?`<div class="dash-section-label">Recent Quotes</div>
-    <div style="display:flex;flex-direction:column;gap:5px;">${quotes.slice(0,5).map(q=>{const t=calcQuoteTotals(q);return`<div class="dash-row" onclick="selectQuote('${q.id}');switchSection('sales')"><span style="flex:1;font-size:12px;font-weight:500;">${escHtml(q.name)}</span><span style="font-size:11px;color:var(--text3);">$${t.monthlyClient.toFixed(0)}/mo</span></div>`;}).join('')}</div>`:`<div style="padding:40px;text-align:center;border:2px dashed var(--border);border-radius:10px;color:var(--text3);"><div style="font-size:32px;margin-bottom:12px;opacity:0.5;">💼</div><div style="font-size:13px;font-weight:500;">No quotes yet — create one with the sidebar button</div></div>`}
+    <div style="display:flex;gap:10px;margin-bottom:22px;flex-wrap:wrap;">
+      ${stats.map(s=>`<div class="dash-stat" style="flex:1;min-width:110px;">
+        <div class="dash-stat-value" style="color:${s.color};">${s.value}</div>
+        <div class="dash-stat-label">${s.label}</div>
+      </div>`).join('')}
+    </div>
+    ${quotes.length?`<div>
+      <div class="dash-section-label">Recent Quotes</div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        ${quotes.slice(0,6).map(q=>{const t=calcQuoteTotals(q);return`<div class="dash-row" onclick="selectQuote('${q.id}')">
+          <span style="flex:1;font-size:12px;font-weight:500;">${escHtml(q.name)}</span>
+          <span style="font-size:11px;color:var(--text3);">$${t.monthlyClient.toFixed(0)}/mo${t.onetimeClient>0?' + $'+t.onetimeClient.toFixed(0)+' OT':''}</span>
+        </div>`;}).join('')}
+      </div>
+    </div>`:`<div style="text-align:center;padding:48px 20px;">
+      <div style="font-size:13px;font-weight:500;color:var(--text2);margin-bottom:6px;">No quotes yet</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:18px;">Create your first quote to get started.</div>
+      <button class="btn-primary" onclick="newQuoteFromSidebar()">+ New Quote</button>
+    </div>`}
   </div>`;
 }
 
@@ -2652,7 +2822,7 @@ async function saveAllConfig(){
   if(cfgR.ok&&setR.ok){
     config={...config,syncroTokenSet:!!(token||config?.syncroTokenSet),syncroTokenHint:token?(token.slice(0,5)+'•••••••••••'):config?.syncroTokenHint||'',syncroSubdomain:subdomain,orgName};
     appSettings={staleDays,dueDays,defaultDueOffset,urlTemplates};
-    document.querySelectorAll('.ah-brand').forEach(el=>el.textContent=(orgName||'System Alternatives')+' Onboarding');
+    document.querySelectorAll('.ah-brand').forEach(el=>el.textContent=orgName||'System Alternatives');
     renderSidebar();
     logAction('config_saved',{clientId:null,clientName:null,details:`org: ${orgName}`});
     showToast('Configuration saved');
@@ -2753,8 +2923,24 @@ function _doCloseProducts(){
 }
 function pmRender(){
   const qtyOpts=['','employees','licensedUsers','workstations','servers','machines','backedUpMachines','sites'];
-  document.getElementById('pm-list').innerHTML=_pmProducts.map((p,i)=>`
-    <div class="pm-row${p.salesCategory?' sales-open':''}" data-pi="${i}" draggable="true"
+  document.getElementById('pm-list').innerHTML=_pmProducts.map((p,i)=>{
+    const hasSubItems=p.subItems?.length>0;
+    const subItemsHtml=hasSubItems?p.subItems.map((sub,si)=>`
+      <div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--border);">
+        <input class="pm-sales-input" style="flex:2;min-width:80px;" value="${escHtml(sub.label)}" placeholder="Sub-item name"
+          oninput="_pmProducts[${i}].subItems[${si}].label=this.value;pmMarkDirty()">
+        <input class="pm-sales-input" type="number" min="0" step="0.01" style="width:64px;" value="${sub.saCost||''}" placeholder="SA cost"
+          oninput="_pmProducts[${i}].subItems[${si}].saCost=parseFloat(this.value)||0;pmMarkDirty()">
+        <input class="pm-sales-input" type="number" min="0" step="0.01" style="width:64px;" value="${sub.defaultPrice||''}" placeholder="Price"
+          oninput="_pmProducts[${i}].subItems[${si}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty()">
+        <select class="pm-sales-input" style="width:80px;" oninput="_pmProducts[${i}].subItems[${si}].billing=this.value;pmMarkDirty()">
+          <option value="monthly" ${(sub.billing||'monthly')==='monthly'?'selected':''}>Monthly</option>
+          <option value="onetime" ${sub.billing==='onetime'?'selected':''}>One-Time</option>
+        </select>
+        <button onclick="pmDeleteSubItem(${i},${si})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 2px;flex-shrink:0;" title="Remove">&#215;</button>
+      </div>`).join(''):'';
+    return`
+    <div class="pm-row" data-pi="${i}" draggable="true"
       ondragstart="pmDragStart(event,${i})" ondragover="pmDragOver(event,${i})"
       ondragleave="pmDragLeave(event)" ondrop="pmDrop(event,${i})" ondragend="pmDragEnd(event)">
       <span class="pm-drag" ontouchstart="pmTouchStart(event,${i})">⠿</span>
@@ -2771,8 +2957,8 @@ function pmRender(){
           oninput="_pmProducts[${i}].desc=this.value;pmMarkDirty()"
           onfocus="this.setSelectionRange(this.value.length,this.value.length)">
         <div class="pm-sales-expand">
-          <div style="width:100%;font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Sales Pricing (leave blank to exclude from quotes)</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;width:100%;">
+          <div style="width:100%;font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Sales Pricing</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-bottom:${hasSubItems?'6px':'0'};">
             <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:90px;">
               <span class="pm-sales-label">Sales Category</span>
               <select class="pm-sales-input" oninput="_pmProducts[${i}].salesCategory=this.value||undefined;pmMarkDirty()">
@@ -2782,6 +2968,13 @@ function pmRender(){
                 <option value="site" ${(p.salesCategory||'')==='site'?'selected':''}>Site</option>
               </select>
             </div>
+            <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:90px;">
+              <span class="pm-sales-label">Qty Source</span>
+              <select class="pm-sales-input" oninput="_pmProducts[${i}].qtySource=this.value;pmMarkDirty()">
+                ${qtyOpts.map(o=>`<option value="${o}" ${(p.qtySource||'')===(o)?'selected':''}>${o||'— Manual —'}</option>`).join('')}
+              </select>
+            </div>
+            ${!hasSubItems?`
             <div style="display:flex;flex-direction:column;gap:2px;width:72px;">
               <span class="pm-sales-label">SA Cost</span>
               <input class="pm-sales-input" type="number" min="0" step="0.01" value="${p.saCost||''}" placeholder="0.00"
@@ -2798,21 +2991,21 @@ function pmRender(){
                 <option value="monthly" ${(p.billing||'monthly')==='monthly'?'selected':''}>Monthly</option>
                 <option value="onetime" ${p.billing==='onetime'?'selected':''}>One-Time</option>
               </select>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:90px;">
-              <span class="pm-sales-label">Qty Source</span>
-              <select class="pm-sales-input" oninput="_pmProducts[${i}].qtySource=this.value;pmMarkDirty()">
-                ${qtyOpts.map(o=>`<option value="${o}" ${(p.qtySource||'')===(o)?'selected':''}>${o||'— Manual —'}</option>`).join('')}
-              </select>
-            </div>
+            </div>`:''}
           </div>
+          ${hasSubItems?`<div style="width:100%;margin-bottom:4px;">
+            <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;display:flex;gap:0;"><span style="flex:2;">Sub-item Name</span><span style="width:64px;">SA Cost</span><span style="width:64px;margin-left:6px;">Price</span><span style="width:80px;margin-left:6px;">Billing</span><span style="width:20px;"></span></div>
+            ${subItemsHtml}
+          </div>`:''}
+          <button onclick="pmAddSubItem(${i})" style="background:none;border:1px dashed var(--border);border-radius:3px;color:var(--text3);cursor:pointer;font-size:10px;padding:2px 8px;margin-top:4px;" title="Add sub-item">+ Sub-item</button>
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;align-items:center;flex-shrink:0;">
-        <button class="pm-sales-toggle" onclick="this.closest('.pm-row').classList.toggle('sales-open');pmMarkDirty()" title="Sales settings">💲</button>
+        <button class="pm-sales-toggle" onclick="pmToggleSalesExpand(${i})" title="Sales settings">💲</button>
         <button class="pm-del-btn" onclick="pmDelete(${i})" title="Remove">&#215;</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 function pmAddProduct(){
   _pmProducts.push({id:'',label:'',desc:''});
@@ -2823,6 +3016,24 @@ function pmAddProduct(){
   if(last){last.focus();}
 }
 function pmDelete(i){_pmProducts.splice(i,1);pmMarkDirty();pmRender();}
+function pmToggleSalesExpand(i){
+  const rows=document.querySelectorAll('#pm-list .pm-row');
+  const target=rows[i];
+  const wasOpen=target?.classList.contains('sales-open');
+  rows.forEach(r=>r.classList.remove('sales-open'));
+  if(!wasOpen)target?.classList.add('sales-open');
+  pmMarkDirty();
+}
+function pmAddSubItem(i){
+  if(!_pmProducts[i].subItems)_pmProducts[i].subItems=[];
+  _pmProducts[i].subItems.push({id:'sub-'+Date.now(),label:'',saCost:0,defaultPrice:0,billing:'monthly'});
+  pmMarkDirty();pmRender();
+}
+function pmDeleteSubItem(i,si){
+  _pmProducts[i].subItems.splice(si,1);
+  if(!_pmProducts[i].subItems.length)delete _pmProducts[i].subItems;
+  pmMarkDirty();pmRender();
+}
 function pmDragStart(e,i){_pmDrag=i;e.dataTransfer.effectAllowed='move';}
 function pmDragOver(e,i){
   e.preventDefault();
@@ -3365,7 +3576,6 @@ function loadClientChecklist(id){
   const devList=Object.values(client.devices||{});
   const devDone=devList.filter(d=>devStatus(d,devSteps)==='complete').length;
 
-  ensureMyName();
   const myName=localStorage.getItem('myName')||'';
 
   // Due date badge
@@ -3388,7 +3598,6 @@ function loadClientChecklist(id){
     </div>
     <div class="header-actions">
       <button class="clear-updates-btn" id="clear-updates-btn" style="display:none" onclick="clearAllUpdateDots()">&#9679; Clear updates</button>
-      <button class="who-chip" onclick="editWhoWorking()" title="Click to change your name">&#128100; ${myName||'Set your name'}</button>
       <div class="client-menu-wrap" id="cmenu-wrap-${id}">
         <button class="client-menu-btn" onclick="toggleClientMenu('${id}')">&#8230;</button>
         <div class="client-menu-dropdown" id="cmenu-${id}">
@@ -4324,7 +4533,7 @@ async function loadConfig(){
     if(!cfg.syncroSubdomain) throw new Error('config.json missing required fields');
     config={syncroTokenSet:cfg.syncroTokenSet||false,syncroTokenHint:cfg.syncroTokenHint||'',syncroSubdomain:cfg.syncroSubdomain,orgName:cfg.orgName||'System Alternatives'};
     const orgName=config.orgName;
-    document.querySelectorAll('.ah-brand').forEach(el=>el.textContent=orgName+' Onboarding');
+    document.querySelectorAll('.ah-brand').forEach(el=>el.textContent=orgName||'System Alternatives');
     if(guidesRes.ok) guides=await guidesRes.json();
     else console.warn('guides.json not found');
     if(stepsRes.ok) stepsData=await stepsRes.json();
@@ -4509,6 +4718,20 @@ connectSSE();
 startUpdatePolling();
 startServerRestartPolling();
 checkFirstVisit();
+
+document.addEventListener('wheel',e=>{
+  const el=e.target;
+  if(el.tagName!=='INPUT'||el.type!=='number')return;
+  if(document.activeElement!==el)return;
+  e.preventDefault();
+  const step=parseFloat(el.step)||1;
+  const cur=parseFloat(el.value)||0;
+  const min=el.min!==''?parseFloat(el.min):-Infinity;
+  const delta=e.deltaY<0?step:-step;
+  el.value=Math.max(min,cur+delta).toFixed(step<1?2:0);
+  el.dispatchEvent(new Event('change',{bubbles:true}));
+  el.dispatchEvent(new Event('input',{bubbles:true}));
+},{passive:false});
 </script>
 </body>
 </html>
