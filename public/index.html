@@ -2353,7 +2353,7 @@ function loadSalesQuote(id){
     html+=`<div class="quote-section">
       <div class="quote-section-header" onclick="this.closest('.quote-section').classList.toggle('collapsed')">
         <span>${sec.label}</span>
-        <span class="quote-section-subtotal">${secTotals.mo>0||secTotals.ot>0?'$'+secTotals.mo.toFixed(0)+'/mo'+(secTotals.ot>0?' + $'+secTotals.ot.toFixed(0)+' OT':''):'—'}</span>
+        <span class="quote-section-subtotal" data-sec="${sec.key}">${secTotals.mo>0||secTotals.ot>0?'$'+secTotals.mo.toFixed(0)+'/mo'+(secTotals.ot>0?' + $'+secTotals.ot.toFixed(0)+' OT':''):'—'}</span>
         <span class="quote-section-toggle">▼</span>
       </div>
       <div class="quote-section-body">`;
@@ -2376,14 +2376,14 @@ function loadSalesQuote(id){
               <div class="quote-check${on?' on':''}" onclick="toggleSalesLine('${id}','${p.id}')">${on?'✓':''}</div>
               <div class="quote-label">${escHtml(p.label)}</div>
               <span class="quote-billing-tag">${p.billing==='onetime'?'One Time':'Monthly'}</span>
-              <input class="quote-input" type="number" min="0" value="${li.qty}" onchange="updateSalesQty('${id}','${p.id}',this.value)" title="Quantity">
-              <input class="quote-input" type="number" min="0" step="0.01" value="${(li.unitPrice||0).toFixed(2)}" onchange="updateSalesPrice('${id}','${p.id}',this.value)" title="Price per unit">
+              <input class="quote-input" type="number" min="0" value="${li.qty}" oninput="onQuoteInputChange('${id}','${p.id}','qty',this.value)" onblur="saveQuoteInput('${id}','${p.id}','qty',this.value)" title="Quantity">
+              <input class="quote-input" type="number" min="0" step="0.01" value="${(li.unitPrice||0).toFixed(2)}" oninput="onQuoteInputChange('${id}','${p.id}','unitPrice',this.value)" onblur="saveQuoteInput('${id}','${p.id}','unitPrice',this.value)" title="Price per unit">
               <button class="quote-note-btn${li.note?' has-note':''}" onclick="toggleQuoteNote('${nid}')">Notes</button>
-              <div class="quote-col${mo>0?' active':''}">${mo>0?'$'+mo.toFixed(2):'-'}</div>
-              <div class="quote-col${ot>0?' active':''}">${ot>0?'$'+ot.toFixed(2):'-'}</div>
+              <div class="quote-col qcol-mo${mo>0?' active':''}" data-pid="${p.id}">${mo>0?'$'+mo.toFixed(2):'-'}</div>
+              <div class="quote-col qcol-ot${ot>0?' active':''}" data-pid="${p.id}">${ot>0?'$'+ot.toFixed(2):'-'}</div>
               <div class="quote-del"></div>
             </div>
-            <div class="quote-note-area"><textarea placeholder="Item note..." onblur="updateSalesNote('${id}','${p.id}',this.value)">${escHtml(li.note||'')}</textarea></div>
+            <div class="quote-note-area"><textarea placeholder="Item note..." oninput="onQuoteNoteInput('${nid}',this.value)" onblur="updateSalesNote('${id}','${p.id}',this.value)">${escHtml(li.note||'')}</textarea></div>
           </div>`;
         });
       }else{
@@ -2396,14 +2396,14 @@ function loadSalesQuote(id){
             <div class="quote-check${on?' on':''}" onclick="toggleSalesLine('${id}','${p.id}')">${on?'✓':''}</div>
             <div class="quote-label">${escHtml(p.label)}</div>
             <span class="quote-billing-tag">${p.billing==='onetime'?'One Time':'Monthly'}</span>
-            <input class="quote-input" type="number" min="0" value="${li.qty}" onchange="updateSalesQty('${id}','${p.id}',this.value)" title="Quantity">
-            <input class="quote-input" type="number" min="0" step="0.01" value="${(li.unitPrice||0).toFixed(2)}" onchange="updateSalesPrice('${id}','${p.id}',this.value)" title="Price per unit">
+            <input class="quote-input" type="number" min="0" value="${li.qty}" oninput="onQuoteInputChange('${id}','${p.id}','qty',this.value)" onblur="saveQuoteInput('${id}','${p.id}','qty',this.value)" title="Quantity">
+            <input class="quote-input" type="number" min="0" step="0.01" value="${(li.unitPrice||0).toFixed(2)}" oninput="onQuoteInputChange('${id}','${p.id}','unitPrice',this.value)" onblur="saveQuoteInput('${id}','${p.id}','unitPrice',this.value)" title="Price per unit">
             <button class="quote-note-btn${li.note?' has-note':''}" onclick="toggleQuoteNote('${nid}')">Notes</button>
-            <div class="quote-col${mo>0?' active':''}">${mo>0?'$'+mo.toFixed(2):'-'}</div>
-            <div class="quote-col${ot>0?' active':''}">${ot>0?'$'+ot.toFixed(2):'-'}</div>
+            <div class="quote-col qcol-mo${mo>0?' active':''}" data-pid="${p.id}">${mo>0?'$'+mo.toFixed(2):'-'}</div>
+            <div class="quote-col qcol-ot${ot>0?' active':''}" data-pid="${p.id}">${ot>0?'$'+ot.toFixed(2):'-'}</div>
             <div class="quote-del"></div>
           </div>
-          <div class="quote-note-area"><textarea placeholder="Item note..." onblur="updateSalesNote('${id}','${p.id}',this.value)">${escHtml(li.note||'')}</textarea></div>
+          <div class="quote-note-area"><textarea placeholder="Item note..." oninput="onQuoteNoteInput('${nid}',this.value)" onblur="updateSalesNote('${id}','${p.id}',this.value)">${escHtml(li.note||'')}</textarea></div>
         </div>`;
       }
     });
@@ -2420,14 +2420,14 @@ function loadSalesQuote(id){
             <option value="monthly" ${c.billing==='monthly'?'selected':''}>Monthly</option>
             <option value="onetime" ${c.billing==='onetime'?'selected':''}>One Time</option>
           </select>
-          <input class="quote-input" type="number" min="0" value="${c.qty}" onchange="updateCustomQty('${id}','${c.id}',this.value)" title="Quantity">
-          <input class="quote-input" type="number" min="0" step="0.01" value="${(c.unitPrice||0).toFixed(2)}" onchange="updateCustomPrice('${id}','${c.id}',this.value)" title="Price per unit">
+          <input class="quote-input" type="number" min="0" value="${c.qty}" oninput="onCustomInputChange('${id}','${c.id}','qty',this.value)" onblur="saveCustomInput('${id}','${c.id}','qty',this.value)" title="Quantity">
+          <input class="quote-input" type="number" min="0" step="0.01" value="${(c.unitPrice||0).toFixed(2)}" oninput="onCustomInputChange('${id}','${c.id}','unitPrice',this.value)" onblur="saveCustomInput('${id}','${c.id}','unitPrice',this.value)" title="Price per unit">
           <button class="quote-note-btn${c.note?' has-note':''}" onclick="toggleQuoteNote('${cnid}')">Notes</button>
-          <div class="quote-col${mo>0?' active':''}">${mo>0?'$'+mo.toFixed(2):'-'}</div>
-          <div class="quote-col${ot>0?' active':''}">${ot>0?'$'+ot.toFixed(2):'-'}</div>
+          <div class="quote-col qcol-cmo${mo>0?' active':''}" data-cid="${c.id}">${mo>0?'$'+mo.toFixed(2):'-'}</div>
+          <div class="quote-col qcol-cot${ot>0?' active':''}" data-cid="${c.id}">${ot>0?'$'+ot.toFixed(2):'-'}</div>
           <button class="quote-del-btn" onclick="styledConfirm('Remove this item?',()=>deleteCustomQuoteLine('${id}','${c.id}'))" title="Remove">&#215;</button>
         </div>
-        <div class="quote-note-area"><textarea placeholder="Item note..." onblur="updateCustomNote('${id}','${c.id}',this.value)">${escHtml(c.note||'')}</textarea></div>
+        <div class="quote-note-area"><textarea placeholder="Item note..." oninput="onQuoteNoteInput('${cnid}',this.value)" onblur="updateCustomNote('${id}','${c.id}',this.value)">${escHtml(c.note||'')}</textarea></div>
       </div>`;
     });
     html+=`<div style="padding:6px 14px 8px;">
@@ -2449,22 +2449,76 @@ async function toggleSalesLine(quoteId,productId){
   logQuote(quoteId,enabled?'line_enabled':'line_disabled',{details:productId});
   loadSalesQuote(quoteId);
 }
-async function updateSalesQty(quoteId,productId,val){
+// Live update: updates in-memory + column cells + totals without re-rendering
+function onQuoteInputChange(quoteId,productId,field,val){
   const q=salesQuotes[quoteId];if(!q)return;
-  if(!q.lineItems[productId]){const p=getSalesProducts().find(p=>p.id===productId);q.lineItems[productId]={enabled:false,qty:0,unitPrice:p?.defaultPrice||0,note:''};}
-  q.lineItems[productId].qty=parseFloat(val)||0;
+  if(!q.lineItems[productId]){const p=getSalesProducts().find(pp=>pp.id===productId);q.lineItems[productId]={enabled:false,qty:0,unitPrice:p?.defaultPrice||0,note:''};}
+  q.lineItems[productId][field]=parseFloat(val)||0;
+  const li=q.lineItems[productId];
+  const p=getSalesProducts().find(pp=>pp.id===productId);
+  if(p){
+    const on=li.enabled;
+    const mo=on&&p.billing==='monthly'?li.qty*li.unitPrice:0;
+    const ot=on&&p.billing==='onetime'?li.qty*li.unitPrice:0;
+    document.querySelectorAll(`.qcol-mo[data-pid="${productId}"]`).forEach(el=>{el.textContent=mo>0?'$'+mo.toFixed(2):'-';el.classList.toggle('active',mo>0);});
+    document.querySelectorAll(`.qcol-ot[data-pid="${productId}"]`).forEach(el=>{el.textContent=ot>0?'$'+ot.toFixed(2):'-';el.classList.toggle('active',ot>0);});
+  }
+  refreshQuoteUI(quoteId);
+}
+// Save to server on blur without re-rendering
+async function saveQuoteInput(quoteId,productId,field,val){
+  const q=salesQuotes[quoteId];if(!q)return;
+  if(!q.lineItems[productId]){const p=getSalesProducts().find(pp=>pp.id===productId);q.lineItems[productId]={enabled:false,qty:0,unitPrice:p?.defaultPrice||0,note:''};}
+  q.lineItems[productId][field]=parseFloat(val)||0;
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
-  loadSalesQuote(quoteId);
 }
-async function updateSalesPrice(quoteId,productId,val){
+function onCustomInputChange(quoteId,customId,field,val){
   const q=salesQuotes[quoteId];if(!q)return;
-  if(!q.lineItems[productId]){const p=getSalesProducts().find(p=>p.id===productId);q.lineItems[productId]={enabled:false,qty:0,unitPrice:p?.defaultPrice||0,note:''};}
-  q.lineItems[productId].unitPrice=parseFloat(val)||0;
+  const c=(q.customItems||[]).find(c=>c.id===customId);if(!c)return;
+  c[field]=parseFloat(val)||0;
+  const enabled=c.enabled!==false;
+  const mo=enabled&&c.billing==='monthly'?c.qty*c.unitPrice:0;
+  const ot=enabled&&c.billing==='onetime'?c.qty*c.unitPrice:0;
+  document.querySelectorAll(`.qcol-cmo[data-cid="${customId}"]`).forEach(el=>{el.textContent=mo>0?'$'+mo.toFixed(2):'-';el.classList.toggle('active',mo>0);});
+  document.querySelectorAll(`.qcol-cot[data-cid="${customId}"]`).forEach(el=>{el.textContent=ot>0?'$'+ot.toFixed(2):'-';el.classList.toggle('active',ot>0);});
+  refreshQuoteUI(quoteId);
+}
+async function saveCustomInput(quoteId,customId,field,val){
+  const q=salesQuotes[quoteId];if(!q)return;
+  const c=(q.customItems||[]).find(c=>c.id===customId);if(!c)return;
+  c[field]=parseFloat(val)||0;
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
-  loadSalesQuote(quoteId);
 }
+function onQuoteNoteInput(wrapperId,val){
+  document.querySelector(`#${wrapperId} .quote-note-btn`)?.classList.toggle('has-note',!!val.trim());
+}
+function refreshQuoteUI(quoteId){
+  const q=salesQuotes[quoteId];if(!q)return;
+  const t=calcQuoteTotals(q);
+  const prods=getSalesProducts();
+  // Sticky totals
+  document.querySelectorAll('.qst-item').forEach(item=>{
+    const label=item.querySelector('.qst-label')?.textContent?.toLowerCase();
+    const valEl=item.querySelector('.qst-value');if(!valEl)return;
+    if(label==='monthly')valEl.textContent='$'+t.monthlyClient.toFixed(2);
+    else if(label==='one time')valEl.textContent='$'+t.onetimeClient.toFixed(2);
+    else if(label==='sa cost')valEl.textContent='$'+t.monthlySA.toFixed(2);
+    else if(label==='profit'){valEl.textContent='$'+t.profit.toFixed(2);valEl.className='qst-value '+(t.profit>=0?'profit-pos':'profit-neg');}
+  });
+  // Section subtotals
+  ['user','machine','site'].forEach(key=>{
+    const sp=prods.filter(p=>p.salesCategory===key);
+    const sc=(q.customItems||[]).filter(c=>c.category===key&&c.enabled!==false);
+    const mo=sp.reduce((s,p)=>{const li=q.lineItems?.[p.id];return s+(li?.enabled&&p.billing==='monthly'?li.qty*li.unitPrice:0);},0)+sc.reduce((s,c)=>s+(c.billing==='monthly'?c.qty*c.unitPrice:0),0);
+    const ot=sp.reduce((s,p)=>{const li=q.lineItems?.[p.id];return s+(li?.enabled&&p.billing==='onetime'?li.qty*li.unitPrice:0);},0)+sc.reduce((s,c)=>s+(c.billing==='onetime'?c.qty*c.unitPrice:0),0);
+    document.querySelectorAll(`.quote-section-subtotal[data-sec="${key}"]`).forEach(el=>{el.textContent=mo>0||ot>0?'$'+mo.toFixed(0)+'/mo'+(ot>0?' + $'+ot.toFixed(0)+' OT':''):'—';});
+  });
+}
+// Legacy wrappers kept for wheel-handler compatibility (no re-render)
+async function updateSalesQty(quoteId,productId,val){await saveQuoteInput(quoteId,productId,'qty',val);}
+async function updateSalesPrice(quoteId,productId,val){await saveQuoteInput(quoteId,productId,'unitPrice',val);}
 async function updateSalesNote(quoteId,productId,val){
   const q=salesQuotes[quoteId];if(!q||!q.lineItems?.[productId])return;
   q.lineItems[productId].note=val;
@@ -2533,17 +2587,8 @@ async function updateCustomLabel(quoteId,customId,val){
   c.label=val;q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
 }
-async function updateCustomQty(quoteId,customId,val){
-  const q=salesQuotes[quoteId];if(!q)return;
-  const c=(q.customItems||[]).find(c=>c.id===customId);if(!c)return;
-  c.qty=parseFloat(val)||0;q.lastModified=new Date().toISOString();
-  await saveSalesQuotes();loadSalesQuote(quoteId);
-}
-async function updateCustomPrice(quoteId,customId,val){
-  const q=salesQuotes[quoteId];if(!q)return;
-  const c=(q.customItems||[]).find(c=>c.id===customId);if(!c)return;
-  c.unitPrice=parseFloat(val)||0;q.lastModified=new Date().toISOString();
-  await saveSalesQuotes();loadSalesQuote(quoteId);
+async function updateCustomQty(quoteId,customId,val){await saveCustomInput(quoteId,customId,'qty',val);}
+async function updateCustomPrice(quoteId,customId,val){await saveCustomInput(quoteId,customId,'unitPrice',val);
 }
 async function updateCustomBilling(quoteId,customId,val){
   const q=salesQuotes[quoteId];if(!q)return;
