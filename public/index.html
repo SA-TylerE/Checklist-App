@@ -65,10 +65,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
 input[type=number]{-moz-appearance:textfield;}
-.quote-sticky-totals{position:sticky;top:0;z-index:10;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:10px 14px;flex-wrap:wrap;margin-bottom:12px;}
-.qst-item{display:flex;flex-direction:column;align-items:center;gap:1px;}
-.qst-label{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;}
-.qst-value{font-size:15px;font-weight:700;}
+.quote-sticky-totals{position:sticky;top:0;z-index:10;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;justify-content:space-around;align-items:stretch;margin-bottom:16px;overflow:hidden;}
+.qst-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;flex:1;padding:12px 8px;border-right:1px solid var(--border);}
+.qst-item:last-child{border-right:none;}
+.qst-label{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;}
+.qst-value{font-size:17px;font-weight:700;}
 .quote-line-note{width:100%;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text3);font-size:10px;font-family:var(--sans);padding:3px 0 3px 23px;outline:none;font-style:italic;display:block;}
 .quote-line-note:focus{color:var(--text2);border-bottom-color:var(--accent);}
 .quote-line-note::placeholder{color:var(--text3);opacity:0.6;}
@@ -76,6 +77,19 @@ input[type=number]{-moz-appearance:textfield;}
 .quote-custom-label{flex:1;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:12px;font-family:var(--sans);outline:none;min-width:0;padding:0;}
 .quote-custom-label:focus{border-bottom-color:var(--accent);}
 .quote-billing-sel{cursor:pointer;background:var(--bg3);border:1px solid var(--border);border-radius:3px;padding:1px 4px;font-size:9px;color:var(--text3);outline:none;}
+.quote-add-item-btn{width:100%;background:none;border:1px dashed var(--accent);border-radius:4px;color:var(--accent);cursor:pointer;font-size:11px;padding:4px 10px;transition:background 0.15s;}
+.quote-add-item-btn:hover{background:rgba(59,130,246,0.08);}
+.quote-del{width:28px;flex-shrink:0;}
+.quote-del-btn{width:28px;background:none;border:none;color:var(--danger);cursor:pointer;font-size:15px;padding:0;flex-shrink:0;opacity:0.7;transition:opacity 0.15s;}
+.quote-del-btn:hover{opacity:1;}
+.quote-note-btn{padding:1px 6px;border-radius:4px;background:none;border:1px solid var(--border);color:var(--text3);font-size:10px;font-family:var(--sans);cursor:pointer;flex-shrink:0;white-space:nowrap;transition:all 0.15s;}
+.quote-note-btn:hover{border-color:var(--accent);color:var(--accent);}
+.quote-note-btn.has-note{border-color:var(--warn);color:var(--warn);background:rgba(245,158,11,0.08);}
+.qline-wrap{}
+.quote-note-area{display:none;padding:4px 8px 6px 23px;}
+.qline-wrap.note-open .quote-note-area{display:block;}
+.quote-note-area textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:6px;color:var(--text);font-size:11px;font-family:var(--sans);resize:vertical;min-height:40px;outline:none;box-sizing:border-box;}
+.quote-note-area textarea:focus{border-color:var(--accent);}
 /* Sales product expand in products modal */
 .pm-sales-expand{display:none;flex-wrap:wrap;gap:6px;padding:6px 0 2px 22px;border-top:1px solid var(--border);margin-top:6px;}
 .pm-row.sales-open .pm-sales-expand{display:flex;}
@@ -2212,7 +2226,7 @@ function renderSalesSidebar(filter){
   const entries=Object.values(salesQuotes).filter(q=>!filter||q.name.toLowerCase().includes(filter.toLowerCase()))
     .sort((a,b)=>new Date(b.lastModified||b.createdAt)-new Date(a.lastModified||a.createdAt));
   if(!entries.length){
-    list.innerHTML=`<div style="padding:20px 12px;text-align:center;"><div style="font-size:24px;margin-bottom:10px;opacity:0.4;">💼</div><div style="font-size:12px;font-weight:500;color:var(--text2);margin-bottom:4px;">${filter?'No matches':'No quotes yet'}</div>${filter?'':`<div style="font-size:11px;color:var(--text3);">Use the button below to create a quote</div>`}</div>`;
+    list.innerHTML=`<div style="padding:20px 12px;text-align:center;"><div style="font-size:24px;margin-bottom:10px;opacity:0.4;">💼</div><div style="font-size:12px;font-weight:500;color:var(--text2);margin-bottom:4px;">${filter?'No matches':'No quotes yet'}</div>${filter?'':`<div style="font-size:11px;color:var(--text3);">Use the button below to get started</div>`}</div>`;
     return;
   }
   list.innerHTML=entries.map(q=>{
@@ -2280,6 +2294,7 @@ function calcQuoteTotals(q){
     else{onetimeClient+=li.qty*li.unitPrice;}
   });
   (q.customItems||[]).forEach(c=>{
+    if(c.enabled===false)return;
     if(c.billing==='monthly')monthlyClient+=c.qty*c.unitPrice;
     else onetimeClient+=c.qty*c.unitPrice;
   });
@@ -2301,8 +2316,8 @@ function loadSalesQuote(id){
     <div class="client-menu-wrap" id="qmenu-wrap-${id}">
       <button class="client-menu-btn" onclick="toggleQuoteMenu('${id}')">&#8230;</button>
       <div class="client-menu-dropdown" id="qmenu-${id}">
-        <button class="client-menu-item" onclick="closeQuoteMenu('${id}');editQuoteInfo('${id}')">Edit Info</button>
         <button class="client-menu-item" onclick="closeQuoteMenu('${id}');printQuote('${id}')">Print / Export</button>
+        <button class="client-menu-item warn" onclick="closeQuoteMenu('${id}');editQuoteInfo('${id}')">Edit Info</button>
         <button class="client-menu-item danger" onclick="closeQuoteMenu('${id}');deleteQuote('${id}')">Delete</button>
       </div>
     </div>
@@ -2317,8 +2332,10 @@ function loadSalesQuote(id){
     <div style="flex:1;"></div>
     <div style="width:60px;text-align:right;">Qty</div>
     <div style="width:78px;text-align:right;">$/Unit</div>
+    <div style="width:44px;"></div>
     <div style="width:78px;text-align:right;">Monthly</div>
     <div style="width:78px;text-align:right;">One Time</div>
+    <div style="width:28px;flex-shrink:0;"></div>
   </div>`;
   sections.forEach(sec=>{
     const sp=prods.filter(p=>p.salesCategory===sec.key);
@@ -2326,7 +2343,7 @@ function loadSalesQuote(id){
     if(!sp.length&&!secCustom.length)return;
     const secTotals={mo:0,ot:0};
     sp.forEach(p=>{const li=q.lineItems?.[p.id];if(li?.enabled){if(p.billing==='monthly')secTotals.mo+=li.qty*li.unitPrice;else secTotals.ot+=li.qty*li.unitPrice;}});
-    secCustom.forEach(c=>{if(c.billing==='monthly')secTotals.mo+=c.qty*c.unitPrice;else secTotals.ot+=c.qty*c.unitPrice;});
+    secCustom.forEach(c=>{if(c.enabled!==false){if(c.billing==='monthly')secTotals.mo+=c.qty*c.unitPrice;else secTotals.ot+=c.qty*c.unitPrice;}});
     html+=`<div class="quote-section">
       <div class="quote-section-header" onclick="this.closest('.quote-section').classList.toggle('collapsed')">
         <span>${sec.label}</span>
@@ -2347,58 +2364,68 @@ function loadSalesQuote(id){
         g.items.forEach(p=>{
           const li=q.lineItems?.[p.id]||{enabled:false,qty:0,unitPrice:p.defaultPrice||0,note:''};
           const on=li.enabled;const mo=on&&p.billing==='monthly'?li.qty*li.unitPrice:0;const ot=on&&p.billing==='onetime'?li.qty*li.unitPrice:0;
-          html+=`<div style="padding-left:12px;"><div class="quote-line${on?'':' disabled'}">
-            <div class="quote-check${on?' on':''}" onclick="toggleSalesLine('${id}','${p.id}')">${on?'✓':''}</div>
-            <div class="quote-label">${escHtml(p.label)}</div>
-            <span class="quote-billing-tag">${p.billing==='onetime'?'One Time':'Monthly'}</span>
-            <input class="quote-input" type="number" min="0" value="${li.qty}" onchange="updateSalesQty('${id}','${p.id}',this.value)" title="Quantity">
-            <input class="quote-input" type="number" min="0" step="0.01" value="${(li.unitPrice||0).toFixed(2)}" onchange="updateSalesPrice('${id}','${p.id}',this.value)" title="Price per unit">
-            <div class="quote-col${mo>0?' active':''}">${mo>0?'$'+mo.toFixed(2):'-'}</div>
-            <div class="quote-col${ot>0?' active':''}">${ot>0?'$'+ot.toFixed(2):'-'}</div>
-          </div>
-          <input class="quote-line-note" placeholder="Add a note..." value="${escHtml(li.note||'')}" onblur="updateSalesNote('${id}','${p.id}',this.value)">
+          const nid=`qln-${id}-${p.id}`;
+          html+=`<div class="qline-wrap${li.note?' note-open':''}" id="${nid}" style="padding-left:12px;">
+            <div class="quote-line${on?'':' disabled'}">
+              <div class="quote-check${on?' on':''}" onclick="toggleSalesLine('${id}','${p.id}')">${on?'✓':''}</div>
+              <div class="quote-label">${escHtml(p.label)}</div>
+              <span class="quote-billing-tag">${p.billing==='onetime'?'One Time':'Monthly'}</span>
+              <input class="quote-input" type="number" min="0" value="${li.qty}" onchange="updateSalesQty('${id}','${p.id}',this.value)" title="Quantity">
+              <input class="quote-input" type="number" min="0" step="0.01" value="${(li.unitPrice||0).toFixed(2)}" onchange="updateSalesPrice('${id}','${p.id}',this.value)" title="Price per unit">
+              <button class="quote-note-btn${li.note?' has-note':''}" onclick="toggleQuoteNote('${nid}')">Notes</button>
+              <div class="quote-col${mo>0?' active':''}">${mo>0?'$'+mo.toFixed(2):'-'}</div>
+              <div class="quote-col${ot>0?' active':''}">${ot>0?'$'+ot.toFixed(2):'-'}</div>
+              <div class="quote-del"></div>
+            </div>
+            <div class="quote-note-area"><textarea placeholder="Item note..." onblur="updateSalesNote('${id}','${p.id}',this.value)">${escHtml(li.note||'')}</textarea></div>
           </div>`;
         });
       }else{
         const p=g.p;
         const li=q.lineItems?.[p.id]||{enabled:false,qty:0,unitPrice:p.defaultPrice||0,note:''};
         const on=li.enabled;const mo=on&&p.billing==='monthly'?li.qty*li.unitPrice:0;const ot=on&&p.billing==='onetime'?li.qty*li.unitPrice:0;
-        html+=`<div><div class="quote-line${on?'':' disabled'}">
-          <div class="quote-check${on?' on':''}" onclick="toggleSalesLine('${id}','${p.id}')">${on?'✓':''}</div>
-          <div class="quote-label">${escHtml(p.label)}</div>
-          <span class="quote-billing-tag">${p.billing==='onetime'?'One Time':'Monthly'}</span>
-          <input class="quote-input" type="number" min="0" value="${li.qty}" onchange="updateSalesQty('${id}','${p.id}',this.value)" title="Quantity">
-          <input class="quote-input" type="number" min="0" step="0.01" value="${(li.unitPrice||0).toFixed(2)}" onchange="updateSalesPrice('${id}','${p.id}',this.value)" title="Price per unit">
-          <div class="quote-col${mo>0?' active':''}">${mo>0?'$'+mo.toFixed(2):'-'}</div>
-          <div class="quote-col${ot>0?' active':''}">${ot>0?'$'+ot.toFixed(2):'-'}</div>
-        </div>
-        <input class="quote-line-note" placeholder="Add a note..." value="${escHtml(li.note||'')}" onblur="updateSalesNote('${id}','${p.id}',this.value)">
+        const nid=`qln-${id}-${p.id}`;
+        html+=`<div class="qline-wrap${li.note?' note-open':''}" id="${nid}">
+          <div class="quote-line${on?'':' disabled'}">
+            <div class="quote-check${on?' on':''}" onclick="toggleSalesLine('${id}','${p.id}')">${on?'✓':''}</div>
+            <div class="quote-label">${escHtml(p.label)}</div>
+            <span class="quote-billing-tag">${p.billing==='onetime'?'One Time':'Monthly'}</span>
+            <input class="quote-input" type="number" min="0" value="${li.qty}" onchange="updateSalesQty('${id}','${p.id}',this.value)" title="Quantity">
+            <input class="quote-input" type="number" min="0" step="0.01" value="${(li.unitPrice||0).toFixed(2)}" onchange="updateSalesPrice('${id}','${p.id}',this.value)" title="Price per unit">
+            <button class="quote-note-btn${li.note?' has-note':''}" onclick="toggleQuoteNote('${nid}')">Notes</button>
+            <div class="quote-col${mo>0?' active':''}">${mo>0?'$'+mo.toFixed(2):'-'}</div>
+            <div class="quote-col${ot>0?' active':''}">${ot>0?'$'+ot.toFixed(2):'-'}</div>
+            <div class="quote-del"></div>
+          </div>
+          <div class="quote-note-area"><textarea placeholder="Item note..." onblur="updateSalesNote('${id}','${p.id}',this.value)">${escHtml(li.note||'')}</textarea></div>
         </div>`;
       }
     });
     // Custom items
     secCustom.forEach(c=>{
-      const mo=c.billing==='monthly'?c.qty*c.unitPrice:0;const ot=c.billing==='onetime'?c.qty*c.unitPrice:0;
-      html+=`<div><div class="quote-line">
-        <div class="quote-check" style="visibility:hidden;"></div>
-        <input class="quote-custom-label" placeholder="Custom item..." value="${escHtml(c.label)}" onblur="updateCustomLabel('${id}','${c.id}',this.value)">
-        <select class="quote-billing-sel" onchange="updateCustomBilling('${id}','${c.id}',this.value)">
-          <option value="monthly" ${c.billing==='monthly'?'selected':''}>Monthly</option>
-          <option value="onetime" ${c.billing==='onetime'?'selected':''}>One Time</option>
-        </select>
-        <input class="quote-input" type="number" min="0" value="${c.qty}" onchange="updateCustomQty('${id}','${c.id}',this.value)" title="Quantity">
-        <input class="quote-input" type="number" min="0" step="0.01" value="${(c.unitPrice||0).toFixed(2)}" onchange="updateCustomPrice('${id}','${c.id}',this.value)" title="Price per unit">
-        <div class="quote-col${mo>0?' active':''}">${mo>0?'$'+mo.toFixed(2):'-'}</div>
-        <div class="quote-col${ot>0?' active':''}">${ot>0?'$'+ot.toFixed(2):'-'}</div>
-        <button onclick="deleteCustomQuoteLine('${id}','${c.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 4px;flex-shrink:0;" title="Remove">&#215;</button>
-      </div>
-      <input class="quote-line-note" placeholder="Add a note..." value="${escHtml(c.note||'')}" onblur="updateCustomNote('${id}','${c.id}',this.value)">
+      const enabled=c.enabled!==false;
+      const mo=enabled&&c.billing==='monthly'?c.qty*c.unitPrice:0;const ot=enabled&&c.billing==='onetime'?c.qty*c.unitPrice:0;
+      const cnid=`qln-${id}-${c.id}`;
+      html+=`<div class="qline-wrap${c.note?' note-open':''}" id="${cnid}">
+        <div class="quote-line${enabled?'':' disabled'}">
+          <div class="quote-check${enabled?' on':''}" onclick="toggleCustomLine('${id}','${c.id}')">${enabled?'✓':''}</div>
+          <input class="quote-custom-label" placeholder="Custom item..." value="${escHtml(c.label)}" onblur="updateCustomLabel('${id}','${c.id}',this.value)">
+          <select class="quote-billing-sel" onchange="updateCustomBilling('${id}','${c.id}',this.value)">
+            <option value="monthly" ${c.billing==='monthly'?'selected':''}>Monthly</option>
+            <option value="onetime" ${c.billing==='onetime'?'selected':''}>One Time</option>
+          </select>
+          <input class="quote-input" type="number" min="0" value="${c.qty}" onchange="updateCustomQty('${id}','${c.id}',this.value)" title="Quantity">
+          <input class="quote-input" type="number" min="0" step="0.01" value="${(c.unitPrice||0).toFixed(2)}" onchange="updateCustomPrice('${id}','${c.id}',this.value)" title="Price per unit">
+          <button class="quote-note-btn${c.note?' has-note':''}" onclick="toggleQuoteNote('${cnid}')">Notes</button>
+          <div class="quote-col${mo>0?' active':''}">${mo>0?'$'+mo.toFixed(2):'-'}</div>
+          <div class="quote-col${ot>0?' active':''}">${ot>0?'$'+ot.toFixed(2):'-'}</div>
+          <button class="quote-del-btn" onclick="styledConfirm('Remove this item?',()=>deleteCustomQuoteLine('${id}','${c.id}'))" title="Remove">&#215;</button>
+        </div>
+        <div class="quote-note-area"><textarea placeholder="Item note..." onblur="updateCustomNote('${id}','${c.id}',this.value)">${escHtml(c.note||'')}</textarea></div>
       </div>`;
     });
     html+=`<div style="padding:6px 14px 8px;">
-      <button onclick="addCustomQuoteLine('${id}','${sec.key}')" style="background:none;border:1px dashed var(--border);border-radius:4px;color:var(--text3);cursor:pointer;font-size:11px;padding:4px 10px;width:100%;transition:border-color 0.15s,color 0.15s;"
-        onmouseenter="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
-        onmouseleave="this.style.borderColor='';this.style.color=''">+ Add Item</button>
+      <button class="quote-add-item-btn" onclick="addCustomQuoteLine('${id}','${sec.key}')">+ Add Item</button>
     </div>`;
     html+=`</div></div>`;
   });
@@ -2435,6 +2462,17 @@ async function updateSalesNote(quoteId,productId,val){
   await saveSalesQuotes();
 }
 
+function toggleQuoteNote(wrapperId){
+  document.getElementById(wrapperId)?.classList.toggle('note-open');
+}
+async function toggleCustomLine(quoteId,customId){
+  const q=salesQuotes[quoteId];if(!q)return;
+  const c=(q.customItems||[]).find(c=>c.id===customId);if(!c)return;
+  c.enabled=c.enabled===false?true:false;
+  q.lastModified=new Date().toISOString();
+  await saveSalesQuotes();
+  loadSalesQuote(quoteId);
+}
 function toggleQuoteMenu(id){
   const menu=document.getElementById(`qmenu-${id}`);
   const isOpen=menu?.classList.contains('open');
@@ -2446,7 +2484,7 @@ function closeQuoteMenu(id){document.getElementById(`qmenu-${id}`)?.classList.re
 async function addCustomQuoteLine(quoteId,category){
   const q=salesQuotes[quoteId];if(!q)return;
   if(!q.customItems)q.customItems=[];
-  q.customItems.push({id:'custom-'+Date.now(),label:'',category,qty:1,unitPrice:0,billing:'monthly',note:''});
+  q.customItems.push({id:'custom-'+Date.now(),label:'',category,qty:1,unitPrice:0,billing:'monthly',note:'',enabled:true});
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
   loadSalesQuote(quoteId);
@@ -2540,29 +2578,88 @@ function printQuote(id){
   const q=salesQuotes[id];if(!q)return;
   const prods=getSalesProducts();
   const t=calcQuoteTotals(q);
+  const orgName=config?.orgName||'System Alternatives';
+  const date=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
   const sections=[{key:'user',label:'User Products'},{key:'machine',label:'Machine Products'},{key:'site',label:'Site Products'}];
-  let rows='';
+  let rows='';let rowIdx=0;
   sections.forEach(sec=>{
     const sp=prods.filter(p=>p.salesCategory===sec.key&&q.lineItems?.[p.id]?.enabled);
-    if(!sp.length)return;
-    rows+=`<tr><td colspan="5" style="background:#f5f6f8;font-weight:700;padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#666;">${sec.label}</td></tr>`;
+    const sc=(q.customItems||[]).filter(c=>c.category===sec.key&&c.enabled!==false&&(c.qty>0||c.unitPrice>0));
+    if(!sp.length&&!sc.length)return;
+    rows+=`<tr class="sec-hdr"><td colspan="5">${sec.label}</td></tr>`;
     sp.forEach(p=>{
       const li=q.lineItems[p.id];
       const mo=p.billing==='monthly'?li.qty*li.unitPrice:0;
       const ot=p.billing==='onetime'?li.qty*li.unitPrice:0;
-      rows+=`<tr><td style="padding:6px 10px;">${p.label}</td><td style="text-align:center;">${li.qty}</td><td style="text-align:right;">$${li.unitPrice.toFixed(2)}</td><td style="text-align:right;">${mo>0?'$'+mo.toFixed(2):'-'}</td><td style="text-align:right;">${ot>0?'$'+ot.toFixed(2):'-'}</td></tr>`;
+      const note=li.note||'';
+      rows+=`<tr class="${rowIdx++%2?'even':''}"><td>${p.label}${note?`<div class="note">${note}</div>`:''}</td><td class="r">${li.qty}</td><td class="r">$${li.unitPrice.toFixed(2)}</td><td class="r">${mo>0?'$'+mo.toFixed(2):'-'}</td><td class="r">${ot>0?'$'+ot.toFixed(2):'-'}</td></tr>`;
+    });
+    sc.forEach(c=>{
+      const mo=c.billing==='monthly'?c.qty*c.unitPrice:0;
+      const ot=c.billing==='onetime'?c.qty*c.unitPrice:0;
+      const note=c.note||'';
+      rows+=`<tr class="${rowIdx++%2?'even':''} custom"><td>${c.label||'(Custom item)'}<span class="tag">${c.billing==='onetime'?'One Time':'Monthly'}</span>${note?`<div class="note">${note}</div>`:''}</td><td class="r">${c.qty}</td><td class="r">$${c.unitPrice.toFixed(2)}</td><td class="r">${mo>0?'$'+mo.toFixed(2):'-'}</td><td class="r">${ot>0?'$'+ot.toFixed(2):'-'}</td></tr>`;
     });
   });
+  const profitColor=t.profit>=0?'#16a34a':'#dc2626';
+  const css=`*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#1a1d23;background:#fff;font-size:13px;line-height:1.5;}
+.accent-bar{height:4px;background:linear-gradient(90deg,#3b82f6,#6366f1);}
+.header{padding:28px 32px 20px;border-bottom:1px solid #e5e7eb;}
+.org{font-size:22px;font-weight:800;color:#1a1d23;letter-spacing:-0.3px;}
+.quote-label-hdr{font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-top:4px;}
+.meta-row{display:flex;gap:24px;flex-wrap:wrap;padding:14px 32px;background:#f9fafb;border-bottom:1px solid #e5e7eb;font-size:12px;color:#374151;}
+.meta-item{display:flex;flex-direction:column;gap:2px;}
+.meta-label{font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;}
+.meta-val{font-weight:600;color:#111827;}
+.body{padding:20px 32px 32px;}
+table{width:100%;border-collapse:collapse;margin-top:0;}
+thead tr{background:#f0f4ff;}
+th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#1e3a8a;padding:10px 12px;text-align:left;border-bottom:2px solid #bfdbfe;}
+td{padding:8px 12px;border-bottom:1px solid #f3f4f6;vertical-align:top;}
+tr.even td{background:#f9fafb;}
+tr.sec-hdr td{background:#eff6ff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#1e40af;padding:8px 12px;border-top:8px solid #fff;border-bottom:1px solid #bfdbfe;}
+tr.custom td:first-child{font-style:italic;}
+.tag{display:inline-block;margin-left:6px;font-size:9px;font-weight:600;color:#6b7280;background:#f3f4f6;border-radius:3px;padding:1px 5px;vertical-align:middle;font-style:normal;}
+.note{font-size:11px;color:#6b7280;margin-top:2px;font-style:italic;}
+.r{text-align:right;font-variant-numeric:tabular-nums;}
+.totals-wrap{display:flex;justify-content:flex-end;margin-top:20px;}
+.totals-card{border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;min-width:280px;}
+.totals-card table{margin-top:0;}
+.totals-card th{background:#f8fafc;color:#6b7280;}
+.totals-card td{padding:9px 14px;}
+.tot-label{font-weight:500;color:#374151;}
+.tot-val{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;}
+.profit-val{color:${profitColor};font-size:15px;}
+.notes-block{margin-top:24px;padding:14px 16px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;}
+.notes-block strong{font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#92400e;}
+.notes-text{margin-top:6px;font-size:12px;color:#78350f;line-height:1.6;white-space:pre-wrap;}
+@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.accent-bar{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}`;
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quote — ${escHtml(q.name)}</title><style>${css}</style></head><body>
+<div class="accent-bar"></div>
+<div class="header">
+  <div class="org">${escHtml(orgName)}</div>
+  <div class="quote-label-hdr">Sales Quote</div>
+</div>
+<div class="meta-row">
+  <div class="meta-item"><span class="meta-label">Company</span><span class="meta-val">${escHtml(q.name)}</span></div>
+  ${q.contact?`<div class="meta-item"><span class="meta-label">Contact</span><span class="meta-val">${escHtml(q.contact)}</span></div>`:''}
+  <div class="meta-item"><span class="meta-label">Prepared by</span><span class="meta-val">${escHtml(q.tech)}</span></div>
+  <div class="meta-item"><span class="meta-label">Date</span><span class="meta-val">${date}</span></div>
+</div>
+<div class="body">
+<table><thead><tr><th>Product / Service</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Monthly</th><th class="r">One Time</th></tr></thead>
+<tbody>${rows}</tbody></table>
+<div class="totals-wrap"><div class="totals-card"><table>
+  <tr><td class="tot-label">Monthly Total</td><td class="tot-val">$${t.monthlyClient.toFixed(2)}</td></tr>
+  <tr><td class="tot-label">One-Time Total</td><td class="tot-val">$${t.onetimeClient.toFixed(2)}</td></tr>
+  <tr><td class="tot-label" style="color:#6b7280;font-weight:400;">SA Cost (monthly)</td><td class="tot-val" style="color:#9ca3af;">$${t.monthlySA.toFixed(2)}</td></tr>
+  <tr style="border-top:2px solid #e5e7eb;"><td class="tot-label">Monthly Profit</td><td class="tot-val profit-val">$${t.profit.toFixed(2)}</td></tr>
+</table></div></div>
+${q.notes?`<div class="notes-block"><strong>Notes</strong><div class="notes-text">${escHtml(q.notes)}</div></div>`:''}
+</div></body></html>`;
   const w=window.open('','_blank');
-  w.document.write(`<html><head><title>Quote — ${q.name}</title><style>body{font-family:Arial,sans-serif;padding:28px;font-size:13px;color:#222;}h2{margin-bottom:4px;}table{width:100%;border-collapse:collapse;margin-top:16px;}th{background:#f0f1f3;font-size:11px;text-transform:uppercase;letter-spacing:0.04em;padding:8px 10px;text-align:left;border-bottom:2px solid #ddd;}td{border-bottom:1px solid #eee;}tfoot td{font-weight:700;border-top:2px solid #ddd;padding:8px 10px;}</style></head><body>
-    <h2>${q.name}</h2>
-    <div style="color:#666;font-size:12px;margin-bottom:4px;">${q.contact||''} &nbsp;·&nbsp; Prepared by ${q.tech} &nbsp;·&nbsp; ${new Date().toLocaleDateString()}</div>
-    <table><thead><tr><th>Product</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Unit Price</th><th style="text-align:right;">Monthly</th><th style="text-align:right;">One-Time</th></tr></thead>
-    <tbody>${rows}</tbody>
-    <tfoot><tr><td colspan="3">Totals</td><td style="text-align:right;">$${t.monthlyClient.toFixed(2)}/mo</td><td style="text-align:right;">$${t.onetimeClient.toFixed(2)}</td></tr></tfoot>
-    </table>${q.notes?`<div style="margin-top:20px;padding:12px;background:#f9f9f9;border-radius:4px;font-size:12px;"><strong>Notes:</strong> ${q.notes}</div>`:''}
-    </body></html>`);
-  w.document.close();w.print();
+  w.document.write(html);w.document.close();w.print();
 }
 
 function renderSalesView(){
@@ -2609,61 +2706,87 @@ function renderDashboard(){
   const el=document.getElementById('view-empty');
   if(!el) return;
   const myName=localStorage.getItem('myName')||'';
+  const orgName=config?.orgName||'System Alternatives';
   const clientList=Object.values(clients);
+  const quoteList=Object.values(salesQuotes);
   const now=Date.now();
   const staleDays=appSettings.staleDays||0;
-  const total=clientList.length;
-  const inProgress=clientList.filter(c=>{const p=overallProgress(c);return p.done>0&&p.done<p.total;}).length;
-  const complete=clientList.filter(c=>{const p=overallProgress(c);return p.total>0&&p.done===p.total;}).length;
-  const stale=staleDays?clientList.filter(c=>{const lm=c.lastModified||c.createdAt||0;return((now-new Date(lm).getTime())/(864e5))>staleDays;}).length:0;
-  const dueSoon=clientList.filter(c=>{
-    if(!c.dueDate)return false;
-    const diff=Math.ceil((new Date(c.dueDate+' 12:00')-new Date())/(864e5));
-    return diff>=0&&diff<=7;
-  }).sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate));
-  const recent=clientList.filter(c=>c.lastModified||c.createdAt)
-    .sort((a,b)=>new Date(b.lastModified||b.createdAt)-new Date(a.lastModified||a.createdAt)).slice(0,6);
-  const stats=[
-    {label:'Total',value:total,color:'var(--accent)'},
-    {label:'In Progress',value:inProgress,color:'var(--warn)'},
-    {label:'Completed',value:complete,color:'var(--success)'},
-    staleDays?{label:'Stale',value:stale,color:'var(--danger)'}:null
-  ].filter(Boolean);
+  // Onboarding stats
+  const obTotal=clientList.length;
+  const obActive=clientList.filter(c=>{const p=overallProgress(c);return p.done>0&&p.done<p.total;}).length;
+  const obComplete=clientList.filter(c=>{const p=overallProgress(c);return p.total>0&&p.done===p.total;}).length;
+  const obStale=staleDays?clientList.filter(c=>{const lm=c.lastModified||c.createdAt||0;return((now-new Date(lm).getTime())/(864e5))>staleDays;}).length:0;
+  // Sales stats
+  const qTotals=quoteList.reduce((acc,q)=>{const t=calcQuoteTotals(q);acc.mrr+=t.monthlyClient;acc.profit+=t.profit;return acc;},{mrr:0,profit:0});
+  // Merged recent activity (checklists + quotes), sorted by last modified
+  const recentClients=clientList.filter(c=>c.lastModified||c.createdAt).map(c=>({type:'checklist',id:c.id,name:c.name,sub:c.tech,ts:new Date(c.lastModified||c.createdAt).getTime(),pct:overallProgress(c)}));
+  const recentQuotes=quoteList.filter(q=>q.lastModified||q.createdAt).map(q=>{const t=calcQuoteTotals(q);return{type:'quote',id:q.id,name:q.name,sub:q.tech,ts:new Date(q.lastModified||q.createdAt).getTime(),mrr:t.monthlyClient};});
+  const recent=[...recentClients,...recentQuotes].sort((a,b)=>b.ts-a.ts).slice(0,8);
   el.innerHTML=`<div style="max-width:760px;width:100%;">
     <div style="margin-bottom:22px;text-align:center;">
-      <h2 style="font-size:20px;font-weight:700;margin-bottom:3px;">${myName?'Welcome back, '+myName:'Welcome'}</h2>
-      <p style="color:var(--text2);font-size:12px;">${config?.orgName||'System Alternatives'} — Onboarding Checklist</p>
+      <h2 style="font-size:20px;font-weight:700;margin-bottom:3px;">${myName?'Hey, '+myName:'Welcome'}</h2>
+      <p style="color:var(--text2);font-size:12px;">${orgName}</p>
     </div>
     <div style="display:flex;gap:10px;margin-bottom:22px;flex-wrap:wrap;">
-      ${stats.map(s=>`<div class="dash-stat" style="flex:1;min-width:110px;">
-        <div class="dash-stat-value" style="color:${s.color};">${s.value}</div>
-        <div class="dash-stat-label">${s.label}</div>
-      </div>`).join('')}
-    </div>
-    ${dueSoon.length?`<div style="margin-bottom:20px;">
-      <div class="dash-section-label">Due within 7 days</div>
-      <div style="display:flex;flex-direction:column;gap:5px;">
-        ${dueSoon.map(c=>{const diff=Math.ceil((new Date(c.dueDate+' 12:00')-new Date())/(864e5));const cls=diff===0?'overdue':diff<=2?'warn':'ok';return`<div class="dash-row" onclick="selectClient('${c.id}')">
-          <span style="flex:1;font-size:12px;font-weight:500;">${c.name}</span>
-          <span class="due-badge ${cls}">${diff===0?'Today':diff+'d left'}</span>
-        </div>`;}).join('')}
-      </div></div>`:''}
-    ${recent.length?`<div>
-      <div class="dash-section-label">Recent checklists</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;">
-        ${recent.map(c=>{const p=overallProgress(c);const pct=p.total?Math.round(p.done/p.total*100):0;return`<div class="dash-row" onclick="selectClient('${c.id}')">
-          <div style="flex:1;min-width:0;">
-            <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.name}</div>
-            <div style="font-size:10px;color:var(--text3);margin-top:1px;">${c.tech}</div>
+      <div class="dash-stat" style="flex:2;min-width:160px;cursor:pointer;" onclick="switchSection('onboarding')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;width:100%;">
+          <div>
+            <div class="dash-stat-value" style="color:var(--accent);">${obTotal}</div>
+            <div class="dash-stat-label">Onboarding</div>
           </div>
-          <span style="font-size:11px;color:var(--text3);flex-shrink:0;">${pct}%</span>
-        </div>`;}).join('')}
-      </div></div>`:''}
-    ${!total?`<div style="text-align:center;padding:48px 20px;">
-      <div style="font-size:13px;font-weight:500;color:var(--text2);margin-bottom:6px;">No checklists yet</div>
-      <div style="font-size:12px;color:var(--text3);margin-bottom:18px;">Create your first client onboarding checklist to get started.</div>
-      <button class="btn-primary" onclick="newClientFromSidebar()">+ New Checklist</button>
-    </div>`:''}
+          <div style="font-size:11px;color:var(--text3);text-align:right;margin-top:4px;line-height:1.8;">
+            ${obActive>0?`<div style="color:var(--warn);">${obActive} active</div>`:''}
+            ${obComplete>0?`<div style="color:var(--success);">${obComplete} complete</div>`:''}
+            ${obStale>0?`<div style="color:var(--danger);">${obStale} stale</div>`:''}
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--accent);margin-top:6px;align-self:flex-end;">Open →</div>
+      </div>
+      <div class="dash-stat" style="flex:2;min-width:160px;cursor:pointer;" onclick="switchSection('sales')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;width:100%;">
+          <div>
+            <div class="dash-stat-value" style="color:var(--success);">${quoteList.length}</div>
+            <div class="dash-stat-label">Sales Quotes</div>
+          </div>
+          <div style="font-size:11px;color:var(--text3);text-align:right;margin-top:4px;line-height:1.8;">
+            ${quoteList.length>0?`<div style="color:var(--success);">$${qTotals.mrr.toFixed(0)}/mo</div><div style="color:${qTotals.profit>=0?'var(--success)':'var(--danger)'};">$${qTotals.profit.toFixed(0)} profit</div>`:'<div>No quotes yet</div>'}
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--accent);margin-top:6px;align-self:flex-end;">Open →</div>
+      </div>
+      <div class="dash-stat" style="flex:1;min-width:120px;cursor:pointer;" onclick="switchSection('reference')">
+        <div class="dash-stat-value" style="font-size:22px;">📖</div>
+        <div class="dash-stat-label">References</div>
+        <div style="font-size:10px;color:var(--accent);margin-top:6px;">Browse →</div>
+      </div>
+    </div>
+    ${recent.length?`<div>
+      <div class="dash-section-label">Recent Activity</div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        ${recent.map(r=>{
+          if(r.type==='checklist'){
+            const pct=r.pct.total?Math.round(r.pct.done/r.pct.total*100):0;
+            return`<div class="dash-row" onclick="selectClient('${r.id}')">
+              <span style="font-size:10px;color:var(--text3);flex-shrink:0;width:64px;">Onboarding</span>
+              <span style="flex:1;font-size:12px;font-weight:500;">${escHtml(r.name)}</span>
+              <span style="font-size:11px;color:var(--text3);">${pct}%</span>
+            </div>`;
+          }else{
+            return`<div class="dash-row" onclick="selectQuote('${r.id}')">
+              <span style="font-size:10px;color:var(--text3);flex-shrink:0;width:64px;">Quote</span>
+              <span style="flex:1;font-size:12px;font-weight:500;">${escHtml(r.name)}</span>
+              <span style="font-size:11px;color:var(--text3);">$${r.mrr.toFixed(0)}/mo</span>
+            </div>`;
+          }
+        }).join('')}
+      </div></div>`:`<div style="text-align:center;padding:48px 20px;">
+      <div style="font-size:13px;font-weight:500;color:var(--text2);margin-bottom:6px;">Nothing here yet</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:18px;">Create a checklist or quote to get started.</div>
+      <div style="display:flex;gap:10px;justify-content:center;">
+        <button class="btn-primary" onclick="switchSection('onboarding');newClientFromSidebar()">+ New Checklist</button>
+        <button class="btn-secondary" onclick="switchSection('sales');newQuoteFromSidebar()">+ New Quote</button>
+      </div>
+    </div>`}
   </div>`;
 }
 
@@ -4729,8 +4852,6 @@ document.addEventListener('wheel',e=>{
   const min=el.min!==''?parseFloat(el.min):-Infinity;
   const delta=e.deltaY<0?step:-step;
   el.value=Math.max(min,cur+delta).toFixed(step<1?2:0);
-  el.dispatchEvent(new Event('change',{bubbles:true}));
-  el.dispatchEvent(new Event('input',{bubbles:true}));
 },{passive:false});
 </script>
 </body>
