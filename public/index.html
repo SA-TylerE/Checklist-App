@@ -38,11 +38,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 
 /* Quote builder */
 .quote-section{margin-bottom:10px;border:1px solid var(--border);border-radius:10px;overflow:hidden;}
-.quote-section-header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg3);font-size:12px;font-weight:600;cursor:pointer;user-select:none;border-bottom:1px solid var(--border);}
+.quote-section-header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg3);font-size:12px;font-weight:600;cursor:pointer;user-select:none;border-bottom:1px solid var(--border);position:relative;}
 .quote-section.collapsed .quote-section-body{display:none;}
 .quote-section.collapsed .quote-section-toggle{transform:rotate(-90deg);}
 .quote-section-toggle{font-size:9px;color:var(--text3);transition:transform 0.15s;margin-left:auto;}
-.quote-section-subtotal{font-size:11px;color:var(--text3);flex:1;text-align:center;font-weight:400;}
+.quote-section-subtotal{position:absolute;left:50%;transform:translateX(-50%);font-size:11px;color:var(--text3);font-weight:400;pointer-events:none;white-space:nowrap;}
 .quote-line{display:flex;align-items:center;gap:8px;padding:7px 12px 7px 14px;border-bottom:1px solid var(--border);font-size:12px;transition:background 0.1s;}
 .quote-line:last-child{border-bottom:none;}
 .quote-line:hover{background:var(--bg3);}
@@ -53,8 +53,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .quote-billing-tag{font-size:9px;color:var(--text3);white-space:nowrap;background:var(--bg3);border:1px solid var(--border);border-radius:3px;padding:1px 5px;}
 .quote-input{width:68px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:3px 7px;color:var(--text);font-size:11px;outline:none;text-align:right;font-family:var(--mono);}
 .quote-input:focus{border-color:var(--accent);}
-.quote-col{text-align:right;font-size:11px;color:var(--text2);min-width:72px;white-space:nowrap;flex-shrink:0;}
+.quote-col{text-align:right;font-size:11px;color:var(--text2);width:78px;flex-shrink:0;}
 .quote-col.active{color:var(--text);font-weight:600;}
+.quote-list{width:64px;text-align:right;font-size:10px;color:var(--text3);flex-shrink:0;white-space:nowrap;}
+.quote-disc{width:40px;text-align:center;font-size:10px;font-weight:600;flex-shrink:0;}
+.quote-disc.inc{color:var(--danger);}
+.quote-disc.dec{color:var(--success);}
+#quote-content[data-customer] .qst-sa,
+#quote-content[data-customer] .qst-profit,
+#quote-content[data-customer] .quote-disc,
+#quote-content[data-customer] .quote-disc-hdr{display:none!important;}
+.customer-view-badge{display:inline-block;background:rgba(34,197,94,0.15);border:1px solid var(--success);color:var(--success);font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;margin-left:8px;}
 .quote-totals{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-top:14px;}
 .quote-total-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;}
 .quote-total-row:last-child{border-bottom:none;font-weight:700;font-size:15px;padding-top:10px;margin-top:4px;}
@@ -110,6 +119,7 @@ input[type=number]{-moz-appearance:textfield;}
 #sidebar{width:var(--sidebar-w);min-width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:width 0.2s,min-width 0.2s;flex-shrink:0;}
 #sidebar.collapsed{width:36px;min-width:36px;}
 #sidebar.collapsed .sidebar-inner{display:none;}
+#sidebar.hidden{display:none;}
 .sidebar-inner{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
 .sidebar-sub{font-size:10px;color:var(--text3);letter-spacing:0.06em;text-transform:uppercase;padding:10px 14px 4px;}
 .sidebar-search{padding:4px 12px 8px;}
@@ -782,7 +792,7 @@ body.light{
     <button class="ah-toggle" onclick="ahToggleSidebar()" aria-label="Toggle sidebar">&#9776;</button>
     <span class="ah-brand" onclick="goToDashboard()" style="cursor:pointer;" title="Back to dashboard">SA</span>
     <nav class="ah-nav" role="navigation" aria-label="App sections">
-      <button class="ah-nav-btn active" id="ah-btn-onboarding" onclick="switchSection('onboarding')">Onboarding</button>
+      <button class="ah-nav-btn" id="ah-btn-onboarding" onclick="switchSection('onboarding')">Onboarding</button>
       <button class="ah-nav-btn" id="ah-btn-sales" onclick="switchSection('sales')">Sales</button>
       <button class="ah-nav-btn" id="ah-btn-reference" onclick="switchSection('reference')">Reference</button>
     </nav>
@@ -808,7 +818,7 @@ body.light{
     <div id="sidebar">
       <div class="sidebar-inner">
         <!-- Onboarding / checklists section -->
-        <div class="sidebar-section active" id="ss-onboarding">
+        <div class="sidebar-section" id="ss-onboarding">
           <div class="sidebar-search">
             <input type="text" id="client-search" placeholder="Search clients..." oninput="filterClients(this.value)">
           </div>
@@ -1478,7 +1488,7 @@ let activeSection='onboarding';
 function switchSection(name){
   if(isMobile()) closeOverlays();
   activeSection=name;
-  document.getElementById('sidebar').classList.remove('collapsed');
+  document.getElementById('sidebar').classList.remove('hidden','collapsed');
   document.getElementById('settings-btn')?.classList.remove('active');
   ['onboarding','sales','reference'].forEach(s=>{
     document.getElementById('ah-btn-'+s)?.classList.toggle('active',s===name);
@@ -1526,7 +1536,7 @@ function goToDashboard(){
     document.getElementById('ah-btn-'+s)?.classList.remove('active');
     document.getElementById('ss-'+s)?.classList.remove('active');
   });
-  document.getElementById('sidebar').classList.add('collapsed');
+  document.getElementById('sidebar').classList.add('hidden');
   showView('home');
 }
 function toggleSettings(){
@@ -2313,15 +2323,18 @@ function loadSalesQuote(id){
   const prods=getSalesProducts();
   const totals=calcQuoteTotals(q);
   const sections=[{key:'user',label:'User Products'},{key:'machine',label:'Machine Products'},{key:'site',label:'Site Products'}];
+  const isCustomerView=document.getElementById('quote-content')?.dataset?.customer==='1';
   let html=`<div class="checklist-header" style="margin-bottom:16px;">
     <div>
-      <h2 style="font-size:18px;font-weight:700;">${escHtml(q.name)}</h2>
+      <h2 style="font-size:18px;font-weight:700;">${escHtml(q.name)}${isCustomerView?'<span class="customer-view-badge">Customer View</span>':''}</h2>
       <div style="font-size:11px;color:var(--text3);">${escHtml(q.tech)}${q.contact?' · '+escHtml(q.contact):''} · Created ${relTime(q.createdAt)}</div>
     </div>
     <div class="client-menu-wrap" id="qmenu-wrap-${id}">
       <button class="client-menu-btn" onclick="toggleQuoteMenu('${id}')">&#8230;</button>
       <div class="client-menu-dropdown" id="qmenu-${id}">
-        <button class="client-menu-item" onclick="closeQuoteMenu('${id}');printQuote('${id}')">Print / Export</button>
+        <button class="client-menu-item" onclick="closeQuoteMenu('${id}');printQuote('${id}')">Print (Internal)</button>
+        <button class="client-menu-item" onclick="closeQuoteMenu('${id}');printQuoteCustomer('${id}')">Print for Customer</button>
+        <button class="client-menu-item" onclick="closeQuoteMenu('${id}');toggleCustomerView('${id}')">Toggle Customer View</button>
         <button class="client-menu-item" onclick="closeQuoteMenu('${id}');showQuoteLog('${id}')">View Log</button>
         <button class="client-menu-item warn" onclick="closeQuoteMenu('${id}');editQuoteInfo('${id}')">Edit</button>
         <button class="client-menu-item danger" onclick="closeQuoteMenu('${id}');deleteQuote('${id}')">Delete</button>
@@ -2331,16 +2344,17 @@ function loadSalesQuote(id){
   <div class="quote-sticky-totals">
     <div class="qst-item"><span class="qst-label">Monthly</span><span class="qst-value" id="qstv-mo-${id}">$${totals.monthlyClient.toFixed(2)}</span></div>
     <div class="qst-item"><span class="qst-label">One Time</span><span class="qst-value" id="qstv-ot-${id}">$${totals.onetimeClient.toFixed(2)}</span></div>
-    <div class="qst-item"><span class="qst-label">SA Cost</span><span class="qst-value" id="qstv-sa-${id}" style="color:var(--text3);">$${totals.monthlySA.toFixed(2)}</span></div>
-    <div class="qst-item"><span class="qst-label">Profit</span><span class="qst-value ${totals.profit>=0?'profit-pos':'profit-neg'}" id="qstv-pr-${id}">$${totals.profit.toFixed(2)}</span></div>
+    <div class="qst-item qst-sa"><span class="qst-label">SA Cost</span><span class="qst-value" id="qstv-sa-${id}" style="color:var(--text3);">$${totals.monthlySA.toFixed(2)}</span></div>
+    <div class="qst-item qst-profit"><span class="qst-label">Profit</span><span class="qst-value ${totals.profit>=0?'profit-pos':'profit-neg'}" id="qstv-pr-${id}">$${totals.profit.toFixed(2)}</span></div>
   </div>
   <div class="quote-col-hdr">
     <div style="flex:1;"></div>
-    <div style="width:60px;text-align:right;">Qty</div>
-    <div style="width:78px;text-align:right;">$/Unit</div>
-    <div style="width:44px;"></div>
-    <div style="width:78px;text-align:right;">Monthly</div>
-    <div style="width:78px;text-align:right;">One Time</div>
+    <div style="width:52px;text-align:right;">Qty</div>
+    <div style="width:64px;text-align:right;">List</div>
+    <div style="width:72px;text-align:right;">$/Unit</div>
+    <div class="quote-disc-hdr" style="width:40px;text-align:center;">Disc</div>
+    <div style="width:78px;text-align:right;">Cost</div>
+    <div style="width:72px;text-align:right;">Freq</div>
     <div style="width:28px;flex-shrink:0;"></div>
   </div>`;
   sections.forEach(sec=>{
@@ -2364,67 +2378,66 @@ function loadSalesQuote(id){
         if(!seenParents.has(p.parentId)){seenParents.add(p.parentId);groups.push({type:'group',parentId:p.parentId,parentLabel:p.parentLabel,items:sp.filter(pp=>pp.parentId===p.parentId)});}
       }else{groups.push({type:'item',p});}
     });
+    // Helper for rendering a standard product line
+    const renderProductLine=(p,li,nid,indent)=>{
+      const on=li.enabled;
+      const cost=on?li.qty*li.unitPrice:0;
+      const listStr=p.defaultPrice!=null?'$'+p.defaultPrice.toFixed(2):'—';
+      const discPct=p.defaultPrice?Math.round((li.unitPrice-p.defaultPrice)/p.defaultPrice*100):null;
+      const discStr=discPct===null||discPct===0?'—':(discPct>0?'+':'')+discPct+'%';
+      const discCls='quote-disc'+(discPct>0?' inc':discPct<0?' dec':'');
+      return`<div class="qline-wrap${li.note?' note-open':''}" id="${nid}"${indent?' style="padding-left:12px;"':''}>
+        <div class="quote-line${on?'':' disabled'}">
+          <div class="quote-check${on?' on':''}" onclick="toggleSalesLine('${id}','${p.id}')">${on?'✓':''}</div>
+          <div class="quote-label" style="display:flex;align-items:center;gap:5px;min-width:0;">
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(p.label)}</span>
+            <button class="quote-note-btn${li.note?' has-note':''}" onclick="toggleQuoteNote('${nid}')">Notes</button>
+          </div>
+          <input class="quote-input" style="width:52px;" type="number" min="0" value="${li.qty}" oninput="onQuoteInputChange('${id}','${p.id}','qty',this.valueAsNumber||0)" onblur="saveQuoteInput('${id}','${p.id}','qty',this.valueAsNumber||0)" title="Quantity">
+          <div class="quote-list">${listStr}</div>
+          <input class="quote-input" style="width:72px;" type="number" min="0" step="0.05" value="${(li.unitPrice||0).toFixed(2)}" oninput="onQuoteInputChange('${id}','${p.id}','unitPrice',this.valueAsNumber||0)" onblur="saveQuoteInput('${id}','${p.id}','unitPrice',this.valueAsNumber||0)" title="Price per unit">
+          <div class="${discCls}" id="qdisc-${id}-${p.id}">${discStr}</div>
+          <div class="quote-col${cost>0?' active':''}" id="qcost-${id}-${p.id}">${cost>0?'$'+cost.toFixed(2):'-'}</div>
+          <span class="quote-billing-tag" style="width:64px;text-align:center;">${p.billing==='onetime'?'One Time':'Monthly'}</span>
+          <div class="quote-del"></div>
+        </div>
+        <div class="quote-note-area"><textarea placeholder="Item note..." oninput="onQuoteNoteInput('${nid}',this.value)" onblur="onSaleNoteBlur('${nid}','${id}','${p.id}',this.value)">${escHtml(li.note||'')}</textarea></div>
+      </div>`;
+    };
     groups.forEach(g=>{
       if(g.type==='group'){
         html+=`<div class="quote-group-header">${escHtml(g.parentLabel)}</div>`;
         g.items.forEach(p=>{
           const li=q.lineItems?.[p.id]||{enabled:false,qty:0,unitPrice:p.defaultPrice||0,note:''};
-          const on=li.enabled;const mo=on&&p.billing==='monthly'?li.qty*li.unitPrice:0;const ot=on&&p.billing==='onetime'?li.qty*li.unitPrice:0;
-          const nid=`qln-${id}-${p.id}`;
-          html+=`<div class="qline-wrap${li.note?' note-open':''}" id="${nid}" style="padding-left:12px;">
-            <div class="quote-line${on?'':' disabled'}">
-              <div class="quote-check${on?' on':''}" onclick="toggleSalesLine('${id}','${p.id}')">${on?'✓':''}</div>
-              <div class="quote-label">${escHtml(p.label)}</div>
-              <span class="quote-billing-tag">${p.billing==='onetime'?'One Time':'Monthly'}</span>
-              <input class="quote-input" type="number" min="0" value="${li.qty}" oninput="onQuoteInputChange('${id}','${p.id}','qty',this.valueAsNumber||0)" onblur="saveQuoteInput('${id}','${p.id}','qty',this.valueAsNumber||0)" title="Quantity">
-              <input class="quote-input" type="number" min="0" step="0.01" value="${(li.unitPrice||0).toFixed(2)}" oninput="onQuoteInputChange('${id}','${p.id}','unitPrice',this.valueAsNumber||0)" onblur="saveQuoteInput('${id}','${p.id}','unitPrice',this.valueAsNumber||0)" title="Price per unit">
-              <button class="quote-note-btn${li.note?' has-note':''}" onclick="toggleQuoteNote('${nid}')">Notes</button>
-              <div class="quote-col${mo>0?' active':''}" id="qcmo-${id}-${p.id}">${mo>0?'$'+mo.toFixed(2):'-'}</div>
-              <div class="quote-col${ot>0?' active':''}" id="qcot-${id}-${p.id}">${ot>0?'$'+ot.toFixed(2):'-'}</div>
-              <div class="quote-del"></div>
-            </div>
-            <div class="quote-note-area"><textarea placeholder="Item note..." oninput="onQuoteNoteInput('${nid}',this.value)" onblur="onSaleNoteBlur('${nid}','${id}','${p.id}',this.value)">${escHtml(li.note||'')}</textarea></div>
-          </div>`;
+          html+=renderProductLine(p,li,`qln-${id}-${p.id}`,true);
         });
       }else{
         const p=g.p;
         const li=q.lineItems?.[p.id]||{enabled:false,qty:0,unitPrice:p.defaultPrice||0,note:''};
-        const on=li.enabled;const mo=on&&p.billing==='monthly'?li.qty*li.unitPrice:0;const ot=on&&p.billing==='onetime'?li.qty*li.unitPrice:0;
-        const nid=`qln-${id}-${p.id}`;
-        html+=`<div class="qline-wrap${li.note?' note-open':''}" id="${nid}">
-          <div class="quote-line${on?'':' disabled'}">
-            <div class="quote-check${on?' on':''}" onclick="toggleSalesLine('${id}','${p.id}')">${on?'✓':''}</div>
-            <div class="quote-label">${escHtml(p.label)}</div>
-            <span class="quote-billing-tag">${p.billing==='onetime'?'One Time':'Monthly'}</span>
-            <input class="quote-input" type="number" min="0" value="${li.qty}" oninput="onQuoteInputChange('${id}','${p.id}','qty',this.valueAsNumber||0)" onblur="saveQuoteInput('${id}','${p.id}','qty',this.valueAsNumber||0)" title="Quantity">
-            <input class="quote-input" type="number" min="0" step="0.01" value="${(li.unitPrice||0).toFixed(2)}" oninput="onQuoteInputChange('${id}','${p.id}','unitPrice',this.valueAsNumber||0)" onblur="saveQuoteInput('${id}','${p.id}','unitPrice',this.valueAsNumber||0)" title="Price per unit">
-            <button class="quote-note-btn${li.note?' has-note':''}" onclick="toggleQuoteNote('${nid}')">Notes</button>
-            <div class="quote-col${mo>0?' active':''}" id="qcmo-${id}-${p.id}">${mo>0?'$'+mo.toFixed(2):'-'}</div>
-            <div class="quote-col${ot>0?' active':''}" id="qcot-${id}-${p.id}">${ot>0?'$'+ot.toFixed(2):'-'}</div>
-            <div class="quote-del"></div>
-          </div>
-          <div class="quote-note-area"><textarea placeholder="Item note..." oninput="onQuoteNoteInput('${nid}',this.value)" onblur="onSaleNoteBlur('${nid}','${id}','${p.id}',this.value)">${escHtml(li.note||'')}</textarea></div>
-        </div>`;
+        html+=renderProductLine(p,li,`qln-${id}-${p.id}`,false);
       }
     });
     // Custom items
     secCustom.forEach(c=>{
       const enabled=c.enabled!==false;
-      const mo=enabled&&c.billing==='monthly'?c.qty*c.unitPrice:0;const ot=enabled&&c.billing==='onetime'?c.qty*c.unitPrice:0;
+      const cost=enabled?c.qty*c.unitPrice:0;
       const cnid=`qln-${id}-${c.id}`;
       html+=`<div class="qline-wrap${c.note?' note-open':''}" id="${cnid}">
         <div class="quote-line${enabled?'':' disabled'}">
           <div class="quote-check${enabled?' on':''}" onclick="toggleCustomLine('${id}','${c.id}')">${enabled?'✓':''}</div>
-          <input class="quote-custom-label" placeholder="Custom item..." value="${escHtml(c.label)}" onblur="updateCustomLabel('${id}','${c.id}',this.value)">
-          <select class="quote-billing-sel" onchange="updateCustomBilling('${id}','${c.id}',this.value)">
+          <div class="quote-label" style="display:flex;align-items:center;gap:5px;min-width:0;">
+            <input class="quote-custom-label" style="flex:1;" placeholder="Custom item..." value="${escHtml(c.label)}" onblur="updateCustomLabel('${id}','${c.id}',this.value)">
+            <button class="quote-note-btn${c.note?' has-note':''}" onclick="toggleQuoteNote('${cnid}')">Notes</button>
+          </div>
+          <input class="quote-input" style="width:52px;" type="number" min="0" value="${c.qty}" oninput="onCustomInputChange('${id}','${c.id}','qty',this.valueAsNumber||0)" onblur="saveCustomInput('${id}','${c.id}','qty',this.valueAsNumber||0)" title="Quantity">
+          <div class="quote-list" style="color:transparent;">—</div>
+          <input class="quote-input" style="width:72px;" type="number" min="0" step="0.05" value="${(c.unitPrice||0).toFixed(2)}" oninput="onCustomInputChange('${id}','${c.id}','unitPrice',this.valueAsNumber||0)" onblur="saveCustomInput('${id}','${c.id}','unitPrice',this.valueAsNumber||0)" title="Price per unit">
+          <div class="quote-disc">—</div>
+          <div class="quote-col${cost>0?' active':''}" id="qcost-${id}-${c.id}">${cost>0?'$'+cost.toFixed(2):'-'}</div>
+          <select class="quote-billing-sel" style="width:64px;" onchange="updateCustomBilling('${id}','${c.id}',this.value)">
             <option value="monthly" ${c.billing==='monthly'?'selected':''}>Monthly</option>
             <option value="onetime" ${c.billing==='onetime'?'selected':''}>One Time</option>
           </select>
-          <input class="quote-input" type="number" min="0" value="${c.qty}" oninput="onCustomInputChange('${id}','${c.id}','qty',this.valueAsNumber||0)" onblur="saveCustomInput('${id}','${c.id}','qty',this.valueAsNumber||0)" title="Quantity">
-          <input class="quote-input" type="number" min="0" step="0.01" value="${(c.unitPrice||0).toFixed(2)}" oninput="onCustomInputChange('${id}','${c.id}','unitPrice',this.valueAsNumber||0)" onblur="saveCustomInput('${id}','${c.id}','unitPrice',this.valueAsNumber||0)" title="Price per unit">
-          <button class="quote-note-btn${c.note?' has-note':''}" onclick="toggleQuoteNote('${cnid}')">Notes</button>
-          <div class="quote-col${mo>0?' active':''}" id="qcmo-${id}-${c.id}">${mo>0?'$'+mo.toFixed(2):'-'}</div>
-          <div class="quote-col${ot>0?' active':''}" id="qcot-${id}-${c.id}">${ot>0?'$'+ot.toFixed(2):'-'}</div>
           <button class="quote-del-btn" onclick="styledConfirm('Remove this item?',()=>deleteCustomQuoteLine('${id}','${c.id}'))" title="Remove">&#215;</button>
         </div>
         <div class="quote-note-area"><textarea placeholder="Item note..." oninput="onQuoteNoteInput('${cnid}',this.value)" onblur="onCustomNoteBlur('${cnid}','${id}','${c.id}',this.value)">${escHtml(c.note||'')}</textarea></div>
@@ -2457,13 +2470,16 @@ function onQuoteInputChange(quoteId,productId,field,val){
   const li=q.lineItems[productId];
   const p=getSalesProducts().find(pp=>pp.id===productId);
   if(p){
-    const on=li.enabled;
-    const mo=on&&p.billing==='monthly'?li.qty*li.unitPrice:0;
-    const ot=on&&p.billing==='onetime'?li.qty*li.unitPrice:0;
-    const moEl=document.getElementById(`qcmo-${quoteId}-${productId}`);
-    const otEl=document.getElementById(`qcot-${quoteId}-${productId}`);
-    if(moEl){moEl.textContent=mo>0?'$'+mo.toFixed(2):'-';moEl.classList.toggle('active',mo>0);}
-    if(otEl){otEl.textContent=ot>0?'$'+ot.toFixed(2):'-';otEl.classList.toggle('active',ot>0);}
+    const cost=li.enabled?li.qty*li.unitPrice:0;
+    const costEl=document.getElementById(`qcost-${quoteId}-${productId}`);
+    if(costEl){costEl.textContent=cost>0?'$'+cost.toFixed(2):'-';costEl.classList.toggle('active',cost>0);}
+    // Update discount %
+    const discEl=document.getElementById(`qdisc-${quoteId}-${productId}`);
+    if(discEl&&p.defaultPrice){
+      const pct=Math.round((li.unitPrice-p.defaultPrice)/p.defaultPrice*100);
+      discEl.textContent=pct===0?'—':(pct>0?'+':'')+pct+'%';
+      discEl.className='quote-disc'+(pct>0?' inc':pct<0?' dec':'');
+    }
   }
   refreshQuoteUI(quoteId);
 }
@@ -2479,13 +2495,9 @@ function onCustomInputChange(quoteId,customId,field,val){
   const q=salesQuotes[quoteId];if(!q)return;
   const c=(q.customItems||[]).find(c=>c.id===customId);if(!c)return;
   c[field]=isNaN(val)?0:+val;
-  const enabled=c.enabled!==false;
-  const mo=enabled&&c.billing==='monthly'?c.qty*c.unitPrice:0;
-  const ot=enabled&&c.billing==='onetime'?c.qty*c.unitPrice:0;
-  const moEl=document.getElementById(`qcmo-${quoteId}-${customId}`);
-  const otEl=document.getElementById(`qcot-${quoteId}-${customId}`);
-  if(moEl){moEl.textContent=mo>0?'$'+mo.toFixed(2):'-';moEl.classList.toggle('active',mo>0);}
-  if(otEl){otEl.textContent=ot>0?'$'+ot.toFixed(2):'-';otEl.classList.toggle('active',ot>0);}
+  const cost=c.enabled!==false?c.qty*c.unitPrice:0;
+  const costEl=document.getElementById(`qcost-${quoteId}-${customId}`);
+  if(costEl){costEl.textContent=cost>0?'$'+cost.toFixed(2):'-';costEl.classList.toggle('active',cost>0);}
   refreshQuoteUI(quoteId);
 }
 async function saveCustomInput(quoteId,customId,field,val){
@@ -2564,6 +2576,58 @@ async function showQuoteLog(quoteId){
     const logs=await r.json();
     renderLogTimeline(document.getElementById('log-modal-body'),logs);
   }catch(e){document.getElementById('log-modal-body').innerHTML=`<div style="color:#fca5a5;font-size:11px;">Failed to load logs: ${e.message}</div>`;}
+}
+function toggleCustomerView(id){
+  const el=document.getElementById('quote-content');if(!el)return;
+  const isOn=el.dataset.customer==='1';
+  el.dataset.customer=isOn?'':'1';
+  loadSalesQuote(id);
+}
+function printQuoteCustomer(id){
+  const q=salesQuotes[id];if(!q)return;
+  const prods=getSalesProducts();
+  const t=calcQuoteTotals(q);
+  const orgName=config?.orgName||'System Alternatives';
+  const date=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const sections=[{key:'user',label:'User Products'},{key:'machine',label:'Machine Products'},{key:'site',label:'Site Products'}];
+  let rows='';let rowIdx=0;
+  sections.forEach(sec=>{
+    const sp=prods.filter(p=>p.salesCategory===sec.key&&q.lineItems?.[p.id]?.enabled);
+    const sc=(q.customItems||[]).filter(c=>c.category===sec.key&&c.enabled!==false&&(c.qty>0||c.unitPrice>0));
+    if(!sp.length&&!sc.length)return;
+    rows+=`<tr class="sec-hdr"><td colspan="4">${sec.label}</td></tr>`;
+    sp.forEach(p=>{
+      const li=q.lineItems[p.id];
+      const cost=li.qty*li.unitPrice;
+      const note=li.note||'';
+      rows+=`<tr class="${rowIdx++%2?'even':''}"><td>${p.label}${note?`<div class="note">${note}</div>`:''}</td><td class="r">${li.qty}</td><td class="r">$${li.unitPrice.toFixed(2)}</td><td class="r">${p.billing==='onetime'?'One Time':'Monthly'}</td></tr>`;
+    });
+    sc.forEach(c=>{
+      const note=c.note||'';
+      rows+=`<tr class="${rowIdx++%2?'even':''} custom"><td>${c.label||'(Custom item)'}${note?`<div class="note">${note}</div>`:''}</td><td class="r">${c.qty}</td><td class="r">$${c.unitPrice.toFixed(2)}</td><td class="r">${c.billing==='onetime'?'One Time':'Monthly'}</td></tr>`;
+    });
+  });
+  const css=`*{box-sizing:border-box;margin:0;padding:0;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#1a1d23;background:#fff;font-size:13px;line-height:1.5;}.accent-bar{height:4px;background:linear-gradient(90deg,#3b82f6,#6366f1);}.header{padding:28px 32px 20px;border-bottom:1px solid #e5e7eb;}.org{font-size:22px;font-weight:800;color:#1a1d23;letter-spacing:-0.3px;}.quote-label-hdr{font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-top:4px;}.meta-row{display:flex;gap:24px;flex-wrap:wrap;padding:14px 32px;background:#f9fafb;border-bottom:1px solid #e5e7eb;font-size:12px;color:#374151;}.meta-item{display:flex;flex-direction:column;gap:2px;}.meta-label{font-size:10px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;}.meta-val{font-weight:600;color:#111827;}.body{padding:20px 32px 32px;}table{width:100%;border-collapse:collapse;margin-top:0;}thead tr{background:#f0f4ff;}th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#1e3a8a;padding:10px 12px;text-align:left;border-bottom:2px solid #bfdbfe;}td{padding:8px 12px;border-bottom:1px solid #f3f4f6;vertical-align:top;}tr.even td{background:#f9fafb;}tr.sec-hdr td{background:#eff6ff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#1e40af;padding:8px 12px;border-top:8px solid #fff;border-bottom:1px solid #bfdbfe;}tr.custom td:first-child{font-style:italic;}.note{font-size:11px;color:#6b7280;margin-top:2px;font-style:italic;}.r{text-align:right;}.totals-wrap{display:flex;justify-content:flex-end;margin-top:20px;}.totals-card{border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;min-width:260px;}.totals-card table{margin-top:0;}.totals-card th{background:#f8fafc;color:#6b7280;}.totals-card td{padding:9px 14px;}.tot-label{font-weight:500;color:#374151;}.tot-val{text-align:right;font-weight:700;}.notes-block{margin-top:24px;padding:14px 16px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;}.notes-block strong{font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#92400e;}.notes-text{margin-top:6px;font-size:12px;color:#78350f;line-height:1.6;white-space:pre-wrap;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}`;
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quote — ${escHtml(q.name)}</title><style>${css}</style></head><body>
+<div class="accent-bar"></div>
+<div class="header"><div class="org">${escHtml(orgName)}</div><div class="quote-label-hdr">Sales Quote</div></div>
+<div class="meta-row">
+  <div class="meta-item"><span class="meta-label">Company</span><span class="meta-val">${escHtml(q.name)}</span></div>
+  ${q.contact?`<div class="meta-item"><span class="meta-label">Contact</span><span class="meta-val">${escHtml(q.contact)}</span></div>`:''}
+  <div class="meta-item"><span class="meta-label">Prepared by</span><span class="meta-val">${escHtml(q.tech)}</span></div>
+  <div class="meta-item"><span class="meta-label">Date</span><span class="meta-val">${date}</span></div>
+</div>
+<div class="body">
+<table><thead><tr><th>Product / Service</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Billing</th></tr></thead>
+<tbody>${rows}</tbody></table>
+<div class="totals-wrap"><div class="totals-card"><table>
+  <tr><td class="tot-label">Monthly Total</td><td class="tot-val">$${t.monthlyClient.toFixed(2)}</td></tr>
+  <tr><td class="tot-label">One-Time Total</td><td class="tot-val">$${t.onetimeClient.toFixed(2)}</td></tr>
+</table></div></div>
+${q.notes?`<div class="notes-block"><strong>Notes</strong><div class="notes-text">${escHtml(q.notes)}</div></div>`:''}
+</div></body></html>`;
+  const w=window.open('','_blank');
+  w.document.write(html);w.document.close();w.print();w.close();
 }
 function toggleQuoteMenu(id){
   const menu=document.getElementById(`qmenu-${id}`);
@@ -2675,19 +2739,20 @@ function printQuote(id){
     const sp=prods.filter(p=>p.salesCategory===sec.key&&q.lineItems?.[p.id]?.enabled);
     const sc=(q.customItems||[]).filter(c=>c.category===sec.key&&c.enabled!==false&&(c.qty>0||c.unitPrice>0));
     if(!sp.length&&!sc.length)return;
-    rows+=`<tr class="sec-hdr"><td colspan="5">${sec.label}</td></tr>`;
+    rows+=`<tr class="sec-hdr"><td colspan="7">${sec.label}</td></tr>`;
     sp.forEach(p=>{
       const li=q.lineItems[p.id];
-      const mo=p.billing==='monthly'?li.qty*li.unitPrice:0;
-      const ot=p.billing==='onetime'?li.qty*li.unitPrice:0;
+      const cost=li.qty*li.unitPrice;
       const note=li.note||'';
-      rows+=`<tr class="${rowIdx++%2?'even':''}"><td>${p.label}${note?`<div class="note">${note}</div>`:''}</td><td class="r">${li.qty}</td><td class="r">$${li.unitPrice.toFixed(2)}</td><td class="r">${mo>0?'$'+mo.toFixed(2):'-'}</td><td class="r">${ot>0?'$'+ot.toFixed(2):'-'}</td></tr>`;
+      const discPct=p.defaultPrice?Math.round((li.unitPrice-p.defaultPrice)/p.defaultPrice*100):null;
+      const discStr=discPct===null||discPct===0?'—':(discPct>0?'+':'')+discPct+'%';
+      const discColor=discPct>0?'#dc2626':discPct<0?'#16a34a':'#9ca3af';
+      rows+=`<tr class="${rowIdx++%2?'even':''}"><td>${p.label}${note?`<div class="note">${note}</div>`:''}</td><td class="r">${li.qty}</td><td class="r">${p.defaultPrice?'$'+p.defaultPrice.toFixed(2):'—'}</td><td class="r">$${li.unitPrice.toFixed(2)}</td><td class="r" style="color:${discColor};font-weight:600;">${discStr}</td><td class="r">$${cost.toFixed(2)}</td><td class="r">${p.billing==='onetime'?'One Time':'Monthly'}</td></tr>`;
     });
     sc.forEach(c=>{
-      const mo=c.billing==='monthly'?c.qty*c.unitPrice:0;
-      const ot=c.billing==='onetime'?c.qty*c.unitPrice:0;
+      const cost=c.qty*c.unitPrice;
       const note=c.note||'';
-      rows+=`<tr class="${rowIdx++%2?'even':''} custom"><td>${c.label||'(Custom item)'}<span class="tag">${c.billing==='onetime'?'One Time':'Monthly'}</span>${note?`<div class="note">${note}</div>`:''}</td><td class="r">${c.qty}</td><td class="r">$${c.unitPrice.toFixed(2)}</td><td class="r">${mo>0?'$'+mo.toFixed(2):'-'}</td><td class="r">${ot>0?'$'+ot.toFixed(2):'-'}</td></tr>`;
+      rows+=`<tr class="${rowIdx++%2?'even':''} custom"><td>${c.label||'(Custom item)'}${note?`<div class="note">${note}</div>`:''}</td><td class="r">${c.qty}</td><td class="r">—</td><td class="r">$${c.unitPrice.toFixed(2)}</td><td class="r">—</td><td class="r">$${cost.toFixed(2)}</td><td class="r">${c.billing==='onetime'?'One Time':'Monthly'}</td></tr>`;
     });
   });
   const profitColor=t.profit>=0?'#16a34a':'#dc2626';
@@ -2737,7 +2802,7 @@ tr.custom td:first-child{font-style:italic;}
   <div class="meta-item"><span class="meta-label">Date</span><span class="meta-val">${date}</span></div>
 </div>
 <div class="body">
-<table><thead><tr><th>Product / Service</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Monthly</th><th class="r">One Time</th></tr></thead>
+<table><thead><tr><th>Product / Service</th><th class="r">Qty</th><th class="r">List Price</th><th class="r">$/Unit</th><th class="r">Disc</th><th class="r">Cost</th><th class="r">Freq</th></tr></thead>
 <tbody>${rows}</tbody></table>
 <div class="totals-wrap"><div class="totals-card"><table>
   <tr><td class="tot-label">Monthly Total</td><td class="tot-val">$${t.monthlyClient.toFixed(2)}</td></tr>
@@ -4765,7 +4830,7 @@ async function loadConfig(){
     else console.warn('steps.json not found');
     const settingsRes=await fetch('/api/settings').catch(()=>null);
     if(settingsRes&&settingsRes.ok){const sd=await settingsRes.json();appSettings={...appSettings,...sd};if(!sd.products) appSettings.products=DEFAULT_PRODUCTS;}
-    await loadClients();await loadSalesQuotes();renderSidebar();buildProductsGrid();showView('home');
+    await loadClients();await loadSalesQuotes();renderSidebar();buildProductsGrid();document.getElementById('sidebar').classList.add('hidden');showView('home');
   }catch(e){showAlert('config-alert','error',`Failed to load: ${e.message}`);}
 }
 async function loadClients(){try{const r=await fetch('/api/clients');if(!r.ok)throw new Error();clients=await r.json();}catch(e){clients={};}}
