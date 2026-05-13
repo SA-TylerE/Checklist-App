@@ -42,7 +42,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .quote-section.collapsed .quote-section-body{display:none;}
 .quote-section.collapsed .quote-section-toggle{transform:rotate(-90deg);}
 .quote-section-toggle{font-size:9px;color:var(--text3);transition:transform 0.15s;margin-left:auto;}
-.quote-section-subtotal{font-size:11px;color:var(--text3);margin-left:auto;margin-right:8px;font-weight:400;}
+.quote-section-subtotal{font-size:11px;color:var(--text3);flex:1;text-align:center;font-weight:400;}
 .quote-line{display:flex;align-items:center;gap:8px;padding:7px 12px 7px 14px;border-bottom:1px solid var(--border);font-size:12px;transition:background 0.1s;}
 .quote-line:last-child{border-bottom:none;}
 .quote-line:hover{background:var(--bg3);}
@@ -99,10 +99,10 @@ input[type=number]{-moz-appearance:textfield;}
 .pm-sales-label{font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;display:block;margin-bottom:2px;}
 
 /* Reference product filter chips */
-.ref-chip{padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-size:11px;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
-.ref-chip:hover{border-color:var(--accent);}
+.ref-chip{padding:5px 10px;border-radius:5px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-size:11px;cursor:pointer;transition:all 0.15s;white-space:nowrap;text-align:left;display:block;width:100%;}
+.ref-chip:hover{border-color:var(--accent);color:var(--accent);}
 .ref-chip.active{background:var(--accent);border-color:var(--accent);color:#fff;}
-.ref-filter-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);}
+.ref-chip-sidebar{padding:6px 8px;display:flex;flex-direction:column;gap:3px;border-bottom:1px solid var(--border);}
 
 #body-row{display:flex;flex:1;overflow:hidden;}
 
@@ -397,10 +397,6 @@ input[type=number]{-moz-appearance:textfield;}
 .sidebar-section.active{display:flex;}
 
 /* Reference sidebar */
-.ref-search{padding:6px 12px 8px;}
-.ref-search input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 9px;color:var(--text);font-size:12px;outline:none;}
-.ref-search input:focus{border-color:var(--accent);}
-.ref-search input::placeholder{color:var(--text3);}
 #ref-list{flex:1;overflow-y:auto;padding:4px 0;}
 .ref-group{border-bottom:1px solid var(--border);}
 .ref-group-header{display:flex;align-items:center;gap:7px;padding:7px 14px;cursor:pointer;user-select:none;transition:background 0.1s;}
@@ -823,10 +819,11 @@ body.light{
         </div>
         <!-- Reference section -->
         <div class="sidebar-section" id="ss-reference">
-          <div class="ref-search">
+          <div class="sidebar-search">
             <input type="text" id="ref-search-input" placeholder="Search procedures..." oninput="filterRefList(this.value)">
           </div>
-          <div id="ref-list"></div>
+          <div id="ref-product-filter" class="ref-chip-sidebar"></div>
+          <div id="ref-list" style="flex:1;overflow-y:auto;padding:4px 0;"></div>
         </div>
 
         <!-- Sales / quotes section -->
@@ -886,7 +883,6 @@ body.light{
 
         <!-- Reference view -->
         <div id="view-reference" class="view">
-          <div class="ref-filter-bar" id="ref-product-filter"></div>
           <div id="reference-content" class="phase-grid"></div>
         </div>
 
@@ -1482,6 +1478,7 @@ let activeSection='onboarding';
 function switchSection(name){
   if(isMobile()) closeOverlays();
   activeSection=name;
+  document.getElementById('sidebar').classList.remove('collapsed');
   document.getElementById('settings-btn')?.classList.remove('active');
   ['onboarding','sales','reference'].forEach(s=>{
     document.getElementById('ah-btn-'+s)?.classList.toggle('active',s===name);
@@ -1529,6 +1526,7 @@ function goToDashboard(){
     document.getElementById('ah-btn-'+s)?.classList.remove('active');
     document.getElementById('ss-'+s)?.classList.remove('active');
   });
+  document.getElementById('sidebar').classList.add('collapsed');
   showView('home');
 }
 function toggleSettings(){
@@ -2286,6 +2284,7 @@ async function createQuote(){
     ...nums,nonManagedMachines:0,localBackupTB:0,cloudBackupTB:0,notes:'',lineItems,customItems:[]
   };
   await saveSalesQuotes();
+  logQuote(id,'quote_created',{clientName:name});
   renderSalesSidebar();
   selectQuote(id);
 }
@@ -2323,7 +2322,8 @@ function loadSalesQuote(id){
       <button class="client-menu-btn" onclick="toggleQuoteMenu('${id}')">&#8230;</button>
       <div class="client-menu-dropdown" id="qmenu-${id}">
         <button class="client-menu-item" onclick="closeQuoteMenu('${id}');printQuote('${id}')">Print / Export</button>
-        <button class="client-menu-item warn" onclick="closeQuoteMenu('${id}');editQuoteInfo('${id}')">Edit Info</button>
+        <button class="client-menu-item" onclick="closeQuoteMenu('${id}');showQuoteLog('${id}')">View Log</button>
+        <button class="client-menu-item warn" onclick="closeQuoteMenu('${id}');editQuoteInfo('${id}')">Edit</button>
         <button class="client-menu-item danger" onclick="closeQuoteMenu('${id}');deleteQuote('${id}')">Delete</button>
       </div>
     </div>
@@ -2441,21 +2441,25 @@ function loadSalesQuote(id){
 
 async function toggleSalesLine(quoteId,productId){
   const q=salesQuotes[quoteId];if(!q)return;
-  if(!q.lineItems[productId])q.lineItems[productId]={enabled:false,qty:0,unitPrice:getSalesProducts().find(p=>p.id===productId)?.defaultPrice||0};
+  if(!q.lineItems[productId])q.lineItems[productId]={enabled:false,qty:0,unitPrice:getSalesProducts().find(p=>p.id===productId)?.defaultPrice||0,note:''};
   q.lineItems[productId].enabled=!q.lineItems[productId].enabled;
+  const enabled=q.lineItems[productId].enabled;
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
+  logQuote(quoteId,enabled?'line_enabled':'line_disabled',{details:productId});
   loadSalesQuote(quoteId);
 }
 async function updateSalesQty(quoteId,productId,val){
-  const q=salesQuotes[quoteId];if(!q||!q.lineItems[productId])return;
+  const q=salesQuotes[quoteId];if(!q)return;
+  if(!q.lineItems[productId]){const p=getSalesProducts().find(p=>p.id===productId);q.lineItems[productId]={enabled:false,qty:0,unitPrice:p?.defaultPrice||0,note:''};}
   q.lineItems[productId].qty=parseFloat(val)||0;
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
   loadSalesQuote(quoteId);
 }
 async function updateSalesPrice(quoteId,productId,val){
-  const q=salesQuotes[quoteId];if(!q||!q.lineItems[productId])return;
+  const q=salesQuotes[quoteId];if(!q)return;
+  if(!q.lineItems[productId]){const p=getSalesProducts().find(p=>p.id===productId);q.lineItems[productId]={enabled:false,qty:0,unitPrice:p?.defaultPrice||0,note:''};}
   q.lineItems[productId].unitPrice=parseFloat(val)||0;
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
@@ -2479,6 +2483,24 @@ async function toggleCustomLine(quoteId,customId){
   await saveSalesQuotes();
   loadSalesQuote(quoteId);
 }
+function logQuote(quoteId,action,details={}){
+  const myName=localStorage.getItem('myName')||'';
+  fetch('/api/logs',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ts:new Date().toISOString(),tech:myName,action,clientId:quoteId,...details})
+  }).catch(_=>{});
+}
+async function showQuoteLog(quoteId){
+  const q=salesQuotes[quoteId];
+  const modal=document.getElementById('log-modal');
+  document.getElementById('log-modal-title').textContent=(q?.name||'Quote')+' — Activity Log';
+  document.getElementById('log-modal-body').innerHTML='<div style="color:var(--text3);font-size:11px;">Loading…</div>';
+  modal.style.display='flex';
+  try{
+    const r=await fetch(`/api/logs?clientId=${quoteId}&limit=200`);
+    const logs=await r.json();
+    renderLogTimeline(document.getElementById('log-modal-body'),logs);
+  }catch(e){document.getElementById('log-modal-body').innerHTML=`<div style="color:#fca5a5;font-size:11px;">Failed to load logs: ${e.message}</div>`;}
+}
 function toggleQuoteMenu(id){
   const menu=document.getElementById(`qmenu-${id}`);
   const isOpen=menu?.classList.contains('open');
@@ -2493,13 +2515,16 @@ async function addCustomQuoteLine(quoteId,category){
   q.customItems.push({id:'custom-'+Date.now(),label:'',category,qty:1,unitPrice:0,billing:'monthly',note:'',enabled:true});
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
+  logQuote(quoteId,'custom_item_added',{details:category});
   loadSalesQuote(quoteId);
 }
 async function deleteCustomQuoteLine(quoteId,customId){
   const q=salesQuotes[quoteId];if(!q)return;
+  const label=(q.customItems||[]).find(c=>c.id===customId)?.label||'';
   q.customItems=(q.customItems||[]).filter(c=>c.id!==customId);
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
+  logQuote(quoteId,'custom_item_removed',{details:label||customId});
   loadSalesQuote(quoteId);
 }
 async function updateCustomLabel(quoteId,customId,val){
@@ -2534,7 +2559,9 @@ async function updateCustomNote(quoteId,customId,val){
 }
 
 async function deleteQuote(id){
-  styledConfirm(`Delete quote "${salesQuotes[id]?.name}"?`,async()=>{
+  const name=salesQuotes[id]?.name;
+  styledConfirm(`Delete quote "${name}"?`,async()=>{
+    logQuote(id,'quote_deleted',{clientName:name});
     delete salesQuotes[id];
     activeSalesQuoteId=null;
     await saveSalesQuotes();
@@ -2576,6 +2603,7 @@ async function saveEditQuote(){
   q.lastModified=new Date().toISOString();
   closeEditQuoteModal();
   await saveSalesQuotes();
+  logQuote(id,'quote_edited',{clientName:q.name});
   renderSalesSidebar();
   loadSalesQuote(id);
 }
@@ -2665,7 +2693,7 @@ tr.custom td:first-child{font-style:italic;}
 ${q.notes?`<div class="notes-block"><strong>Notes</strong><div class="notes-text">${escHtml(q.notes)}</div></div>`:''}
 </div></body></html>`;
   const w=window.open('','_blank');
-  w.document.write(html);w.document.close();w.print();
+  w.document.write(html);w.document.close();w.print();w.close();
 }
 
 function renderSalesView(){
@@ -4708,7 +4736,7 @@ function renderSyncroLinkArea(){
 }
 let syncroLinkCallback=null;
 function openSyncroLinkModal(callback){
-  if(!config?.syncroToken){showToast('Add Syncro credentials in Settings first','error');return;}
+  if(!config?.syncroTokenSet){showToast('Add Syncro credentials in Settings first','error');return;}
   syncroLinkCallback=callback||null;
   document.getElementById('slm-input').value='';
   document.getElementById('slm-results').innerHTML='';
