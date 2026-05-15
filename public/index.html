@@ -99,6 +99,14 @@ input[type=number]{-moz-appearance:textfield;}
 .qline-wrap.note-open .quote-note-area{display:block;}
 .quote-note-area textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:6px;color:var(--text);font-size:11px;font-family:var(--sans);resize:vertical;min-height:40px;outline:none;box-sizing:border-box;}
 .quote-note-area textarea:focus{border-color:var(--accent);}
+.inline-notes{border-bottom:1px solid var(--border);}
+.inline-notes-toggle{width:100%;text-align:left;background:none;border:none;padding:7px 14px;font-size:11px;color:var(--text3);cursor:pointer;display:flex;align-items:center;gap:6px;transition:color 0.15s;}
+.inline-notes-toggle:hover{color:var(--text2);}
+.note-dot{color:var(--warn);font-size:9px;margin-left:2px;}
+.inline-notes-body{display:none;padding:0 14px 8px;}
+.inline-notes.open .inline-notes-body{display:block;}
+.inline-notes-ta{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:7px 9px;color:var(--text);font-size:12px;font-family:var(--sans);resize:vertical;min-height:64px;outline:none;box-sizing:border-box;}
+.inline-notes-ta:focus{border-color:var(--accent);}
 /* Sales product expand in products modal */
 .pm-sales-expand{display:none;flex-wrap:wrap;gap:6px;padding:6px 0 2px 22px;border-top:1px solid var(--border);margin-top:6px;}
 .pm-row.sales-open .pm-sales-expand{display:flex;}
@@ -968,7 +976,6 @@ body.light{
       <div class="field-group" style="margin:0;"><label>Sites</label><input type="number" id="eq-sites" min="1"></div>
       <div class="field-group" style="margin:0;"><label>Backed Up Machines</label><input type="number" id="eq-backup" min="0"></div>
     </div>
-    <div class="field-group"><label>Notes</label><textarea id="eq-notes" style="height:60px;resize:vertical;"></textarea></div>
     <div class="modal-actions" style="margin-top:14px;">
       <button class="btn-secondary" onclick="closeEditQuoteModal()">Cancel</button>
       <button class="btn-primary" onclick="saveEditQuote()">Save</button>
@@ -1048,9 +1055,9 @@ body.light{
 </div>
 <div id="summary-modal">
   <div class="summary-card">
-    <h3>Onboarding Summary</h3>
+    <h3 id="summary-title">Summary</h3>
     <div id="summary-body"></div>
-    <div class="summary-actions">
+    <div class="summary-actions" id="summary-actions">
       <button class="btn-secondary" onclick="document.getElementById('summary-modal').classList.remove('show')">Close</button>
       <button class="btn-primary" onclick="printSummary()">Print</button>
     </div>
@@ -2332,13 +2339,20 @@ function loadSalesQuote(id){
     <div class="client-menu-wrap" id="qmenu-wrap-${id}">
       <button class="client-menu-btn" onclick="toggleQuoteMenu('${id}')">&#8230;</button>
       <div class="client-menu-dropdown" id="qmenu-${id}">
-        <button class="client-menu-item" onclick="closeQuoteMenu('${id}');printQuote('${id}')">Print (Internal)</button>
-        <button class="client-menu-item" onclick="closeQuoteMenu('${id}');printQuoteCustomer('${id}')">Print for Customer</button>
-        <button class="client-menu-item" onclick="closeQuoteMenu('${id}');toggleCustomerView('${id}')">Toggle Customer View</button>
+        <button class="client-menu-item" onclick="closeQuoteMenu('${id}');showQuoteSummary('${id}')">Summary</button>
+        <button class="client-menu-item" onclick="closeQuoteMenu('${id}');toggleCustomerView('${id}')">${isCustomerView?'Exit Customer View':'Customer View'}</button>
         <button class="client-menu-item" onclick="closeQuoteMenu('${id}');showQuoteLog('${id}')">View Log</button>
         <button class="client-menu-item warn" onclick="closeQuoteMenu('${id}');editQuoteInfo('${id}')">Edit</button>
         <button class="client-menu-item danger" onclick="closeQuoteMenu('${id}');deleteQuote('${id}')">Delete</button>
       </div>
+    </div>
+  </div>
+  <div class="inline-notes${q.notes?' open':''}" id="qnotes-${id}">
+    <button class="inline-notes-toggle" onclick="this.closest('.inline-notes').classList.toggle('open')">
+      &#128203; Notes${q.notes?'<span class="note-dot">&#9679;</span>':''}
+    </button>
+    <div class="inline-notes-body">
+      <textarea class="inline-notes-ta" placeholder="Add notes about this quote..." onblur="saveInlineQuoteNotes('${id}',this.value)">${escHtml(q.notes||'')}</textarea>
     </div>
   </div>
   <div class="quote-sticky-totals">
@@ -2455,11 +2469,29 @@ function loadSalesQuote(id){
 async function toggleSalesLine(quoteId,productId){
   const q=salesQuotes[quoteId];if(!q)return;
   if(!q.lineItems[productId])q.lineItems[productId]={enabled:false,qty:0,unitPrice:getSalesProducts().find(p=>p.id===productId)?.defaultPrice||0,note:''};
-  q.lineItems[productId].enabled=!q.lineItems[productId].enabled;
-  const enabled=q.lineItems[productId].enabled;
+  const wantEnable=!q.lineItems[productId].enabled;
+  const p=getSalesProducts().find(pp=>pp.id===productId);
+  // Dependency check: require another product to be enabled first
+  if(wantEnable&&p?.requires){
+    const reqEnabled=q.lineItems[p.requires]?.enabled;
+    if(!reqEnabled){
+      const reqProd=getSalesProducts().find(pp=>pp.id===p.requires);
+      showToast(`"${p.label}" requires "${reqProd?.label||p.requires}" to be enabled first`,'warn');
+      return;
+    }
+  }
+  // When disabling, auto-disable any dependents
+  if(!wantEnable){
+    const dependents=getSalesProducts().filter(pp=>pp.requires===productId&&q.lineItems[pp.id]?.enabled);
+    if(dependents.length){
+      dependents.forEach(pp=>{q.lineItems[pp.id].enabled=false;});
+      showToast(`Also disabled ${dependents.length} dependent item${dependents.length>1?'s':''}`,'warn');
+    }
+  }
+  q.lineItems[productId].enabled=wantEnable;
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
-  logQuote(quoteId,enabled?'line_enabled':'line_disabled',{details:productId});
+  logQuote(quoteId,wantEnable?'line_enabled':'line_disabled',{details:productId});
   loadSalesQuote(quoteId);
 }
 // Live update: updates in-memory + column cells + totals without re-rendering
@@ -2577,10 +2609,19 @@ async function showQuoteLog(quoteId){
     renderLogTimeline(document.getElementById('log-modal-body'),logs);
   }catch(e){document.getElementById('log-modal-body').innerHTML=`<div style="color:#fca5a5;font-size:11px;">Failed to load logs: ${e.message}</div>`;}
 }
+async function saveInlineQuoteNotes(quoteId,val){
+  const q=salesQuotes[quoteId];if(!q)return;
+  q.notes=val;
+  q.lastModified=new Date().toISOString();
+  await saveSalesQuotes();
+  const toggle=document.querySelector(`#qnotes-${quoteId} .inline-notes-toggle`);
+  if(toggle)toggle.innerHTML=`&#128203; Notes${val?'<span class="note-dot">&#9679;</span>':''}`;
+}
 function toggleCustomerView(id){
   const el=document.getElementById('quote-content');if(!el)return;
   const isOn=el.dataset.customer==='1';
-  el.dataset.customer=isOn?'':'1';
+  if(isOn) el.removeAttribute('data-customer');
+  else el.dataset.customer='1';
   loadSalesQuote(id);
 }
 function printQuoteCustomer(id){
@@ -2701,7 +2742,6 @@ function editQuoteInfo(id){
   document.getElementById('eq-srv').value=q.servers||0;
   document.getElementById('eq-sites').value=q.sites||1;
   document.getElementById('eq-backup').value=q.backedUpMachines||0;
-  document.getElementById('eq-notes').value=q.notes||'';
   m._quoteId=id;
   m.style.display='flex';
 }
@@ -2718,7 +2758,6 @@ async function saveEditQuote(){
   q.servers=parseInt(document.getElementById('eq-srv').value)||0;
   q.sites=parseInt(document.getElementById('eq-sites').value)||1;
   q.backedUpMachines=parseInt(document.getElementById('eq-backup').value)||0;
-  q.notes=document.getElementById('eq-notes').value;
   q.lastModified=new Date().toISOString();
   closeEditQuoteModal();
   await saveSalesQuotes();
@@ -3262,6 +3301,13 @@ function pmRender(){
               <span class="pm-sales-label">Qty Source</span>
               <select class="pm-sales-input" oninput="_pmProducts[${i}].qtySource=this.value;pmMarkDirty()">
                 ${qtyOpts.map(o=>`<option value="${o}" ${(p.qtySource||'')===(o)?'selected':''}>${o||'— Manual —'}</option>`).join('')}
+              </select>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:90px;">
+              <span class="pm-sales-label">Requires</span>
+              <select class="pm-sales-input" oninput="_pmProducts[${i}].requires=this.value||undefined;pmMarkDirty()">
+                <option value="">— No requirement —</option>
+                ${_pmProducts.filter((pp,j)=>j!==i&&pp.id&&pp.salesCategory).map(pp=>`<option value="${pp.id}" ${(p.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`).join('')}
               </select>
             </div>
             ${!hasSubItems?`
@@ -3892,12 +3938,20 @@ function loadClientChecklist(id){
         <button class="client-menu-btn" onclick="toggleClientMenu('${id}')">&#8230;</button>
         <div class="client-menu-dropdown" id="cmenu-${id}">
           <button class="client-menu-item" onclick="closeClientMenu('${id}');showSummary('${id}')">Summary</button>
-          <button class="client-menu-item" onclick="closeClientMenu('${id}');openClientNotes('${id}')">Notes${client.notes?'&nbsp;<span style="color:var(--warn);font-size:10px;">●</span>':''}</button>
           <button class="client-menu-item" onclick="closeClientMenu('${id}');showClientLog('${id}')">View Log</button>
           <button class="client-menu-item warn" onclick="closeClientMenu('${id}');openEditClientModal('${id}')">Edit</button>
           <button class="client-menu-item danger" onclick="closeClientMenu('${id}');confirmDeleteClient('${id}')">Delete</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div class="inline-notes${client.notes?' open':''}" id="cnotes-${id}">
+    <button class="inline-notes-toggle" onclick="this.closest('.inline-notes').classList.toggle('open')">
+      &#128203; Notes${client.notes?'<span class="note-dot">&#9679;</span>':''}
+    </button>
+    <div class="inline-notes-body">
+      <textarea class="inline-notes-ta" placeholder="Add notes about this client..." onblur="saveInlineClientNotes('${id}',this.value)">${escHtml(client.notes||'')}</textarea>
     </div>
   </div>
 
@@ -4001,6 +4055,15 @@ async function saveClientNotes(clientId,val){
   await saveClients();
 }
 
+async function saveInlineClientNotes(clientId,val){
+  if(!clients[clientId])return;
+  clients[clientId].notes=val;
+  clients[clientId].lastModified=new Date().toISOString();
+  await saveClients();
+  // Update dot indicator without re-render
+  const toggle=document.querySelector(`#cnotes-${clientId} .inline-notes-toggle`);
+  if(toggle)toggle.innerHTML=`&#128203; Notes${val?'<span class="note-dot">&#9679;</span>':''}`;
+}
 function openClientNotes(clientId){
   const client=clients[clientId];
   const modal=document.getElementById('client-notes-modal');
@@ -4198,46 +4261,106 @@ function showSummary(clientId){
   const client=clients[clientId];
   const phases=buildPhases(client);
   const prog=overallProgress(client);
+  const pct=prog.total?Math.round(prog.done/prog.total*100):0;
   const devSteps=buildDeviceSteps(client);
   const devList=Object.values(client.devices||{});
+  const incomplete=phases.filter(p=>!isPhaseComplete(client,p));
 
   let body=`<div class="summary-section">
-    <h4>Organization Progress</h4>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div>
+        <div style="font-size:13px;font-weight:600;">${escHtml(client.name)}</div>
+        <div style="font-size:11px;color:var(--text3);">Tech: ${escHtml(client.tech)} · Created ${new Date(client.createdAt).toLocaleDateString()}</div>
+        ${client.syncroCustomerName?`<div style="font-size:11px;color:var(--text3);">Syncro: ${escHtml(client.syncroCustomerName)}</div>`:''}
+      </div>
+      <div style="font-size:22px;font-weight:700;color:${pct===100?'var(--success)':'var(--accent)'};">${pct}%</div>
+    </div>
+    <div style="background:var(--bg3);border-radius:4px;height:6px;overflow:hidden;margin-bottom:4px;">
+      <div style="background:${pct===100?'var(--success)':'var(--accent)'};width:${pct}%;height:100%;border-radius:4px;"></div>
+    </div>
+    <div style="font-size:10px;color:var(--text3);">${prog.done} of ${prog.total} steps complete</div>
+  </div>`;
+
+  if(client.dueDate){
+    const diff=Math.ceil((new Date(client.dueDate+'T12:00:00')-new Date())/(864e5));
+    const cls=diff<0?'var(--danger)':diff<=3?'var(--warn)':'var(--success)';
+    const label=diff<0?`${Math.abs(diff)}d overdue`:diff===0?'Due today':`${diff}d remaining`;
+    body+=`<div class="summary-section"><h4>Due Date</h4><div class="summary-row"><span>${new Date(client.dueDate+'T12:00:00').toLocaleDateString()}</span><span style="color:${cls};font-weight:600;">${label}</span></div></div>`;
+  }
+
+  body+=`<div class="summary-section"><h4>Progress by Phase</h4>
     ${phases.map(p=>{
       const pr=phaseProgress(client,p);
-      return `<div class="summary-row"><span>${p.title}</span><span>${pr.done}/${pr.total}</span></div>`;
+      const done=isPhaseComplete(client,p);
+      return `<div class="summary-row"><span>${escHtml(p.title)}</span><span style="color:${done?'var(--success)':'var(--text2)'};">${done?'✓ Complete':`${pr.done}/${pr.total}`}</span></div>`;
     }).join('')}
-    <div class="summary-row" style="font-weight:600;margin-top:4px;"><span>Total</span><span>${prog.done}/${prog.total}</span></div>
   </div>`;
 
   if(devList.length){
-    body+=`<div class="summary-section">
-      <h4>Devices</h4>
-      ${devList.map(d=>{
-        const st=devStatus(d,devSteps);
-        const lm={'not-started':'Not Started','in-progress':'In Progress','complete':'Complete'};
-        return `<div class="summary-row"><span>${d.name} (${d.type||'?'})</span><span>${lm[st]}</span></div>`;
-      }).join('')}
+    const stMap={'not-started':'⏳ Not Started','in-progress':'🔄 In Progress','complete':'✓ Complete'};
+    const devDone=devList.filter(d=>devStatus(d,devSteps)==='complete').length;
+    body+=`<div class="summary-section"><h4>Devices (${devDone}/${devList.length})</h4>
+      ${devList.map(d=>{const st=devStatus(d,devSteps);return`<div class="summary-row"><span>${escHtml(d.name)} <span style="color:var(--text3);font-size:10px;">${d.type||''}</span></span><span style="color:${st==='complete'?'var(--success)':st==='in-progress'?'var(--warn)':'var(--text3)'};">${stMap[st]||st}</span></div>`;}).join('')}
     </div>`;
   }
 
   if(client.notes){
-    body+=`<div class="summary-section"><h4>Client Notes</h4><p style="font-size:12px;color:var(--text2);line-height:1.5;">${client.notes}</p></div>`;
+    body+=`<div class="summary-section"><h4>Notes</h4><p style="font-size:12px;color:var(--text2);line-height:1.5;white-space:pre-wrap;">${escHtml(client.notes)}</p></div>`;
   }
 
-  if(client.dueDate){
-    body+=`<div class="summary-section"><h4>Due Date</h4><p style="font-size:12px;color:var(--text2);">${new Date(client.dueDate).toLocaleDateString()}</p></div>`;
-  }
-
+  document.getElementById('summary-title').textContent='Onboarding Summary';
   document.getElementById('summary-body').innerHTML=body;
+  document.getElementById('summary-actions').innerHTML=`
+    <button class="btn-secondary" onclick="document.getElementById('summary-modal').classList.remove('show')">Close</button>
+    <button class="btn-primary" onclick="printSummary()">Print</button>`;
   document.getElementById('summary-modal').classList.add('show');
 }
 
 function printSummary(){
+  const title=document.getElementById('summary-title').textContent;
   const content=document.getElementById('summary-body').innerHTML;
   const w=window.open('','_blank');
-  w.document.write(`<html><head><title>Summary</title><style>body{font-family:sans-serif;padding:20px;font-size:13px;}h3{margin-bottom:16px;}h4{font-size:11px;text-transform:uppercase;color:#666;margin:12px 0 6px;}div{display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:3px 0;}</style></head><body><h3>Onboarding Summary</h3>${content}</body></html>`);
-  w.document.close();w.print();
+  w.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:28px;font-size:13px;color:#1a1d23;}h3{font-size:18px;font-weight:700;margin-bottom:20px;padding-bottom:10px;border-bottom:2px solid #3b82f6;}h4{font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#6b7280;margin:16px 0 6px;font-weight:700;}.summary-section{margin-bottom:12px;}.summary-row{display:flex;justify-content:space-between;border-bottom:1px solid #f3f4f6;padding:5px 0;font-size:12px;}p{font-size:12px;color:#374151;line-height:1.6;}@media print{body{padding:16px;}}</style></head><body><h3>${title}</h3>${content}</body></html>`);
+  w.document.close();w.print();w.close();
+}
+
+function showQuoteSummary(quoteId){
+  const q=salesQuotes[quoteId];if(!q)return;
+  const t=calcQuoteTotals(q);
+  const prods=getSalesProducts();
+  const sections=[{key:'user',label:'User Products'},{key:'machine',label:'Machine Products'},{key:'site',label:'Site Products'}];
+  let body=`<div class="summary-section">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px;">
+      <div>
+        <div style="font-size:13px;font-weight:600;">${escHtml(q.name)}</div>
+        ${q.contact?`<div style="font-size:11px;color:var(--text3);">Contact: ${escHtml(q.contact)}</div>`:''}
+        <div style="font-size:11px;color:var(--text3);">Tech: ${escHtml(q.tech)} · Created ${relTime(q.createdAt)}</div>
+      </div>
+    </div>
+  </div>
+  <div class="summary-section"><h4>Totals</h4>
+    <div class="summary-row"><span>Monthly</span><span style="font-weight:600;color:var(--success);">$${t.monthlyClient.toFixed(2)}</span></div>
+    <div class="summary-row"><span>One-Time</span><span style="font-weight:600;">$${t.onetimeClient.toFixed(2)}</span></div>
+    <div class="summary-row"><span>SA Cost (monthly)</span><span style="color:var(--text3);">$${t.monthlySA.toFixed(2)}</span></div>
+    <div class="summary-row" style="font-weight:600;"><span>Monthly Profit</span><span class="${t.profit>=0?'profit-pos':'profit-neg'}">$${t.profit.toFixed(2)}</span></div>
+  </div>`;
+  sections.forEach(sec=>{
+    const enabled=prods.filter(p=>p.salesCategory===sec.key&&q.lineItems?.[p.id]?.enabled);
+    const custom=(q.customItems||[]).filter(c=>c.category===sec.key&&c.enabled!==false&&c.qty>0);
+    if(!enabled.length&&!custom.length)return;
+    body+=`<div class="summary-section"><h4>${sec.label}</h4>`;
+    enabled.forEach(p=>{const li=q.lineItems[p.id];body+=`<div class="summary-row"><span>${escHtml(p.label)}</span><span>${li.qty} × $${li.unitPrice.toFixed(2)} <span style="color:var(--text3);font-size:10px;">${p.billing==='onetime'?'OT':'mo'}</span></span></div>`;});
+    custom.forEach(c=>{body+=`<div class="summary-row"><span>${escHtml(c.label||'Custom item')}</span><span>${c.qty} × $${c.unitPrice.toFixed(2)} <span style="color:var(--text3);font-size:10px;">${c.billing==='onetime'?'OT':'mo'}</span></span></div>`;});
+    body+=`</div>`;
+  });
+  if(q.notes)body+=`<div class="summary-section"><h4>Notes</h4><p style="font-size:12px;color:var(--text2);line-height:1.5;white-space:pre-wrap;">${escHtml(q.notes)}</p></div>`;
+  document.getElementById('summary-title').textContent=`Quote — ${q.name}`;
+  document.getElementById('summary-body').innerHTML=body;
+  document.getElementById('summary-actions').innerHTML=`
+    <button class="btn-secondary" onclick="document.getElementById('summary-modal').classList.remove('show')">Close</button>
+    <button class="btn-secondary" onclick="document.getElementById('summary-modal').classList.remove('show');printQuoteCustomer('${quoteId}')">Print (Customer)</button>
+    <button class="btn-primary" onclick="document.getElementById('summary-modal').classList.remove('show');printQuote('${quoteId}')">Print (Internal)</button>`;
+  document.getElementById('summary-modal').classList.add('show');
 }
 
 document.getElementById('summary-modal').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.classList.remove('show');});
