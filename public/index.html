@@ -29,8 +29,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .ah-nav-btn:hover{color:var(--text);background:var(--bg3);}
 .ah-nav-btn.active{color:var(--text);background:var(--bg3);}
 .ah-right{display:flex;align-items:center;gap:4px;margin-left:auto;}
-.ah-name-btn{background:none;border:1px solid var(--border);border-radius:14px;color:var(--text2);font-size:11px;font-weight:600;padding:3px 10px;cursor:pointer;white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis;}
-.ah-name-btn:hover{border-color:var(--accent);color:var(--text);}
+.ah-name-btn{background:var(--bg4);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:11px;font-weight:600;padding:4px 10px;cursor:pointer;white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis;}
+.ah-name-btn:hover{border-color:var(--accent);color:var(--text);background:var(--bg3);}
 /* Hide sidebar toggle in app-header at ≥1280px (sidebar always visible) */
 @media(min-width:1280px){.ah-toggle{display:none;}}
 /* On mobile hide brand (save space for nav buttons) */
@@ -100,10 +100,12 @@ input[type=number]{-moz-appearance:textfield;}
 .quote-status.blocked{background:rgba(239,68,68,0.12);color:var(--danger);}
 .quote-status.customer-active,.quote-status[onclick]{cursor:pointer;}
 /* Sidebar priority star */
-.sidebar-star{background:none;border:none;cursor:pointer;font-size:18px;line-height:1;flex-shrink:0;color:var(--border2);padding:0 4px 0 2px;transition:color 0.15s;font-family:serif;}
+.sidebar-star{background:none;border:none;cursor:pointer;width:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.15);padding:0;transition:color 0.15s;align-self:stretch;}
 .sidebar-star:hover,.sidebar-star.on{color:var(--warn);}
+/* Normalize badge styles — ensure <button class="quote-status"> looks same as <span> */
+button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:none;padding:2px 7px;line-height:normal;}
 /* Status badge wrap — positions the dropdown relative to the badge */
-.status-badge-wrap{position:relative;display:inline-flex;}
+.status-badge-wrap{position:relative;display:inline-flex;margin-left:6px;}
 /* Step attribution */
 .step-by{font-size:9px;color:var(--text3);font-style:italic;margin-top:1px;}
 /* Comment thread */
@@ -187,7 +189,7 @@ input[type=number]{-moz-appearance:textfield;}
 .sidebar-search input::placeholder{color:var(--text3);}
 #client-list{flex:1;overflow-y:auto;padding:4px 0;}
 #sales-list{flex:1;overflow-y:auto;padding:4px 0;}
-.client-item{padding:7px 14px;cursor:pointer;border-left:2px solid transparent;transition:all 0.1s;position:relative;}
+.client-item{padding:0;cursor:pointer;border-left:2px solid transparent;transition:all 0.1s;position:relative;overflow:hidden;}
 .client-item:hover{background:var(--bg3);}
 .client-item.active{border-left-color:var(--accent);background:rgba(59,130,246,0.08);}
 .client-item .cn{font-size:12px;font-weight:500;}
@@ -857,17 +859,6 @@ body.light{
     </nav>
     <div class="ah-right">
       <button class="ah-name-btn" id="ah-name-display" onclick="openNameModal()" title="Edit your name" style="display:none;"></button>
-      <div class="theme-pill-wrap"><div class="theme-pill">
-        <button class="theme-btn" id="theme-light" onclick="applyTheme('light')" title="Light">
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/><line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/><line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/></svg>
-        </button>
-        <button class="theme-btn active" id="theme-system" onclick="applyTheme('system')" title="System">
-          <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-        </button>
-        <button class="theme-btn" id="theme-dark" onclick="applyTheme('dark')" title="Dark">
-          <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-        </button>
-      </div></div>
       <button class="sidebar-icon-btn" id="settings-btn" onclick="toggleSettings()" title="Settings">
 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
 </button>
@@ -2325,11 +2316,13 @@ function renderSalesSidebar(filter){
   list.innerHTML=entries.map(q=>{
     const t=calcQuoteTotals(q);
     return `<div class="client-item ${q.id===activeSalesQuoteId?'active':''}" onclick="selectQuote('${q.id}')" title="${q.name}">
-      <div class="cn" style="display:flex;align-items:center;">
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;">${escHtml(q.name)}${quoteStatusBadge(q.status)}</span>
-        <button class="sidebar-star${q.priority?' on':''}" onclick="event.stopPropagation();toggleQuotePriority('${q.id}')" title="${q.priority?'Unmark priority':'Mark priority'}">&#9733;</button>
+      <div style="display:flex;align-items:center;">
+        <div style="flex:1;min-width:0;padding:7px 0 7px 14px;">
+          <div class="cn">${escHtml(q.name)}${quoteStatusBadge(q.status)}</div>
+          <div class="cm">${escHtml(q.tech)} · $${t.monthlyClient.toFixed(0)}/mo${t.onetimeClient>0?' + $'+t.onetimeClient.toFixed(0)+' OT':''}</div>
+        </div>
+        <button class="sidebar-star${q.priority?' on':''}" onclick="event.stopImmediatePropagation();toggleQuotePriority('${q.id}')" title="${q.priority?'Unmark priority':'Mark priority'}"><svg width="16" height="16" viewBox="0 0 24 24" fill="${q.priority?'currentColor':'none'}" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button>
       </div>
-      <div class="cm">${escHtml(q.tech)} · $${t.monthlyClient.toFixed(0)}/mo${t.onetimeClient>0?' + $'+t.onetimeClient.toFixed(0)+' OT':''}</div>
     </div>`;
   }).join('');
 }
@@ -2969,11 +2962,14 @@ function renderSalesView(){
   const quotes=Object.values(salesQuotes).sort((a,b)=>new Date(b.lastModified||b.createdAt)-new Date(a.lastModified||a.createdAt));
   const totalMRR=quotes.reduce((s,q)=>s+calcQuoteTotals(q).monthlyClient,0);
   const totalProfit=quotes.reduce((s,q)=>s+calcQuoteTotals(q).profit,0);
+  const byStatus={draft:0,sent:0,accepted:0,rejected:0};
+  quotes.forEach(q=>{const s=q.status||'draft';byStatus[s]=(byStatus[s]||0)+1;});
   const stats=[
-    {label:'Quotes',value:quotes.length,color:'var(--accent)'},
-    {label:'Total MRR',value:'$'+totalMRR.toFixed(0),color:'var(--success)'},
-    {label:'Profit',value:'$'+totalProfit.toFixed(0),color:totalProfit>=0?'var(--success)':'var(--danger)'},
-  ];
+    {label:'Total',value:quotes.length,color:'var(--accent)'},
+    {label:'Sent',value:byStatus.sent,color:'var(--warn)'},
+    {label:'Accepted',value:byStatus.accepted,color:'var(--success)'},
+    {label:'MRR',value:'$'+totalMRR.toFixed(0),color:'var(--success)'},
+  ].filter(s=>quotes.length>0||s.label==='Total');
   el.innerHTML=`<div style="max-width:760px;width:100%;">
     <div style="margin-bottom:22px;text-align:center;">
       <h2 style="font-size:20px;font-weight:700;margin-bottom:3px;">${myName?'Hey, '+myName:'Sales'}</h2>
@@ -2987,10 +2983,12 @@ function renderSalesView(){
     </div>
     ${quotes.length?`<div>
       <div class="dash-section-label">Recent Quotes</div>
-      <div style="display:flex;flex-direction:column;gap:5px;">
-        ${quotes.slice(0,6).map(q=>{const t=calcQuoteTotals(q);return`<div class="dash-row" onclick="selectQuote('${q.id}')">
-          <span style="flex:1;font-size:12px;font-weight:500;">${escHtml(q.name)}</span>
-          <span style="font-size:11px;color:var(--text3);">$${t.monthlyClient.toFixed(0)}/mo${t.onetimeClient>0?' + $'+t.onetimeClient.toFixed(0)+' OT':''}</span>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;">
+        ${quotes.slice(0,8).map(q=>{const t=calcQuoteTotals(q);return`<div class="dash-row" onclick="selectQuote('${q.id}')">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(q.name)}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:1px;display:flex;align-items:center;gap:4px;">${quoteStatusBadge(q.status)}<span>$${t.monthlyClient.toFixed(0)}/mo</span></div>
+          </div>
         </div>`;}).join('')}
       </div>
     </div>`:`<div style="text-align:center;padding:48px 20px;">
@@ -3108,6 +3106,23 @@ function renderSettingsView(){
   document.getElementById('settings-content').innerHTML=`
     <div style="max-width:760px;">
       <h2 style="font-size:18px;font-weight:700;margin-bottom:18px;">Settings</h2>
+      <div class="settings-block">
+        <div class="settings-block-header">Appearance</div>
+        <div class="settings-block-body">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Display theme</div>
+          <div class="theme-pill" style="width:fit-content;">
+            <button class="theme-btn${currentTheme==='light'?' active':''}" id="theme-light" onclick="applyTheme('light')" title="Light">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/><line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/><line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/></svg> Light
+            </button>
+            <button class="theme-btn${currentTheme==='system'?' active':''}" id="theme-system" onclick="applyTheme('system')" title="System">
+              <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> System
+            </button>
+            <button class="theme-btn${currentTheme==='dark'?' active':''}" id="theme-dark" onclick="applyTheme('dark')" title="Dark">
+              <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> Dark
+            </button>
+          </div>
+        </div>
+      </div>
       <div class="settings-block">
         <div class="settings-block-header">Configuration</div>
         <div class="settings-block-body" id="cfg-section-body"></div>
@@ -3684,15 +3699,16 @@ function renderSidebar(filter){
     const staleBadge=stale?`<span class="stale-dot" title="Inactive ${staleDays}+ days">\u25cf</span>`:'';
     const unseen=unseenChanges.get(c.id);
     const unseenBadge=unseen?`<span class="unseen-dot" title="${unseen.techName?unseen.techName+' made changes':'Changes made'}"></span>`:'';
-    const statusBadge=(c.clientStatus&&c.clientStatus!=='active')?`<span class="quote-status ${c.clientStatus}">${clientStatusLabel(c.clientStatus)}</span> `:'';
-    return `<div class="client-item ${c.id===activeClientId?'active':''}" onclick="selectClient('${c.id}')" title="${c.name}" data-notify-id="cl:${c.id}">
-      <div class="cn" style="display:flex;align-items:center;">
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;">${c.name} ${staleBadge}${statusBadge}</span>
-        <button class="sidebar-star${c.priority?' on':''}" onclick="event.stopPropagation();toggleClientPriority('${c.id}')" title="${c.priority?'Unmark priority':'Mark priority'}">&#9733;</button>
+    const statusBadge=(c.clientStatus&&c.clientStatus!=='active')?`<span class="quote-status ${c.clientStatus}">${clientStatusLabel(c.clientStatus)}</span>`:'';
+    const starSvg=`<svg width="16" height="16" viewBox="0 0 24 24" fill="${c.priority?'currentColor':'none'}" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+    return `<div class="client-item ${c.id===activeClientId?'active':''}" onclick="selectClient('${c.id}')" title="${c.name}" data-notify-id="cl:${c.id}" style="display:flex;align-items:center;padding:0;">
+      <div style="flex:1;min-width:0;padding:7px 0 7px 14px;">
+        <div class="cn">${c.name} ${staleBadge}${statusBadge}</div>
+        <div class="cm">${c.tech} \u00b7 ${pct}% org</div>
+        <div class="cpbar"><div class="cpbar-fill" style="width:0" data-w="${pct}" data-bar-id="sb-${c.id}"></div></div>
+        ${unseenBadge}
       </div>
-      <div class="cm">${c.tech} \u00b7 ${pct}% org</div>
-      <div class="cpbar"><div class="cpbar-fill" style="width:0" data-w="${pct}" data-bar-id="sb-${c.id}"></div></div>
-      ${unseenBadge}
+      <button class="sidebar-star${c.priority?' on':''}" onclick="event.stopImmediatePropagation();toggleClientPriority('${c.id}')" title="${c.priority?'Unmark priority':'Mark priority'}">${starSvg}</button>
     </div>`;
   }).join('');
   animateBars(list, sbFrom);
@@ -4283,7 +4299,7 @@ document.addEventListener('click',e=>{
   if(!e.target.closest('.client-menu-wrap')){
     document.querySelectorAll('.client-menu-dropdown.open').forEach(m=>m.classList.remove('open'));
   }
-  if(!e.target.closest('.status-select-wrap')){
+  if(!e.target.closest('.status-badge-wrap')){
     document.querySelectorAll('.status-dropdown.open').forEach(d=>d.classList.remove('open'));
   }
 });
