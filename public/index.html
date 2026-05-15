@@ -104,9 +104,27 @@ input[type=number]{-moz-appearance:textfield;}
 /* Step attribution */
 .step-by{font-size:9px;color:var(--text3);font-style:italic;margin-top:1px;}
 /* Comment thread */
-.comment-thread{border-top:1px solid var(--border);padding:8px 14px;}
-.comment-thread-title{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text3);margin-bottom:6px;}
-.comment-item{display:flex;gap:8px;margin-bottom:8px;font-size:11px;}
+.comment-thread{border-top:none;}
+.comment-thread-toggle{width:100%;text-align:left;background:none;border:none;border-top:1px solid var(--border);padding:6px 14px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text3);cursor:pointer;display:flex;align-items:center;gap:8px;transition:all 0.15s;}
+.comment-thread-toggle:hover{background:var(--bg3);color:var(--text2);}
+.comment-thread.collapsed .comment-thread-body{display:none;}
+.comment-thread.collapsed .inline-notes-arrow{transform:rotate(-90deg);}
+.comment-thread-body{padding:6px 14px 8px;}
+.comment-item{display:flex;gap:8px;margin-bottom:6px;font-size:11px;}
+/* Header note area (replaces inline-notes) */
+.header-note-area{display:none;padding:6px 14px 8px;border-bottom:1px solid var(--border);}
+.header-note-area.open{display:block;}
+/* Status dropdown */
+.status-select-wrap{position:relative;}
+.status-select-btn{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:3px 8px;border-radius:4px;border:none;cursor:pointer;transition:all 0.15s;}
+.status-select-btn.active{background:rgba(34,197,94,0.12);color:var(--success);}
+.status-select-btn.on-hold{background:rgba(245,158,11,0.12);color:var(--warn);}
+.status-select-btn.blocked{background:rgba(239,68,68,0.12);color:var(--danger);}
+.status-dropdown{display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--bg2);border:1px solid var(--border2);border-radius:7px;min-width:100px;z-index:300;box-shadow:0 4px 16px rgba(0,0,0,0.3);overflow:hidden;}
+.status-dropdown.open{display:block;}
+.status-dropdown button{display:block;width:100%;padding:8px 12px;font-size:11px;color:var(--text);background:none;border:none;text-align:left;cursor:pointer;transition:background 0.1s;}
+.status-dropdown button:hover{background:var(--bg3);}
+.quote-status.customer-active{background:rgba(34,197,94,0.12);color:var(--success);cursor:pointer;}
 .comment-meta{color:var(--text3);font-size:10px;white-space:nowrap;flex-shrink:0;}
 .comment-text{color:var(--text2);line-height:1.5;flex:1;}
 .comment-input-row{display:flex;gap:6px;margin-top:4px;}
@@ -337,7 +355,7 @@ input[type=number]{-moz-appearance:textfield;}
 
 /* Step */
 .step-item{border-radius:6px;margin-bottom:2px;position:relative;}
-.step-row{display:flex;gap:8px;padding:7px 8px;cursor:pointer;transition:background 0.1s;align-items:flex-start;border-radius:6px;position:relative;}
+.step-row{display:flex;gap:8px;padding:7px 8px;cursor:pointer;transition:background 0.1s;align-items:flex-start;border-radius:6px;position:relative;min-height:56px;}
 .step-row:hover{background:var(--bg3);}
 .step-item.done>.step-row{opacity:0.5;}
 .step-item.done>.step-row .step-title{text-decoration:line-through;color:var(--text3);}
@@ -348,7 +366,7 @@ input[type=number]{-moz-appearance:textfield;}
 .step-partial-dash{width:6px;height:2px;background:var(--warn);border-radius:1px;}
 .step-body{flex:1;min-width:0;}
 .step-title{font-size:12px;font-weight:500;color:var(--text);}
-.step-detail{font-size:11px;color:var(--text2);margin-top:2px;line-height:1.5;}
+.step-detail{font-size:11px;color:var(--text2);margin-top:2px;line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
 .step-tags{display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;}
 .step-tag{font-size:9px;padding:1px 5px;border-radius:20px;background:var(--bg3);color:var(--text3);border:1px solid var(--border);}
 .step-tag.required{color:#fca5a5;border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);}
@@ -2296,7 +2314,7 @@ function renderSalesSidebar(filter){
   const list=document.getElementById('sales-list');
   if(!list) return;
   const entries=Object.values(salesQuotes).filter(q=>!filter||q.name.toLowerCase().includes(filter.toLowerCase()))
-    .sort((a,b)=>new Date(b.lastModified||b.createdAt)-new Date(a.lastModified||a.createdAt));
+    .sort((a,b)=>(b.priority?1:0)-(a.priority?1:0)||new Date(b.lastModified||b.createdAt)-new Date(a.lastModified||a.createdAt));
   if(!entries.length){
     list.innerHTML=`<div style="padding:20px 12px;text-align:center;"><div style="font-size:24px;height:30px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;opacity:0.4;">💼</div><div style="font-size:12px;font-weight:500;color:var(--text2);margin-bottom:4px;">${filter?'No matches':'No quotes yet'}</div>${filter?'':`<div style="font-size:11px;color:var(--text3);">Use the button below to get started</div>`}</div>`;
     return;
@@ -2304,7 +2322,7 @@ function renderSalesSidebar(filter){
   list.innerHTML=entries.map(q=>{
     const t=calcQuoteTotals(q);
     return `<div class="client-item ${q.id===activeSalesQuoteId?'active':''}" onclick="selectQuote('${q.id}')" title="${q.name}">
-      <div class="cn" style="display:flex;align-items:center;gap:6px;">${escHtml(q.name)}${quoteStatusBadge(q.status)}</div>
+      <div class="cn" style="display:flex;align-items:center;gap:5px;">${q.priority?'<span style="color:var(--warn);font-size:11px;">&#9733;</span>':''}${escHtml(q.name)}${quoteStatusBadge(q.status)}</div>
       <div class="cm">${escHtml(q.tech)} · $${t.monthlyClient.toFixed(0)}/mo${t.onetimeClient>0?' + $'+t.onetimeClient.toFixed(0)+' OT':''}</div>
     </div>`;
   }).join('');
@@ -2349,7 +2367,7 @@ async function createQuote(){
     id,name,contact:document.getElementById('qwiz-contact').value.trim(),
     tech:document.getElementById('qwiz-tech').value.trim()||localStorage.getItem('myName')||'Unassigned',
     createdAt:new Date().toISOString(),lastModified:new Date().toISOString(),
-    ...nums,nonManagedMachines:0,localBackupTB:0,cloudBackupTB:0,notes:'',lineItems,customItems:[],status:'draft'
+    ...nums,nonManagedMachines:0,localBackupTB:0,cloudBackupTB:0,notes:'',lineItems,customItems:[],status:'draft',priority:false
   };
   await saveSalesQuotes();
   logQuote(id,'quote_created',{clientName:name});
@@ -2382,29 +2400,28 @@ function loadSalesQuote(id){
   const totals=calcQuoteTotals(q);
   const sections=[{key:'user',label:'User Products'},{key:'machine',label:'Machine Products'},{key:'site',label:'Site Products'}];
   const isCustomerView=document.getElementById('quote-content')?.dataset?.customer==='1';
-  let html=`<div class="checklist-header" style="margin-bottom:16px;">
+  let html=`<div class="checklist-header" style="margin-bottom:0;">
     <div>
-      <h2 style="font-size:18px;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${escHtml(q.name)}${quoteStatusBadge(q.status)}${isCustomerView?'<span class="customer-view-badge">Customer View</span>':''}</h2>
+      <h2 style="font-size:18px;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${escHtml(q.name)}${quoteStatusBadge(q.status)}${isCustomerView?'<span class="quote-status accepted">Customer View</span>':''}</h2>
       <div style="font-size:11px;color:var(--text3);">${escHtml(q.tech)}${q.contact?' · '+escHtml(q.contact):''} · Created ${relTime(q.createdAt)}</div>
     </div>
-    <div class="client-menu-wrap" id="qmenu-wrap-${id}">
-      <button class="client-menu-btn" onclick="toggleQuoteMenu('${id}')">&#8230;</button>
-      <div class="client-menu-dropdown" id="qmenu-${id}">
-        <button class="client-menu-item" onclick="closeQuoteMenu('${id}');showQuoteSummary('${id}')">Summary</button>
-        <button class="client-menu-item" onclick="closeQuoteMenu('${id}');toggleCustomerView('${id}')">${isCustomerView?'Exit Customer View':'Customer View'}</button>
-        <button class="client-menu-item" onclick="closeQuoteMenu('${id}');showQuoteLog('${id}')">View Log</button>
-        <button class="client-menu-item warn" onclick="closeQuoteMenu('${id}');editQuoteInfo('${id}')">Edit</button>
-        <button class="client-menu-item danger" onclick="closeQuoteMenu('${id}');deleteQuote('${id}')">Delete</button>
+    <div class="header-actions">
+      <button class="step-note-btn${q.notes?' has-note':''}" id="qnotes-btn-${id}" onclick="toggleHeaderNote('${id}','quote')" title="Quote notes">Notes</button>
+      <button class="priority-btn${q.priority?' on':''}" onclick="toggleQuotePriority('${id}')" title="${q.priority?'Unmark priority':'Mark as priority'}">${q.priority?'&#9733;':'&#9734;'}</button>
+      <button class="quote-status${isCustomerView?' customer-active':''}" onclick="toggleCustomerView('${id}')" title="Toggle customer view" style="cursor:pointer;">${isCustomerView?'Customer View':'Client View'}</button>
+      <div class="client-menu-wrap" id="qmenu-wrap-${id}">
+        <button class="client-menu-btn" onclick="toggleQuoteMenu('${id}')">&#8230;</button>
+        <div class="client-menu-dropdown" id="qmenu-${id}">
+          <button class="client-menu-item" onclick="closeQuoteMenu('${id}');showQuoteSummary('${id}')">Summary</button>
+          <button class="client-menu-item" onclick="closeQuoteMenu('${id}');showQuoteLog('${id}')">View Log</button>
+          <button class="client-menu-item warn" onclick="closeQuoteMenu('${id}');editQuoteInfo('${id}')">Edit</button>
+          <button class="client-menu-item danger" onclick="closeQuoteMenu('${id}');deleteQuote('${id}')">Delete</button>
+        </div>
       </div>
     </div>
   </div>
-  <div class="inline-notes${q.notes?' open has-note':''}" id="qnotes-${id}">
-    <button class="inline-notes-toggle" onclick="this.closest('.inline-notes').classList.toggle('open')">
-      Notes<span class="inline-notes-arrow">▼</span>
-    </button>
-    <div class="inline-notes-body">
-      <textarea class="inline-notes-ta" placeholder="Add notes about this quote..." onblur="saveInlineQuoteNotes('${id}',this.value)">${escHtml(q.notes||'')}</textarea>
-    </div>
+  <div class="header-note-area${q.notes?' open':''}" id="qnotes-${id}" style="margin-bottom:16px;">
+    <textarea class="inline-notes-ta" placeholder="Add notes about this quote..." onblur="saveInlineQuoteNotes('${id}',this.value)">${escHtml(q.notes||'')}</textarea>
   </div>
   <div class="quote-sticky-totals">
     <div class="qst-item"><span class="qst-label">Monthly</span><span class="qst-value" id="qstv-mo-${id}">$${totals.monthlyClient.toFixed(2)}</span></div>
@@ -2644,6 +2661,14 @@ async function toggleCustomLine(quoteId,customId){
   logQuote(quoteId,wasEnabled?'line_enabled':'line_disabled',{details:c.label||'Custom item'});
   loadSalesQuote(quoteId);
 }
+async function toggleQuotePriority(id){
+  const q=salesQuotes[id];if(!q)return;
+  q.priority=!q.priority;
+  q.lastModified=new Date().toISOString();
+  await saveSalesQuotes();
+  renderSalesSidebar();
+  loadSalesQuote(id);
+}
 function quoteStatusBadge(status){
   const labels={draft:'Draft',sent:'Sent',accepted:'Accepted',rejected:'Rejected'};
   return`<span class="quote-status ${status||'draft'}">${labels[status]||'Draft'}</span>`;
@@ -2672,8 +2697,8 @@ async function saveInlineQuoteNotes(quoteId,val){
   q.notes=val;
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
-  const wrap=document.getElementById(`qnotes-${quoteId}`);
-  if(wrap)wrap.classList.toggle('has-note',!!val);
+  const btn=document.getElementById(`qnotes-btn-${quoteId}`);
+  if(btn)btn.classList.toggle('has-note',!!val);
 }
 function toggleCustomerView(id){
   const el=document.getElementById('quote-content');if(!el)return;
@@ -3988,6 +4013,7 @@ function loadClientChecklist(id){
   }
 
   // Build header
+  const _cs=client.clientStatus||'active';
   let html=`<div class="checklist-header">
     <div>
       <h2>${client.name}</h2>
@@ -3996,13 +4022,20 @@ function loadClientChecklist(id){
     </div>
     <div class="header-actions">
       <button class="clear-updates-btn" id="clear-updates-btn" style="display:none" onclick="clearAllUpdateDots()">&#9679; Clear updates</button>
+      <button class="step-note-btn${client.notes?' has-note':''}" id="cnotes-btn-${id}" onclick="toggleHeaderNote('${id}','client')" title="Client notes">Notes</button>
+      <button class="priority-btn${client.priority?' on':''}" onclick="toggleClientPriority('${id}')" title="${client.priority?'Unmark priority':'Mark as priority'}">${client.priority?'&#9733;':'&#9734;'}</button>
+      <div class="status-select-wrap">
+        <button class="status-select-btn ${_cs}" onclick="toggleStatusDropdown('${id}')">${clientStatusLabel(_cs)} &#9660;</button>
+        <div class="status-dropdown" id="status-dd-${id}">
+          <button onclick="closeStatusDropdown('${id}');setClientStatus('${id}','active')">Active</button>
+          <button onclick="closeStatusDropdown('${id}');setClientStatus('${id}','on-hold')">On Hold</button>
+          <button onclick="closeStatusDropdown('${id}');setClientStatus('${id}','blocked')">Blocked</button>
+        </div>
+      </div>
       <div class="client-menu-wrap" id="cmenu-wrap-${id}">
         <button class="client-menu-btn" onclick="toggleClientMenu('${id}')">&#8230;</button>
         <div class="client-menu-dropdown" id="cmenu-${id}">
           <button class="client-menu-item" onclick="closeClientMenu('${id}');showSummary('${id}')">Summary</button>
-          <button class="client-menu-item" onclick="closeClientMenu('${id}');toggleClientPriority('${id}')">${client.priority?'★ Unmark Priority':'☆ Mark Priority'}</button>
-          <button class="client-menu-item" onclick="closeClientMenu('${id}');setClientStatus('${id}',${client.clientStatus==='blocked'?`'active'`:`'blocked'`})">${client.clientStatus==='blocked'?'Unblock':'Block'}</button>
-          <button class="client-menu-item" onclick="closeClientMenu('${id}');setClientStatus('${id}',${client.clientStatus==='on-hold'?`'active'`:`'on-hold'`})">${client.clientStatus==='on-hold'?'Resume':'On Hold'}</button>
           <button class="client-menu-item" onclick="closeClientMenu('${id}');showClientLog('${id}')">View Log</button>
           <button class="client-menu-item warn" onclick="closeClientMenu('${id}');openEditClientModal('${id}')">Edit</button>
           <button class="client-menu-item danger" onclick="closeClientMenu('${id}');confirmDeleteClient('${id}')">Delete</button>
@@ -4011,30 +4044,28 @@ function loadClientChecklist(id){
     </div>
   </div>
 
-  <div class="inline-notes${client.notes?' open has-note':''}" id="cnotes-${id}">
-    <button class="inline-notes-toggle" onclick="this.closest('.inline-notes').classList.toggle('open')">
-      Notes<span class="inline-notes-arrow">▼</span>
-    </button>
-    <div class="inline-notes-body">
-      <textarea class="inline-notes-ta" placeholder="Add notes about this client..." onblur="saveInlineClientNotes('${id}',this.value)">${escHtml(client.notes||'')}</textarea>
-    </div>
+  <div class="header-note-area${client.notes?' open':''}" id="cnotes-${id}">
+    <textarea class="inline-notes-ta" placeholder="Add notes about this client..." onblur="saveInlineClientNotes('${id}',this.value)">${escHtml(client.notes||'')}</textarea>
   </div>
 
-  ${(client.dueDate||dueBadge)||client.clientStatus&&client.clientStatus!=='active'?`<div class="due-date-row">
+  ${(client.dueDate||dueBadge)?`<div class="due-date-row">
     ${client.dueDate?`<span>Due ${new Date(client.dueDate+'T12:00:00').toLocaleDateString()}</span>`:''}
     ${dueBadge}
-    ${client.clientStatus&&client.clientStatus!=='active'?`<span class="client-status-badge ${client.clientStatus}" style="margin-left:auto;">${client.clientStatus==='blocked'?'🚫 Blocked':'⏸ On Hold'}</span>`:''}
   </div>`:''}
 
-  <div class="comment-thread">
-    <div class="comment-thread-title">Handoff Notes</div>
-    ${(client.comments||[]).map(c=>`<div class="comment-item">
-      <div class="comment-meta">${escHtml(c.tech)} · ${relTime(c.ts)}</div>
-      <div class="comment-text">${escHtml(c.text)}</div>
-    </div>`).join('')}
-    <div class="comment-input-row">
-      <input class="comment-input" id="comment-input-${id}" placeholder="Add a handoff note..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addHandoffComment('${id}',this.value);this.value='';}">
-      <button class="comment-send" onclick="const i=document.getElementById('comment-input-${id}');addHandoffComment('${id}',i.value);i.value='';">Send</button>
+  <div class="comment-thread${(client.comments?.length)?'':' collapsed'}" id="cthread-${id}">
+    <button class="comment-thread-toggle" onclick="this.closest('.comment-thread').classList.toggle('collapsed')">
+      Handoff Notes<span class="inline-notes-arrow">▼</span>
+    </button>
+    <div class="comment-thread-body">
+      ${(client.comments||[]).map(c=>`<div class="comment-item">
+        <div class="comment-meta">${escHtml(c.tech)} · ${relTime(c.ts)}</div>
+        <div class="comment-text">${escHtml(c.text)}</div>
+      </div>`).join('')}
+      <div class="comment-input-row">
+        <input class="comment-input" id="comment-input-${id}" placeholder="Add a handoff note..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addHandoffComment('${id}',this.value);this.value='';}">
+        <button class="comment-send" onclick="const i=document.getElementById('comment-input-${id}');addHandoffComment('${id}',i.value);i.value='';">Add</button>
+      </div>
     </div>
   </div>
 
@@ -4138,8 +4169,8 @@ async function saveInlineClientNotes(clientId,val){
   clients[clientId].notes=val;
   clients[clientId].lastModified=new Date().toISOString();
   await saveClients();
-  const wrap=document.getElementById(`cnotes-${clientId}`);
-  if(wrap)wrap.classList.toggle('has-note',!!val);
+  const btn=document.getElementById(`cnotes-btn-${clientId}`);
+  if(btn)btn.classList.toggle('has-note',!!val);
 }
 function openClientNotes(clientId){
   const client=clients[clientId];
@@ -4225,6 +4256,9 @@ function closeClientMenu(clientId){
 document.addEventListener('click',e=>{
   if(!e.target.closest('.client-menu-wrap')){
     document.querySelectorAll('.client-menu-dropdown.open').forEach(m=>m.classList.remove('open'));
+  }
+  if(!e.target.closest('.status-select-wrap')){
+    document.querySelectorAll('.status-dropdown.open').forEach(d=>d.classList.remove('open'));
   }
 });
 
@@ -4633,6 +4667,23 @@ async function deleteDevice(cid,did){
     logAction('device_removed',{details:devName});
     await saveClients();refreshDeviceGuide(cid);
   });
+}
+function clientStatusLabel(s){return s==='blocked'?'Blocked':s==='on-hold'?'On Hold':'Active';}
+function toggleStatusDropdown(id){
+  const dd=document.getElementById(`status-dd-${id}`);
+  const isOpen=dd?.classList.contains('open');
+  document.querySelectorAll('.status-dropdown.open').forEach(d=>d.classList.remove('open'));
+  if(!isOpen)dd?.classList.add('open');
+}
+function closeStatusDropdown(id){document.getElementById(`status-dd-${id}`)?.classList.remove('open');}
+function toggleHeaderNote(id,type){
+  const prefix=type==='client'?'c':'q';
+  const wrap=document.getElementById(`${prefix}notes-${id}`);
+  const btn=document.getElementById(`${prefix}notes-btn-${id}`);
+  if(!wrap)return;
+  wrap.classList.toggle('open');
+  btn?.classList.toggle('has-note',btn.classList.contains('has-note')||wrap.classList.contains('open'));
+  if(wrap.classList.contains('open'))wrap.querySelector('textarea')?.focus();
 }
 async function toggleClientPriority(id){
   if(!clients[id])return;
