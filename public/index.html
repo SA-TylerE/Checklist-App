@@ -90,7 +90,7 @@ input[type=number]{-moz-appearance:textfield;}
 .quote-add-item-btn:hover{background:rgba(59,130,246,0.08);}
 /* Quote status badges */
 /* Unified status badge — used for both checklists and quotes */
-.quote-status{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;padding:2px 7px;border-radius:3px;flex-shrink:0;display:inline-block;white-space:nowrap;}
+.quote-status{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:1px 5px;border-radius:3px;flex-shrink:0;display:inline-block;white-space:nowrap;vertical-align:middle;line-height:1.2;}
 .quote-status.draft{background:rgba(59,130,246,0.12);color:var(--accent);}
 .quote-status.sent{background:rgba(245,158,11,0.12);color:var(--warn);}
 .quote-status.accepted{background:rgba(34,197,94,0.12);color:var(--success);}
@@ -100,10 +100,10 @@ input[type=number]{-moz-appearance:textfield;}
 .quote-status.blocked{background:rgba(239,68,68,0.12);color:var(--danger);}
 .quote-status.customer-active,.quote-status[onclick]{cursor:pointer;}
 /* Sidebar priority star */
-.sidebar-star{background:none;border:none;cursor:pointer;width:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.15);padding:0;transition:color 0.15s;align-self:stretch;}
+.sidebar-star{position:absolute;right:0;top:0;bottom:0;width:32px;z-index:2;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.15);padding:0;transition:color 0.15s;}
 .sidebar-star:hover,.sidebar-star.on{color:var(--warn);}
 /* Normalize badge styles — ensure <button class="quote-status"> looks same as <span> */
-button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:none;padding:2px 7px;line-height:normal;}
+button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:none;padding:1px 5px;line-height:1.2;font-size:8px;vertical-align:middle;border:none;cursor:pointer;}
 /* Status badge wrap — positions the dropdown relative to the badge */
 .status-badge-wrap{position:relative;display:inline-flex;margin-left:6px;}
 /* Step attribution */
@@ -111,6 +111,13 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 /* Comment thread */
 .comment-thread{border-top:none;}
 .comment-thread-toggle{width:100%;text-align:left;background:none;border:none;border-top:1px solid var(--border);padding:6px 14px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text3);cursor:pointer;display:flex;align-items:center;gap:8px;transition:all 0.15s;}
+.handoff-thread{border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden;}
+.handoff-thread-header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg2);font-size:11px;font-weight:600;color:var(--text2);cursor:pointer;user-select:none;}
+.handoff-thread-header:hover{background:var(--bg3);}
+.handoff-toggle{background:none;border:none;color:var(--text3);cursor:pointer;font-size:9px;padding:0;transition:transform 0.15s;line-height:1;}
+.handoff-thread.collapsed .handoff-toggle{transform:rotate(-90deg);}
+.handoff-thread.collapsed .handoff-thread-body{display:none;}
+.handoff-thread-body{padding:8px 12px;}
 .comment-thread-toggle:hover{background:var(--bg3);color:var(--text2);}
 .comment-thread.collapsed .comment-thread-body{display:none;}
 .comment-thread.collapsed .inline-notes-arrow{transform:rotate(-90deg);}
@@ -673,7 +680,7 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .ef-add-btn{padding:6px 14px;background:none;border:1px solid var(--accent);color:var(--accent);border-radius:6px;font-size:12px;cursor:pointer;}
 .ef-add-btn:hover{background:rgba(59,130,246,0.08);}
 /* Dashboard stat cards */
-.dash-stat{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;cursor:default;text-align:center;}
+.dash-stat{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;cursor:default;text-align:center;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;}
 .dash-stat-value{font-size:30px;font-weight:700;line-height:1;}
 .dash-stat-label{font-size:11px;color:var(--text2);margin-top:4px;}
 .dash-row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:background 0.1s;}
@@ -1565,11 +1572,10 @@ function switchSection(name){
     document.getElementById('ss-'+s)?.classList.toggle('active',s===name);
   });
   if(name==='onboarding'){
-    if(activeClientId) showView('checklist'); else showView('empty');
+    showView('empty');
   } else if(name==='sales'){
     renderSalesSidebar();
-    if(activeSalesQuoteId&&salesQuotes[activeSalesQuoteId]) loadSalesQuote(activeSalesQuoteId);
-    else showView('sales');
+    showView('sales');
   } else if(name==='reference'){
     renderRefProductChips();
     renderReferenceView(null,null);
@@ -2316,13 +2322,11 @@ function renderSalesSidebar(filter){
   list.innerHTML=entries.map(q=>{
     const t=calcQuoteTotals(q);
     return `<div class="client-item ${q.id===activeSalesQuoteId?'active':''}" onclick="selectQuote('${q.id}')" title="${q.name}">
-      <div style="display:flex;align-items:center;">
-        <div style="flex:1;min-width:0;padding:7px 0 7px 14px;">
-          <div class="cn">${escHtml(q.name)}${quoteStatusBadge(q.status)}</div>
-          <div class="cm">${escHtml(q.tech)} · $${t.monthlyClient.toFixed(0)}/mo${t.onetimeClient>0?' + $'+t.onetimeClient.toFixed(0)+' OT':''}</div>
-        </div>
-        <button class="sidebar-star${q.priority?' on':''}" onclick="event.stopImmediatePropagation();toggleQuotePriority('${q.id}')" title="${q.priority?'Unmark priority':'Mark priority'}"><svg width="16" height="16" viewBox="0 0 24 24" fill="${q.priority?'currentColor':'none'}" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button>
+      <div style="padding:7px 32px 7px 14px;">
+        <div class="cn">${escHtml(q.name)}${quoteStatusBadge(q.status)}</div>
+        <div class="cm">${escHtml(q.tech)} · $${t.monthlyClient.toFixed(0)}/mo${t.onetimeClient>0?' + $'+t.onetimeClient.toFixed(0)+' OT':''}</div>
       </div>
+      <button class="sidebar-star${q.priority?' on':''}" onclick="toggleQuotePriority('${q.id}')" title="${q.priority?'Unmark priority':'Mark priority'}"><svg width="16" height="16" viewBox="0 0 24 24" fill="${q.priority?'currentColor':'none'}" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button>
     </div>`;
   }).join('');
 }
@@ -2411,7 +2415,7 @@ function loadSalesQuote(id){
             <button onclick="closeStatusDropdown('${id}');saveQuoteStatus('${id}','rejected')">Rejected</button>
           </div>
         </span>
-        <button class="quote-status${isCustomerView?' customer-active':''}" onclick="toggleCustomerView('${id}')" title="Toggle customer view" style="cursor:pointer;border:none;">${isCustomerView?'Customer View':'Client View'}</button>
+        <button class="quote-status${isCustomerView?' customer-active':''}" onclick="toggleCustomerView('${id}')" title="Toggle customer view">${isCustomerView?'Exit Customer View':'Show Customer View'}</button>
       </h2>
       <div style="font-size:11px;color:var(--text3);">${escHtml(q.tech)}${q.contact?' · '+escHtml(q.contact):''} · Created ${relTime(q.createdAt)}</div>
     </div>
@@ -3701,14 +3705,14 @@ function renderSidebar(filter){
     const unseenBadge=unseen?`<span class="unseen-dot" title="${unseen.techName?unseen.techName+' made changes':'Changes made'}"></span>`:'';
     const statusBadge=(c.clientStatus&&c.clientStatus!=='active')?`<span class="quote-status ${c.clientStatus}">${clientStatusLabel(c.clientStatus)}</span>`:'';
     const starSvg=`<svg width="16" height="16" viewBox="0 0 24 24" fill="${c.priority?'currentColor':'none'}" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
-    return `<div class="client-item ${c.id===activeClientId?'active':''}" onclick="selectClient('${c.id}')" title="${c.name}" data-notify-id="cl:${c.id}" style="display:flex;align-items:center;padding:0;">
-      <div style="flex:1;min-width:0;padding:7px 0 7px 14px;">
+    return `<div class="client-item ${c.id===activeClientId?'active':''}" onclick="selectClient('${c.id}')" title="${c.name}" data-notify-id="cl:${c.id}">
+      <div style="padding:7px 32px 7px 14px;">
         <div class="cn">${c.name} ${staleBadge}${statusBadge}</div>
         <div class="cm">${c.tech} \u00b7 ${pct}% org</div>
         <div class="cpbar"><div class="cpbar-fill" style="width:0" data-w="${pct}" data-bar-id="sb-${c.id}"></div></div>
         ${unseenBadge}
       </div>
-      <button class="sidebar-star${c.priority?' on':''}" onclick="event.stopImmediatePropagation();toggleClientPriority('${c.id}')" title="${c.priority?'Unmark priority':'Mark priority'}">${starSvg}</button>
+      <button class="sidebar-star${c.priority?' on':''}" onclick="toggleClientPriority('${c.id}')" title="${c.priority?'Unmark priority':'Mark priority'}">${starSvg}</button>
     </div>`;
   }).join('');
   animateBars(list, sbFrom);
@@ -4095,22 +4099,6 @@ function loadClientChecklist(id){
     ${dueBadge}
   </div>`:''}
 
-  <div class="comment-thread${(client.comments?.length)?'':' collapsed'}" id="cthread-${id}">
-    <button class="comment-thread-toggle" onclick="this.closest('.comment-thread').classList.toggle('collapsed')">
-      Handoff Notes<span class="inline-notes-arrow">▼</span>
-    </button>
-    <div class="comment-thread-body">
-      ${(client.comments||[]).map(c=>`<div class="comment-item">
-        <div class="comment-meta">${escHtml(c.tech)} · ${relTime(c.ts)}</div>
-        <div class="comment-text">${escHtml(c.text)}</div>
-      </div>`).join('')}
-      <div class="comment-input-row">
-        <input class="comment-input" id="comment-input-${id}" placeholder="Add a handoff note..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addHandoffComment('${id}',this.value);this.value='';}">
-        <button class="comment-send" onclick="const i=document.getElementById('comment-input-${id}');addHandoffComment('${id}',i.value);i.value='';">Add</button>
-      </div>
-    </div>
-  </div>
-
   <div class="tab-bar">
     <button class="tab-btn ${activeChecklistTab!=='devices'?'active':''}" id="tab-btn-org-${id}" data-notify-id="tab:org" onclick="switchChecklistTab('${id}','org')">Organization</button>
     <button class="tab-btn ${activeChecklistTab==='devices'?'active':''}" id="tab-btn-devices-${id}" data-notify-id="tab:devices" onclick="switchChecklistTab('${id}','devices')">Devices (${devDone}/${devList.length})</button>
@@ -4123,6 +4111,22 @@ function loadClientChecklist(id){
 
   <!-- Org tab -->
   <div class="tab-panel ${activeChecklistTab!=='devices'?'active':''}" id="tab-org-${id}">
+  <div class="handoff-thread${(client.comments?.length)?'':' collapsed'}" id="cthread-${id}">
+    <div class="handoff-thread-header" onclick="this.closest('.handoff-thread').classList.toggle('collapsed')">
+      <span>Team Handoff Notes</span>
+      <button class="handoff-toggle" onclick="event.stopPropagation();this.closest('.handoff-thread').classList.toggle('collapsed')" title="Toggle">▼</button>
+    </div>
+    <div class="handoff-thread-body">
+      ${(client.comments||[]).map(c=>`<div class="comment-item">
+        <div class="comment-meta">${escHtml(c.tech)} · ${relTime(c.ts)}</div>
+        <div class="comment-text">${escHtml(c.text)}</div>
+      </div>`).join('')}
+      <div class="comment-input-row">
+        <input class="comment-input" id="comment-input-${id}" placeholder="Add a handoff note for the team..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addHandoffComment('${id}',this.value);this.value='';}">
+        <button class="comment-send" onclick="const i=document.getElementById('comment-input-${id}');addHandoffComment('${id}',i.value);i.value='';">Add</button>
+      </div>
+    </div>
+  </div>
   <div class="phase-grid">`;
 
   activePhases.forEach((p,i)=>{ html+=renderPhase(id,p,i+1,false); }); // all open by default
