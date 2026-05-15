@@ -256,7 +256,7 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 /* Views */
 .view{display:none;}.view.active{display:block;}
 #view-home.active,#view-empty.active,#view-sales.active{display:flex;justify-content:center;padding:24px 28px;}
-#sales-content{width:100%;}
+#sales-content{width:100%;display:flex;justify-content:center;}
 
 /* Config */
 .config-card{max-width:440px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:22px;}
@@ -1586,11 +1586,19 @@ function switchSection(name){
     document.getElementById('ss-'+s)?.classList.toggle('active',s===name);
   });
   if(name==='onboarding'){
+    activeSalesQuoteId=null;
+    renderSidebar();
     showView('empty');
   } else if(name==='sales'){
+    activeClientId=null;
+    renderSidebar();
     renderSalesSidebar();
     showView('sales');
   } else if(name==='reference'){
+    activeClientId=null;
+    activeSalesQuoteId=null;
+    renderSidebar();
+    renderSalesSidebar();
     renderRefProductChips();
     renderReferenceView(null,null);
   }
@@ -1612,14 +1620,17 @@ function openSettings(){
   if(isMobile()) closeOverlays();
   _preSettingsClientId=activeClientId;
   activeClientId=null;
+  activeSalesQuoteId=null;
   document.getElementById('settings-btn')?.classList.add('active');
   showView('settings');
   renderSettingsView();
   renderSidebar();
+  renderSalesSidebar();
 }
 function goToDashboard(){
   document.getElementById('settings-btn')?.classList.remove('active');
   activeClientId=null;
+  activeSalesQuoteId=null;
   _preSettingsClientId=null;
   activeSection=null;
   ['onboarding','sales','reference'].forEach(s=>{
@@ -1632,15 +1643,14 @@ function goToDashboard(){
 function toggleSettings(){
   const btn=document.getElementById('settings-btn');
   if(btn?.classList.contains('active')){
-    // Settings is open — return to previous state
     btn.classList.remove('active');
-    if(_preSettingsClientId&&clients[_preSettingsClientId]){
-      activeClientId=_preSettingsClientId;
-      loadClientChecklist(_preSettingsClientId);
+    _preSettingsClientId=null;
+    if(activeSection==='sales'){
+      renderSalesSidebar();
+      showView('sales');
     } else {
       showView('empty');
     }
-    _preSettingsClientId=null;
   } else {
     openSettings();
   }
@@ -2586,6 +2596,7 @@ async function toggleSalesLine(quoteId,productId){
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
   logQuote(quoteId,wantEnable?'line_enabled':'line_disabled',{details:p?.label||productId});
+  renderSalesSidebar(document.getElementById('sales-search')?.value||'');
   loadSalesQuote(quoteId);
 }
 // Live update: updates in-memory + column cells + totals without re-rendering
@@ -2616,6 +2627,7 @@ async function saveQuoteInput(quoteId,productId,field,val){
   q.lineItems[productId][field]=isNaN(val)?0:+val;
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
+  renderSalesSidebar(document.getElementById('sales-search')?.value||'');
 }
 function onCustomInputChange(quoteId,customId,field,val){
   const q=salesQuotes[quoteId];if(!q)return;
@@ -2632,6 +2644,7 @@ async function saveCustomInput(quoteId,customId,field,val){
   c[field]=isNaN(val)?0:+val;
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
+  renderSalesSidebar(document.getElementById('sales-search')?.value||'');
 }
 function onQuoteNoteInput(wrapperId,val){
   document.querySelector(`#${wrapperId} .quote-note-btn`)?.classList.toggle('has-note',!!val.trim());
@@ -3002,10 +3015,10 @@ function renderSalesView(){
     ${quotes.length?`<div>
       <div class="dash-section-label">Recent Quotes</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;">
-        ${quotes.slice(0,8).map(q=>{const t=calcQuoteTotals(q);return`<div class="dash-row" onclick="selectQuote('${q.id}')">
+        ${quotes.slice(0,8).map(q=>{const t=calcQuoteTotals(q);const otStr=t.onetimeClient>0?' + $'+t.onetimeClient.toFixed(0)+' OT':'';const profitColor=t.profit>=0?'var(--success)':'var(--danger)';return`<div class="dash-row" onclick="selectQuote('${q.id}')">
           <div style="flex:1;min-width:0;">
-            <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(q.name)}</div>
-            <div style="font-size:10px;color:var(--text3);margin-top:1px;display:flex;align-items:center;gap:4px;">${quoteStatusBadge(q.status)}<span>$${t.monthlyClient.toFixed(0)}/mo</span></div>
+            <div style="font-size:12px;font-weight:500;display:flex;align-items:center;gap:4px;overflow:hidden;"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(q.name)}</span>${quoteStatusBadge(q.status)}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px;">$${t.monthlyClient.toFixed(0)}/mo${otStr}<span style="color:${profitColor};margin-left:4px;">· $${t.profit.toFixed(0)} profit</span></div>
           </div>
         </div>`;}).join('')}
       </div>
@@ -3103,9 +3116,9 @@ function renderDashboard(){
     ${recent.length?`<div>
       <div class="dash-section-label">Recent checklists</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;">
-        ${recent.map(c=>{const p=overallProgress(c);const pct=p.total?Math.round(p.done/p.total*100):0;return`<div class="dash-row" onclick="selectClient('${c.id}')">
+        ${recent.map(c=>{const p=overallProgress(c);const pct=p.total?Math.round(p.done/p.total*100):0;const cs=c.clientStatus&&c.clientStatus!=='active'?`<span class="quote-status ${c.clientStatus}">${clientStatusLabel(c.clientStatus)}</span>`:'';return`<div class="dash-row" onclick="selectClient('${c.id}')">
           <div style="flex:1;min-width:0;">
-            <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.name}</div>
+            <div style="font-size:12px;font-weight:500;display:flex;align-items:center;gap:4px;overflow:hidden;"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.name}</span>${cs}</div>
             <div style="font-size:10px;color:var(--text3);margin-top:1px;">${c.tech}</div>
           </div>
           <span style="font-size:11px;color:var(--text3);flex-shrink:0;">${pct}%</span>
