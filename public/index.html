@@ -91,18 +91,21 @@ input[type=number]{-moz-appearance:textfield;}
 .quote-del{width:28px;flex-shrink:0;}
 .quote-del-btn{width:28px;background:none;border:none;color:var(--danger);cursor:pointer;font-size:15px;padding:0;flex-shrink:0;opacity:0.7;transition:opacity 0.15s;}
 .quote-del-btn:hover{opacity:1;}
-.quote-note-btn{padding:1px 6px;border-radius:4px;background:none;border:1px solid var(--border);color:var(--text3);font-size:10px;font-family:var(--sans);cursor:pointer;flex-shrink:0;white-space:nowrap;transition:all 0.15s;}
-.quote-note-btn:hover{border-color:var(--accent);color:var(--accent);}
-.quote-note-btn.has-note{border-color:var(--warn);color:var(--warn);background:rgba(245,158,11,0.08);}
+.quote-note-btn{width:20px;height:20px;border-radius:4px;background:none;border:1px solid transparent;color:var(--text3);font-size:13px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all 0.15s;opacity:0.45;padding:0;line-height:1;}
+.quote-note-btn:hover{border-color:var(--accent);color:var(--accent);opacity:1;}
+.quote-note-btn.has-note{border-color:var(--warn);color:var(--warn);background:rgba(245,158,11,0.1);opacity:1;}
 .qline-wrap{}
 .quote-note-area{display:none;padding:4px 8px 6px 23px;}
 .qline-wrap.note-open .quote-note-area{display:block;}
 .quote-note-area textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:6px;color:var(--text);font-size:11px;font-family:var(--sans);resize:vertical;min-height:40px;outline:none;box-sizing:border-box;}
 .quote-note-area textarea:focus{border-color:var(--accent);}
 .inline-notes{border-bottom:1px solid var(--border);}
-.inline-notes-toggle{width:100%;text-align:left;background:none;border:none;padding:7px 14px;font-size:11px;color:var(--text3);cursor:pointer;display:flex;align-items:center;gap:6px;transition:color 0.15s;}
-.inline-notes-toggle:hover{color:var(--text2);}
-.note-dot{color:var(--warn);font-size:9px;margin-left:2px;}
+.inline-notes-toggle{width:100%;text-align:left;background:none;border:none;border-top:1px solid var(--border);padding:7px 14px;font-size:11px;color:var(--text3);cursor:pointer;display:flex;align-items:center;gap:6px;transition:all 0.15s;}
+.inline-notes-toggle:hover{background:var(--bg3);color:var(--text2);}
+.inline-notes.open .inline-notes-toggle{background:var(--bg3);color:var(--text2);}
+.inline-notes.has-note .inline-notes-toggle{color:var(--warn);}
+.inline-notes.has-note .inline-notes-toggle:hover{background:rgba(245,158,11,0.06);}
+.note-dot{display:none;}
 .inline-notes-body{display:none;padding:0 14px 8px;}
 .inline-notes.open .inline-notes-body{display:block;}
 .inline-notes-ta{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:7px 9px;color:var(--text);font-size:12px;font-family:var(--sans);resize:vertical;min-height:64px;outline:none;box-sizing:border-box;}
@@ -1041,6 +1044,15 @@ body.light{
           <option value="notes_updated">Notes updated</option>
           <option value="customer_linked">Customer linked</option>
         </optgroup>
+        <optgroup label="Quotes">
+          <option value="quote_created">Quote created</option>
+          <option value="quote_edited">Quote edited</option>
+          <option value="quote_deleted">Quote deleted</option>
+          <option value="line_enabled">Line item enabled</option>
+          <option value="line_disabled">Line item disabled</option>
+          <option value="custom_item_added">Custom item added</option>
+          <option value="custom_item_removed">Custom item removed</option>
+        </optgroup>
         <optgroup label="Settings">
           <option value="config_saved">Configuration saved</option>
           <option value="products_saved">Products saved</option>
@@ -1305,6 +1317,9 @@ function actionLabel(action){
     step_note:'Step note updated',
     procedures_saved:'Saved procedures',guides_saved:'Saved guides',
     config_saved:'Saved configuration',products_saved:'Saved products',
+    quote_created:'Created quote',quote_edited:'Edited quote',quote_deleted:'Deleted quote',
+    line_enabled:'Enabled line item',line_disabled:'Disabled line item',
+    custom_item_added:'Added custom item',custom_item_removed:'Removed custom item',
   };
   return map[action]||action;
 }
@@ -1316,9 +1331,9 @@ function relTime(ts){
   return d.toLocaleDateString([],{month:'short',day:'numeric'})+'  '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
 }
 function logDotColor(action){
-  if(['checklist_created','device_added','customer_linked'].includes(action)) return 'var(--success)';
-  if(['checklist_deleted','device_removed','customer_unlinked'].includes(action)) return 'var(--danger)';
-  if(['checklist_edited','notes_updated','step_note'].includes(action)) return 'var(--warn)';
+  if(['checklist_created','device_added','customer_linked','quote_created','line_enabled','custom_item_added'].includes(action)) return 'var(--success)';
+  if(['checklist_deleted','device_removed','customer_unlinked','quote_deleted','custom_item_removed'].includes(action)) return 'var(--danger)';
+  if(['checklist_edited','notes_updated','step_note','quote_edited','line_disabled'].includes(action)) return 'var(--warn)';
   if(['procedures_saved','guides_saved','config_saved','products_saved'].includes(action)) return 'var(--text2)';
   return 'var(--accent)';
 }
@@ -2347,7 +2362,7 @@ function loadSalesQuote(id){
       </div>
     </div>
   </div>
-  <div class="inline-notes${q.notes?' open':''}" id="qnotes-${id}">
+  <div class="inline-notes${q.notes?' open has-note':''}" id="qnotes-${id}">
     <button class="inline-notes-toggle" onclick="this.closest('.inline-notes').classList.toggle('open')">
       &#128203; Notes${q.notes?'<span class="note-dot">&#9679;</span>':''}
     </button>
@@ -2405,7 +2420,7 @@ function loadSalesQuote(id){
           <div class="quote-check${on?' on':''}" onclick="toggleSalesLine('${id}','${p.id}')">${on?'✓':''}</div>
           <div class="quote-label" style="display:flex;align-items:center;gap:5px;min-width:0;">
             <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(p.label)}</span>
-            <button class="quote-note-btn${li.note?' has-note':''}" onclick="toggleQuoteNote('${nid}')">Notes</button>
+            <button class="quote-note-btn${li.note?' has-note':''}" onclick="toggleQuoteNote('${nid}')" title="Notes">&#9998;</button>
           </div>
           <input class="quote-input" style="width:52px;" type="number" min="0" value="${li.qty}" oninput="onQuoteInputChange('${id}','${p.id}','qty',this.valueAsNumber||0)" onblur="saveQuoteInput('${id}','${p.id}','qty',this.valueAsNumber||0)" title="Quantity">
           <div class="quote-list">${listStr}</div>
@@ -2441,7 +2456,7 @@ function loadSalesQuote(id){
           <div class="quote-check${enabled?' on':''}" onclick="toggleCustomLine('${id}','${c.id}')">${enabled?'✓':''}</div>
           <div class="quote-label" style="display:flex;align-items:center;gap:5px;min-width:0;">
             <input class="quote-custom-label" style="flex:1;" placeholder="Custom item..." value="${escHtml(c.label)}" onblur="updateCustomLabel('${id}','${c.id}',this.value)">
-            <button class="quote-note-btn${c.note?' has-note':''}" onclick="toggleQuoteNote('${cnid}')">Notes</button>
+            <button class="quote-note-btn${c.note?' has-note':''}" onclick="toggleQuoteNote('${cnid}')" title="Notes">&#9998;</button>
           </div>
           <input class="quote-input" style="width:52px;" type="number" min="0" value="${c.qty}" oninput="onCustomInputChange('${id}','${c.id}','qty',this.valueAsNumber||0)" onblur="saveCustomInput('${id}','${c.id}','qty',this.valueAsNumber||0)" title="Quantity">
           <div class="quote-list" style="color:transparent;">—</div>
@@ -2491,7 +2506,7 @@ async function toggleSalesLine(quoteId,productId){
   q.lineItems[productId].enabled=wantEnable;
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
-  logQuote(quoteId,wantEnable?'line_enabled':'line_disabled',{details:productId});
+  logQuote(quoteId,wantEnable?'line_enabled':'line_disabled',{details:p?.label||productId});
   loadSalesQuote(quoteId);
 }
 // Live update: updates in-memory + column cells + totals without re-rendering
@@ -2586,15 +2601,18 @@ function toggleQuoteNote(wrapperId){
 async function toggleCustomLine(quoteId,customId){
   const q=salesQuotes[quoteId];if(!q)return;
   const c=(q.customItems||[]).find(c=>c.id===customId);if(!c)return;
-  c.enabled=c.enabled===false?true:false;
+  const wasEnabled=c.enabled===false?true:false;
+  c.enabled=wasEnabled;
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
+  logQuote(quoteId,wasEnabled?'line_enabled':'line_disabled',{details:c.label||'Custom item'});
   loadSalesQuote(quoteId);
 }
 function logQuote(quoteId,action,details={}){
   const myName=localStorage.getItem('myName')||'';
+  const q=salesQuotes[quoteId];
   fetch('/api/logs',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({ts:new Date().toISOString(),tech:myName,action,clientId:quoteId,...details})
+    body:JSON.stringify({ts:new Date().toISOString(),tech:myName,action,clientId:quoteId,clientName:q?.name||null,...details})
   }).catch(_=>{});
 }
 async function showQuoteLog(quoteId){
@@ -2614,8 +2632,8 @@ async function saveInlineQuoteNotes(quoteId,val){
   q.notes=val;
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
-  const toggle=document.querySelector(`#qnotes-${quoteId} .inline-notes-toggle`);
-  if(toggle)toggle.innerHTML=`&#128203; Notes${val?'<span class="note-dot">&#9679;</span>':''}`;
+  const wrap=document.getElementById(`qnotes-${quoteId}`);
+  if(wrap)wrap.classList.toggle('has-note',!!val);
 }
 function toggleCustomerView(id){
   const el=document.getElementById('quote-content');if(!el)return;
@@ -2684,7 +2702,7 @@ async function addCustomQuoteLine(quoteId,category){
   q.customItems.push({id:'custom-'+Date.now(),label:'',category,qty:1,unitPrice:0,billing:'monthly',note:'',enabled:true});
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
-  logQuote(quoteId,'custom_item_added',{details:category});
+  logQuote(quoteId,'custom_item_added',{details:`Added custom item to ${category} section`});
   loadSalesQuote(quoteId);
 }
 async function deleteCustomQuoteLine(quoteId,customId){
@@ -2693,7 +2711,7 @@ async function deleteCustomQuoteLine(quoteId,customId){
   q.customItems=(q.customItems||[]).filter(c=>c.id!==customId);
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
-  logQuote(quoteId,'custom_item_removed',{details:label||customId});
+  logQuote(quoteId,'custom_item_removed',{details:label?`"${label}"`:'unnamed custom item'});
   loadSalesQuote(quoteId);
 }
 async function updateCustomLabel(quoteId,customId,val){
@@ -2761,7 +2779,7 @@ async function saveEditQuote(){
   q.lastModified=new Date().toISOString();
   closeEditQuoteModal();
   await saveSalesQuotes();
-  logQuote(id,'quote_edited',{clientName:q.name});
+  logQuote(id,'quote_edited',{details:'Updated quote info'});
   renderSalesSidebar();
   loadSalesQuote(id);
 }
@@ -3946,7 +3964,7 @@ function loadClientChecklist(id){
     </div>
   </div>
 
-  <div class="inline-notes${client.notes?' open':''}" id="cnotes-${id}">
+  <div class="inline-notes${client.notes?' open has-note':''}" id="cnotes-${id}">
     <button class="inline-notes-toggle" onclick="this.closest('.inline-notes').classList.toggle('open')">
       &#128203; Notes${client.notes?'<span class="note-dot">&#9679;</span>':''}
     </button>
@@ -4060,9 +4078,8 @@ async function saveInlineClientNotes(clientId,val){
   clients[clientId].notes=val;
   clients[clientId].lastModified=new Date().toISOString();
   await saveClients();
-  // Update dot indicator without re-render
-  const toggle=document.querySelector(`#cnotes-${clientId} .inline-notes-toggle`);
-  if(toggle)toggle.innerHTML=`&#128203; Notes${val?'<span class="note-dot">&#9679;</span>':''}`;
+  const wrap=document.getElementById(`cnotes-${clientId}`);
+  if(wrap)wrap.classList.toggle('has-note',!!val);
 }
 function openClientNotes(clientId){
   const client=clients[clientId];
