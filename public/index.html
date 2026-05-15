@@ -89,18 +89,21 @@ input[type=number]{-moz-appearance:textfield;}
 .quote-add-item-btn{width:100%;background:none;border:1px dashed var(--accent);border-radius:4px;color:var(--accent);cursor:pointer;font-size:11px;padding:4px 10px;transition:background 0.15s;}
 .quote-add-item-btn:hover{background:rgba(59,130,246,0.08);}
 /* Quote status badges */
-.quote-status{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;padding:2px 7px;border-radius:3px;flex-shrink:0;display:inline-block;}
+/* Unified status badge — used for both checklists and quotes */
+.quote-status{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;padding:2px 7px;border-radius:3px;flex-shrink:0;display:inline-block;white-space:nowrap;}
 .quote-status.draft{background:rgba(59,130,246,0.12);color:var(--accent);}
 .quote-status.sent{background:rgba(245,158,11,0.12);color:var(--warn);}
 .quote-status.accepted{background:rgba(34,197,94,0.12);color:var(--success);}
 .quote-status.rejected{background:rgba(239,68,68,0.12);color:var(--danger);}
-/* Priority star */
-.priority-btn{background:none;border:none;cursor:pointer;font-size:14px;color:var(--text3);padding:0 2px;transition:color 0.15s;line-height:1;flex-shrink:0;}
-.priority-btn:hover,.priority-btn.on{color:var(--warn);}
-/* Client status badge (blocked/on-hold) */
-.client-status-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:1px 5px;border-radius:3px;flex-shrink:0;}
-.client-status-badge.blocked{background:rgba(239,68,68,0.12);color:var(--danger);}
-.client-status-badge.on-hold{background:rgba(245,158,11,0.12);color:var(--warn);}
+.quote-status.active{background:rgba(34,197,94,0.12);color:var(--success);}
+.quote-status.on-hold{background:rgba(245,158,11,0.12);color:var(--warn);}
+.quote-status.blocked{background:rgba(239,68,68,0.12);color:var(--danger);}
+.quote-status.customer-active,.quote-status[onclick]{cursor:pointer;}
+/* Sidebar priority star */
+.sidebar-star{background:none;border:none;cursor:pointer;font-size:18px;line-height:1;flex-shrink:0;color:var(--border2);padding:0 4px 0 2px;transition:color 0.15s;font-family:serif;}
+.sidebar-star:hover,.sidebar-star.on{color:var(--warn);}
+/* Status badge wrap — positions the dropdown relative to the badge */
+.status-badge-wrap{position:relative;display:inline-flex;}
 /* Step attribution */
 .step-by{font-size:9px;color:var(--text3);font-style:italic;margin-top:1px;}
 /* Comment thread */
@@ -327,7 +330,7 @@ input[type=number]{-moz-appearance:textfield;}
 @keyframes progressStripe{from{background-position:0 0;}to{background-position:14px 0;}}
 
 /* Phase + device card grids */
-.phase-grid,.device-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(450px,1fr));gap:10px;align-items:start;}
+.phase-grid,.device-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(450px,1fr));gap:10px;align-items:stretch;}
 .phase-grid .phase-block,.device-grid .device-entry{margin-bottom:0;}
 /* In grid, phase headers don't need to be sticky */
 .phase-grid .phase-header{position:static;}
@@ -337,7 +340,7 @@ input[type=number]{-moz-appearance:textfield;}
 .completed-section-hdr::before,.completed-section-hdr::after{content:'';flex:1;height:1px;background:var(--border);}
 
 /* Phase */
-.phase-block{margin-bottom:5px;border:1px solid var(--border);border-radius:10px;}
+.phase-block{margin-bottom:5px;border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;}
 .phase-block.collapsed .phase-body{display:none;}
 .phase-block.completed{opacity:0.6;}
 .phase-header{display:flex;align-items:center;gap:8px;padding:9px 13px;background:var(--bg2);cursor:pointer;user-select:none;transition:background 0.1s;position:sticky;top:0;z-index:5;border-radius:10px 10px 0 0;}
@@ -351,7 +354,7 @@ input[type=number]{-moz-appearance:textfield;}
 .phase-collapse-icon{margin-left:auto;color:var(--text3);font-size:9px;transition:transform 0.2s;flex-shrink:0;}
 .phase-block.collapsed .phase-collapse-icon{transform:rotate(-90deg);}
 .phase-progress-text{font-size:10px;color:var(--text3);flex-shrink:0;}
-.phase-body{padding:5px;border-radius:0 0 10px 10px;}
+.phase-body{padding:5px;border-radius:0 0 10px 10px;flex:1;overflow-y:auto;min-height:0;}
 
 /* Step */
 .step-item{border-radius:6px;margin-bottom:2px;position:relative;}
@@ -2322,7 +2325,10 @@ function renderSalesSidebar(filter){
   list.innerHTML=entries.map(q=>{
     const t=calcQuoteTotals(q);
     return `<div class="client-item ${q.id===activeSalesQuoteId?'active':''}" onclick="selectQuote('${q.id}')" title="${q.name}">
-      <div class="cn" style="display:flex;align-items:center;gap:5px;">${q.priority?'<span style="color:var(--warn);font-size:11px;">&#9733;</span>':''}${escHtml(q.name)}${quoteStatusBadge(q.status)}</div>
+      <div class="cn" style="display:flex;align-items:center;">
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;">${escHtml(q.name)}${quoteStatusBadge(q.status)}</span>
+        <button class="sidebar-star${q.priority?' on':''}" onclick="event.stopPropagation();toggleQuotePriority('${q.id}')" title="${q.priority?'Unmark priority':'Mark priority'}">&#9733;</button>
+      </div>
       <div class="cm">${escHtml(q.tech)} · $${t.monthlyClient.toFixed(0)}/mo${t.onetimeClient>0?' + $'+t.onetimeClient.toFixed(0)+' OT':''}</div>
     </div>`;
   }).join('');
@@ -2402,13 +2408,22 @@ function loadSalesQuote(id){
   const isCustomerView=document.getElementById('quote-content')?.dataset?.customer==='1';
   let html=`<div class="checklist-header" style="margin-bottom:0;">
     <div>
-      <h2 style="font-size:18px;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${escHtml(q.name)}${quoteStatusBadge(q.status)}${isCustomerView?'<span class="quote-status accepted">Customer View</span>':''}</h2>
+      <h2 style="font-size:18px;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${escHtml(q.name)}
+        <span class="status-badge-wrap">
+          <span class="quote-status ${q.status||'draft'}" onclick="toggleStatusDropdown('${id}')" style="cursor:pointer;" title="Change status">${quoteStatusLabel(q.status)}</span>
+          <div class="status-dropdown" id="status-dd-${id}">
+            <button onclick="closeStatusDropdown('${id}');saveQuoteStatus('${id}','draft')">Draft</button>
+            <button onclick="closeStatusDropdown('${id}');saveQuoteStatus('${id}','sent')">Sent</button>
+            <button onclick="closeStatusDropdown('${id}');saveQuoteStatus('${id}','accepted')">Accepted</button>
+            <button onclick="closeStatusDropdown('${id}');saveQuoteStatus('${id}','rejected')">Rejected</button>
+          </div>
+        </span>
+        <button class="quote-status${isCustomerView?' customer-active':''}" onclick="toggleCustomerView('${id}')" title="Toggle customer view" style="cursor:pointer;border:none;">${isCustomerView?'Customer View':'Client View'}</button>
+      </h2>
       <div style="font-size:11px;color:var(--text3);">${escHtml(q.tech)}${q.contact?' · '+escHtml(q.contact):''} · Created ${relTime(q.createdAt)}</div>
     </div>
     <div class="header-actions">
       <button class="step-note-btn${q.notes?' has-note':''}" id="qnotes-btn-${id}" onclick="toggleHeaderNote('${id}','quote')" title="Quote notes">Notes</button>
-      <button class="priority-btn${q.priority?' on':''}" onclick="toggleQuotePriority('${id}')" title="${q.priority?'Unmark priority':'Mark as priority'}">${q.priority?'&#9733;':'&#9734;'}</button>
-      <button class="quote-status${isCustomerView?' customer-active':''}" onclick="toggleCustomerView('${id}')" title="Toggle customer view" style="cursor:pointer;">${isCustomerView?'Customer View':'Client View'}</button>
       <div class="client-menu-wrap" id="qmenu-wrap-${id}">
         <button class="client-menu-btn" onclick="toggleQuoteMenu('${id}')">&#8230;</button>
         <div class="client-menu-dropdown" id="qmenu-${id}">
@@ -2669,9 +2684,16 @@ async function toggleQuotePriority(id){
   renderSalesSidebar();
   loadSalesQuote(id);
 }
+function quoteStatusLabel(s){return{draft:'Draft',sent:'Sent',accepted:'Accepted',rejected:'Rejected'}[s]||'Draft';}
 function quoteStatusBadge(status){
-  const labels={draft:'Draft',sent:'Sent',accepted:'Accepted',rejected:'Rejected'};
-  return`<span class="quote-status ${status||'draft'}">${labels[status]||'Draft'}</span>`;
+  return`<span class="quote-status ${status||'draft'}">${quoteStatusLabel(status)}</span>`;
+}
+async function saveQuoteStatus(id,status){
+  const q=salesQuotes[id];if(!q)return;
+  q.status=status;q.lastModified=new Date().toISOString();
+  await saveSalesQuotes();
+  renderSalesSidebar();
+  loadSalesQuote(id);
 }
 function logQuote(quoteId,action,details={}){
   const myName=localStorage.getItem('myName')||'';
@@ -3662,8 +3684,12 @@ function renderSidebar(filter){
     const staleBadge=stale?`<span class="stale-dot" title="Inactive ${staleDays}+ days">\u25cf</span>`:'';
     const unseen=unseenChanges.get(c.id);
     const unseenBadge=unseen?`<span class="unseen-dot" title="${unseen.techName?unseen.techName+' made changes':'Changes made'}"></span>`:'';
+    const statusBadge=(c.clientStatus&&c.clientStatus!=='active')?`<span class="quote-status ${c.clientStatus}">${clientStatusLabel(c.clientStatus)}</span> `:'';
     return `<div class="client-item ${c.id===activeClientId?'active':''}" onclick="selectClient('${c.id}')" title="${c.name}" data-notify-id="cl:${c.id}">
-      <div class="cn">${c.name} ${staleBadge}</div>
+      <div class="cn" style="display:flex;align-items:center;">
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;">${c.name} ${staleBadge}${statusBadge}</span>
+        <button class="sidebar-star${c.priority?' on':''}" onclick="event.stopPropagation();toggleClientPriority('${c.id}')" title="${c.priority?'Unmark priority':'Mark priority'}">&#9733;</button>
+      </div>
       <div class="cm">${c.tech} \u00b7 ${pct}% org</div>
       <div class="cpbar"><div class="cpbar-fill" style="width:0" data-w="${pct}" data-bar-id="sb-${c.id}"></div></div>
       ${unseenBadge}
@@ -4016,22 +4042,22 @@ function loadClientChecklist(id){
   const _cs=client.clientStatus||'active';
   let html=`<div class="checklist-header">
     <div>
-      <h2>${client.name}</h2>
+      <h2 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${client.name}
+        <span class="status-badge-wrap">
+          <span class="quote-status ${_cs}" onclick="toggleStatusDropdown('${id}')" style="cursor:pointer;" title="Change status">${clientStatusLabel(_cs)}</span>
+          <div class="status-dropdown" id="status-dd-${id}">
+            <button onclick="closeStatusDropdown('${id}');setClientStatus('${id}','active')">Active</button>
+            <button onclick="closeStatusDropdown('${id}');setClientStatus('${id}','on-hold')">On Hold</button>
+            <button onclick="closeStatusDropdown('${id}');setClientStatus('${id}','blocked')">Blocked</button>
+          </div>
+        </span>
+      </h2>
       <div class="meta">Tech: ${client.tech} &nbsp;·&nbsp; Created: ${new Date(client.createdAt).toLocaleDateString()}</div>
       ${client.syncroCustomerName?`<div class="meta" style="margin-top:1px;">Syncro: ${client.syncroCustomerName}</div>`:''}
     </div>
     <div class="header-actions">
       <button class="clear-updates-btn" id="clear-updates-btn" style="display:none" onclick="clearAllUpdateDots()">&#9679; Clear updates</button>
       <button class="step-note-btn${client.notes?' has-note':''}" id="cnotes-btn-${id}" onclick="toggleHeaderNote('${id}','client')" title="Client notes">Notes</button>
-      <button class="priority-btn${client.priority?' on':''}" onclick="toggleClientPriority('${id}')" title="${client.priority?'Unmark priority':'Mark as priority'}">${client.priority?'&#9733;':'&#9734;'}</button>
-      <div class="status-select-wrap">
-        <button class="status-select-btn ${_cs}" onclick="toggleStatusDropdown('${id}')">${clientStatusLabel(_cs)} &#9660;</button>
-        <div class="status-dropdown" id="status-dd-${id}">
-          <button onclick="closeStatusDropdown('${id}');setClientStatus('${id}','active')">Active</button>
-          <button onclick="closeStatusDropdown('${id}');setClientStatus('${id}','on-hold')">On Hold</button>
-          <button onclick="closeStatusDropdown('${id}');setClientStatus('${id}','blocked')">Blocked</button>
-        </div>
-      </div>
       <div class="client-menu-wrap" id="cmenu-wrap-${id}">
         <button class="client-menu-btn" onclick="toggleClientMenu('${id}')">&#8230;</button>
         <div class="client-menu-dropdown" id="cmenu-${id}">
