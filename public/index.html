@@ -256,6 +256,7 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 /* Views */
 .view{display:none;}.view.active{display:block;}
 #view-home.active,#view-empty.active,#view-sales.active{display:flex;justify-content:center;padding:24px 28px;}
+#sales-content{width:100%;}
 
 /* Config */
 .config-card{max-width:440px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:22px;}
@@ -347,7 +348,7 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 @keyframes progressStripe{from{background-position:0 0;}to{background-position:14px 0;}}
 
 /* Phase + device card grids */
-.phase-grid,.device-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(450px,1fr));gap:10px;align-items:stretch;}
+.phase-grid,.device-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(450px,1fr));gap:10px;align-items:start;}
 .phase-grid .phase-block,.device-grid .device-entry{margin-bottom:0;}
 /* In grid, phase headers don't need to be sticky */
 .phase-grid .phase-header{position:static;}
@@ -371,7 +372,12 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .phase-collapse-icon{margin-left:auto;color:var(--text3);font-size:9px;transition:transform 0.2s;flex-shrink:0;}
 .phase-block.collapsed .phase-collapse-icon{transform:rotate(-90deg);}
 .phase-progress-text{font-size:10px;color:var(--text3);flex-shrink:0;}
-.phase-body{padding:5px;border-radius:0 0 10px 10px;flex:1;overflow-y:auto;min-height:0;}
+.phase-body{padding:5px;border-radius:0 0 10px 10px;overflow-y:auto;max-height:300px;scrollbar-width:none;}
+.phase-body::-webkit-scrollbar{width:0;}
+.phase-block:hover .phase-body{scrollbar-width:thin;scrollbar-color:rgba(127,127,127,0.25) transparent;}
+.phase-block:hover .phase-body::-webkit-scrollbar{width:4px;}
+.phase-block:hover .phase-body::-webkit-scrollbar-thumb{background:rgba(127,127,127,0.25);border-radius:4px;}
+.phase-block:hover .phase-body::-webkit-scrollbar-track{background:transparent;}
 
 /* Step */
 .step-item{border-radius:6px;margin-bottom:2px;position:relative;}
@@ -2687,7 +2693,7 @@ async function toggleQuotePriority(id){
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
   renderSalesSidebar();
-  loadSalesQuote(id);
+  if(activeSalesQuoteId===id) loadSalesQuote(id);
 }
 function quoteStatusLabel(s){return{draft:'Draft',sent:'Sent',accepted:'Accepted',rejected:'Rejected'}[s]||'Draft';}
 function quoteStatusBadge(status){
@@ -4751,7 +4757,7 @@ async function toggleClientPriority(id){
   clients[id].lastModified=new Date().toISOString();
   await saveClients();
   renderSidebar();
-  loadClientChecklist(id);
+  if(activeClientId===id) loadClientChecklist(id);
 }
 async function setClientStatus(id,status){
   if(!clients[id])return;
