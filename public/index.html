@@ -255,8 +255,8 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 
 /* Views */
 .view{display:none;}.view.active{display:block;}
-#view-home.active,#view-empty.active,#view-sales.active{display:flex;justify-content:center;padding:24px 28px;}
-#sales-content{width:100%;display:flex;justify-content:center;}
+#view-home.active,#view-empty.active,#view-sales.active,#view-settings.active{display:flex;justify-content:center;padding:24px 28px;}
+#sales-content,#settings-content{width:100%;display:flex;justify-content:center;}
 
 /* Config */
 .config-card{max-width:440px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:22px;}
@@ -1621,6 +1621,7 @@ function openSettings(){
   _preSettingsClientId=activeClientId;
   activeClientId=null;
   activeSalesQuoteId=null;
+  ['onboarding','sales','reference'].forEach(s=>document.getElementById('ah-btn-'+s)?.classList.remove('active'));
   document.getElementById('settings-btn')?.classList.add('active');
   showView('settings');
   renderSettingsView();
@@ -1645,6 +1646,7 @@ function toggleSettings(){
   if(btn?.classList.contains('active')){
     btn.classList.remove('active');
     _preSettingsClientId=null;
+    if(activeSection) document.getElementById('ah-btn-'+activeSection)?.classList.add('active');
     if(activeSection==='sales'){
       renderSalesSidebar();
       showView('sales');
