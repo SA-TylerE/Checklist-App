@@ -90,7 +90,7 @@ input[type=number]{-moz-appearance:textfield;}
 .quote-add-item-btn:hover{background:rgba(59,130,246,0.08);}
 /* Quote status badges */
 /* Unified status badge — used for both checklists and quotes */
-.quote-status{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:1px 5px;border-radius:3px;flex-shrink:0;display:inline-block;white-space:nowrap;vertical-align:middle;line-height:1.2;}
+.quote-status{font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:0.15em 0.45em;border-radius:3px;flex-shrink:0;display:inline-block;white-space:nowrap;vertical-align:middle;line-height:1;}
 .quote-status.draft{background:rgba(59,130,246,0.12);color:var(--accent);}
 .quote-status.sent{background:rgba(245,158,11,0.12);color:var(--warn);}
 .quote-status.accepted{background:rgba(34,197,94,0.12);color:var(--success);}
@@ -103,7 +103,7 @@ input[type=number]{-moz-appearance:textfield;}
 .sidebar-star{position:absolute;right:0;top:0;bottom:0;width:32px;z-index:2;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.15);padding:0;transition:color 0.15s;}
 .sidebar-star:hover,.sidebar-star.on{color:var(--warn);}
 /* Normalize badge styles — ensure <button class="quote-status"> looks same as <span> */
-button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:none;padding:1px 5px;line-height:1.2;font-size:8px;vertical-align:middle;border:none;cursor:pointer;}
+button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:none;padding:0.15em 0.45em;line-height:1;font-size:0.75em;vertical-align:middle;border:none;cursor:pointer;}
 /* Status badge wrap — positions the dropdown relative to the badge */
 .status-badge-wrap{position:relative;display:inline-flex;margin-left:6px;}
 /* Step attribution */
@@ -122,7 +122,15 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .comment-thread.collapsed .comment-thread-body{display:none;}
 .comment-thread.collapsed .inline-notes-arrow{transform:rotate(-90deg);}
 .comment-thread-body{padding:6px 14px 8px;}
-.comment-item{display:flex;gap:8px;margin-bottom:6px;font-size:11px;}
+.comment-item{display:flex;gap:8px;margin-bottom:8px;align-items:flex-start;}
+.comment-body{flex:1;font-size:11px;min-width:0;}
+.comment-actions{display:flex;gap:2px;flex-shrink:0;opacity:0;transition:opacity 0.15s;}
+.comment-item:hover .comment-actions{opacity:1;}
+.comment-action-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 3px;line-height:1;border-radius:3px;transition:color 0.15s;}
+.comment-action-btn:hover{color:var(--text);}
+.comment-action-btn.del:hover{color:var(--danger);}
+.comment-edit-input{width:100%;min-height:50px;font-size:11px;padding:4px 6px;border:1px solid var(--accent);border-radius:4px;background:var(--bg);color:var(--text);resize:vertical;font-family:var(--sans);outline:none;box-sizing:border-box;}
+.comment-cancel-btn{background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text2);cursor:pointer;padding:4px 8px;font-size:11px;}
 /* Header note area (replaces inline-notes) */
 .header-note-area{display:none;padding:6px 14px 8px;border-bottom:1px solid var(--border);}
 .header-note-area.open{display:block;}
@@ -199,7 +207,7 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .client-item{padding:0;cursor:pointer;border-left:2px solid transparent;transition:all 0.1s;position:relative;overflow:hidden;}
 .client-item:hover{background:var(--bg3);}
 .client-item.active{border-left-color:var(--accent);background:rgba(59,130,246,0.08);}
-.client-item .cn{font-size:12px;font-weight:500;}
+.client-item .cn{font-size:12px;font-weight:500;display:flex;align-items:center;gap:4px;}
 .client-item .cm{font-size:10px;color:var(--text3);margin-top:1px;}
 .client-item .cpbar{height:2px;background:var(--bg3);border-radius:2px;margin-top:4px;overflow:hidden;}
 .client-item .cpbar-fill{height:100%;background:var(--accent);border-radius:2px;transition:width 0.55s ease;}
@@ -2321,9 +2329,9 @@ function renderSalesSidebar(filter){
   }
   list.innerHTML=entries.map(q=>{
     const t=calcQuoteTotals(q);
-    return `<div class="client-item ${q.id===activeSalesQuoteId?'active':''}" onclick="selectQuote('${q.id}')" title="${q.name}">
-      <div style="padding:7px 32px 7px 14px;">
-        <div class="cn">${escHtml(q.name)}${quoteStatusBadge(q.status)}</div>
+    return `<div class="client-item ${q.id===activeSalesQuoteId?'active':''}" title="${q.name}">
+      <div style="padding:7px 32px 7px 14px;" onclick="selectQuote('${q.id}')">
+        <div class="cn"><span>${escHtml(q.name)}</span>${quoteStatusBadge(q.status)}</div>
         <div class="cm">${escHtml(q.tech)} · $${t.monthlyClient.toFixed(0)}/mo${t.onetimeClient>0?' + $'+t.onetimeClient.toFixed(0)+' OT':''}</div>
       </div>
       <button class="sidebar-star${q.priority?' on':''}" onclick="toggleQuotePriority('${q.id}')" title="${q.priority?'Unmark priority':'Mark priority'}"><svg width="16" height="16" viewBox="0 0 24 24" fill="${q.priority?'currentColor':'none'}" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button>
@@ -2973,14 +2981,14 @@ function renderSalesView(){
     {label:'Sent',value:byStatus.sent,color:'var(--warn)'},
     {label:'Accepted',value:byStatus.accepted,color:'var(--success)'},
     {label:'MRR',value:'$'+totalMRR.toFixed(0),color:'var(--success)'},
-  ].filter(s=>quotes.length>0||s.label==='Total');
+  ];
   el.innerHTML=`<div style="max-width:760px;width:100%;">
     <div style="margin-bottom:22px;text-align:center;">
       <h2 style="font-size:20px;font-weight:700;margin-bottom:3px;">${myName?'Hey, '+myName:'Sales'}</h2>
       <p style="color:var(--text2);font-size:12px;">${config?.orgName||'System Alternatives'} — Quote Builder</p>
     </div>
-    <div style="display:flex;gap:10px;margin-bottom:22px;flex-wrap:wrap;">
-      ${stats.map(s=>`<div class="dash-stat" style="flex:1;min-width:110px;">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px;">
+      ${stats.map(s=>`<div class="dash-stat">
         <div class="dash-stat-value" style="color:${s.color};">${s.value}</div>
         <div class="dash-stat-label">${s.label}</div>
       </div>`).join('')}
@@ -3065,15 +3073,15 @@ function renderDashboard(){
     {label:'Total',value:total,color:'var(--accent)'},
     {label:'In Progress',value:inProgress,color:'var(--warn)'},
     {label:'Completed',value:complete,color:'var(--success)'},
-    staleDays?{label:'Stale',value:stale,color:'var(--danger)'}:null
-  ].filter(Boolean);
+    {label:staleDays?'Stale':'On Hold',value:staleDays?stale:clientList.filter(c=>c.clientStatus==='on-hold').length,color:'var(--danger)'},
+  ];
   el.innerHTML=`<div style="max-width:760px;width:100%;">
     <div style="margin-bottom:22px;text-align:center;">
       <h2 style="font-size:20px;font-weight:700;margin-bottom:3px;">${myName?'Welcome back, '+myName:'Onboarding'}</h2>
       <p style="color:var(--text2);font-size:12px;">Client checklists &amp; setup tracking</p>
     </div>
-    <div style="display:flex;gap:10px;margin-bottom:22px;flex-wrap:wrap;">
-      ${stats.map(s=>`<div class="dash-stat" style="flex:1;min-width:110px;">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px;">
+      ${stats.map(s=>`<div class="dash-stat">
         <div class="dash-stat-value" style="color:${s.color};">${s.value}</div>
         <div class="dash-stat-label">${s.label}</div>
       </div>`).join('')}
@@ -3705,9 +3713,9 @@ function renderSidebar(filter){
     const unseenBadge=unseen?`<span class="unseen-dot" title="${unseen.techName?unseen.techName+' made changes':'Changes made'}"></span>`:'';
     const statusBadge=(c.clientStatus&&c.clientStatus!=='active')?`<span class="quote-status ${c.clientStatus}">${clientStatusLabel(c.clientStatus)}</span>`:'';
     const starSvg=`<svg width="16" height="16" viewBox="0 0 24 24" fill="${c.priority?'currentColor':'none'}" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
-    return `<div class="client-item ${c.id===activeClientId?'active':''}" onclick="selectClient('${c.id}')" title="${c.name}" data-notify-id="cl:${c.id}">
-      <div style="padding:7px 32px 7px 14px;">
-        <div class="cn">${c.name} ${staleBadge}${statusBadge}</div>
+    return `<div class="client-item ${c.id===activeClientId?'active':''}" title="${c.name}" data-notify-id="cl:${c.id}">
+      <div style="padding:7px 32px 7px 14px;" onclick="selectClient('${c.id}')">
+        <div class="cn"><span>${c.name}</span>${staleBadge}${statusBadge}</div>
         <div class="cm">${c.tech} \u00b7 ${pct}% org</div>
         <div class="cpbar"><div class="cpbar-fill" style="width:0" data-w="${pct}" data-bar-id="sb-${c.id}"></div></div>
         ${unseenBadge}
@@ -4117,9 +4125,15 @@ function loadClientChecklist(id){
       <button class="handoff-toggle" onclick="event.stopPropagation();this.closest('.handoff-thread').classList.toggle('collapsed')" title="Toggle">▼</button>
     </div>
     <div class="handoff-thread-body">
-      ${(client.comments||[]).map(c=>`<div class="comment-item">
-        <div class="comment-meta">${escHtml(c.tech)} · ${relTime(c.ts)}</div>
-        <div class="comment-text">${escHtml(c.text)}</div>
+      ${(client.comments||[]).map(c=>`<div class="comment-item" id="hc-${id}-${c.id}">
+        <div class="comment-body">
+          <div class="comment-meta">${escHtml(c.tech)} · ${relTime(c.ts)}</div>
+          <div class="comment-text" id="hct-${c.id}">${escHtml(c.text)}</div>
+        </div>
+        <div class="comment-actions">
+          <button class="comment-action-btn" onclick="editHandoffComment('${id}','${c.id}')" title="Edit">✎</button>
+          <button class="comment-action-btn del" onclick="deleteHandoffComment('${id}','${c.id}')" title="Delete">✕</button>
+        </div>
       </div>`).join('')}
       <div class="comment-input-row">
         <input class="comment-input" id="comment-input-${id}" placeholder="Add a handoff note for the team..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addHandoffComment('${id}',this.value);this.value='';}">
@@ -4755,6 +4769,34 @@ async function addHandoffComment(id,text){
   clients[id].lastModified=new Date().toISOString();
   await saveClients();
   loadClientChecklist(id);
+}
+function editHandoffComment(clientId,commentId){
+  const textEl=document.getElementById('hct-'+commentId);
+  if(!textEl)return;
+  const comment=(clients[clientId]?.comments||[]).find(c=>c.id===commentId);
+  if(!comment)return;
+  textEl.innerHTML=`<textarea class="comment-edit-input" id="hce-${commentId}">${escHtml(comment.text)}</textarea><div style="display:flex;gap:4px;margin-top:4px;"><button class="comment-send" onclick="saveHandoffEdit('${clientId}','${commentId}')">Save</button><button class="comment-cancel-btn" onclick="loadClientChecklist('${clientId}')">Cancel</button></div>`;
+  const ta=document.getElementById('hce-'+commentId);
+  if(ta){ta.focus();ta.selectionStart=ta.selectionEnd=ta.value.length;}
+}
+async function saveHandoffEdit(clientId,commentId){
+  const ta=document.getElementById('hce-'+commentId);
+  if(!ta||!ta.value.trim())return;
+  const comment=(clients[clientId]?.comments||[]).find(c=>c.id===commentId);
+  if(!comment)return;
+  comment.text=ta.value.trim();
+  clients[clientId].lastModified=new Date().toISOString();
+  await saveClients();
+  loadClientChecklist(clientId);
+}
+async function deleteHandoffComment(clientId,commentId){
+  if(!clients[clientId])return;
+  styledConfirm('Delete this handoff note?',async()=>{
+    clients[clientId].comments=(clients[clientId].comments||[]).filter(c=>c.id!==commentId);
+    clients[clientId].lastModified=new Date().toISOString();
+    await saveClients();
+    loadClientChecklist(clientId);
+  });
 }
 async function confirmDeleteClient(id){
   styledConfirm(`Delete checklist for "${clients[id]?.name}"? This cannot be undone.`,async()=>{
