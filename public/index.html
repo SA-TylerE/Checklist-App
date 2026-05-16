@@ -1647,15 +1647,20 @@ function toggleSettings(){
   if(btn?.classList.contains('active')){
     btn.classList.remove('active');
     _preSettingsClientId=null;
-    if(activeSection) document.getElementById('ah-btn-'+activeSection)?.classList.add('active');
-    if(activeSection){
-      document.getElementById('sidebar').classList.remove('hidden','collapsed');
-    }
-    if(activeSection==='sales'){
-      renderSalesSidebar();
-      showView('sales');
+    if(!activeSection){
+      goToDashboard();
     } else {
-      showView('empty');
+      document.getElementById('ah-btn-'+activeSection)?.classList.add('active');
+      document.getElementById('sidebar').classList.remove('hidden','collapsed');
+      if(activeSection==='sales'){
+        renderSalesSidebar();
+        showView('sales');
+      } else if(activeSection==='reference'){
+        renderRefProductChips();
+        renderReferenceView(null,null);
+      } else {
+        showView('empty');
+      }
     }
   } else {
     openSettings();
