@@ -1623,6 +1623,7 @@ function openSettings(){
   activeSalesQuoteId=null;
   ['onboarding','sales','reference'].forEach(s=>document.getElementById('ah-btn-'+s)?.classList.remove('active'));
   document.getElementById('settings-btn')?.classList.add('active');
+  document.getElementById('sidebar').classList.add('hidden');
   showView('settings');
   renderSettingsView();
   renderSidebar();
@@ -1647,6 +1648,9 @@ function toggleSettings(){
     btn.classList.remove('active');
     _preSettingsClientId=null;
     if(activeSection) document.getElementById('ah-btn-'+activeSection)?.classList.add('active');
+    if(activeSection){
+      document.getElementById('sidebar').classList.remove('hidden','collapsed');
+    }
     if(activeSection==='sales'){
       renderSalesSidebar();
       showView('sales');
