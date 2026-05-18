@@ -1066,7 +1066,7 @@ body.light{
   </div>
 </div>
 <div id="products-modal">
-  <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:10px;width:min(520px,94vw);max-height:82vh;display:flex;flex-direction:column;overflow:hidden;">
+  <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:10px;width:min(780px,94vw);max-height:82vh;display:flex;flex-direction:column;overflow:hidden;">
     <div style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;">
       <span style="font-size:14px;font-weight:700;">Manage Products</span>
       <span id="pm-dirty-indicator" style="display:none;font-size:11px;color:var(--warn);margin-left:10px;">Unsaved changes</span>
@@ -2322,7 +2322,7 @@ function getSalesProducts(){
   const result=[];
   source.forEach(p=>{
     if(p.subItems?.length){
-      p.subItems.forEach(sub=>result.push({...sub,salesCategory:p.salesCategory,qtySource:p.qtySource||'',parentLabel:p.label,parentId:p.id}));
+      p.subItems.forEach(sub=>result.push({...sub,salesCategory:sub.salesCategory||p.salesCategory,qtySource:sub.qtySource||p.qtySource||'',parentLabel:p.label,parentId:p.id}));
     }else{
       result.push(p);
     }
@@ -3425,11 +3425,27 @@ function pmRender(){
           oninput="_pmProducts[${i}].subItems[${si}].label=this.value;pmMarkDirty()">
         <input class="pm-sales-input" type="number" min="0" step="0.01" style="width:64px;" value="${sub.saCost||''}" placeholder="SA cost"
           oninput="_pmProducts[${i}].subItems[${si}].saCost=parseFloat(this.value)||0;pmMarkDirty()">
-        <input class="pm-sales-input" type="number" min="0" step="0.01" style="width:64px;" value="${sub.defaultPrice||''}" placeholder="Price"
+        <input class="pm-sales-input" type="number" min="0" step="0.01" style="width:64px;" value="${sub.defaultPrice||''}" placeholder="Client price"
           oninput="_pmProducts[${i}].subItems[${si}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty()">
-        <select class="pm-sales-input" style="width:80px;" oninput="_pmProducts[${i}].subItems[${si}].billing=this.value;pmMarkDirty()">
+        <select class="pm-sales-input" style="width:76px;" oninput="_pmProducts[${i}].subItems[${si}].billing=this.value;pmMarkDirty()">
           <option value="monthly" ${(sub.billing||'monthly')==='monthly'?'selected':''}>Monthly</option>
           <option value="onetime" ${sub.billing==='onetime'?'selected':''}>One-Time</option>
+        </select>
+        <select class="pm-sales-input" style="width:76px;" oninput="_pmProducts[${i}].subItems[${si}].salesCategory=this.value||undefined;pmMarkDirty()">
+          <option value="" ${!sub.salesCategory?'selected':''}>— Inherit —</option>
+          <option value="user" ${sub.salesCategory==='user'?'selected':''}>User</option>
+          <option value="machine" ${sub.salesCategory==='machine'?'selected':''}>Machine</option>
+          <option value="site" ${sub.salesCategory==='site'?'selected':''}>Site</option>
+        </select>
+        <select class="pm-sales-input" style="width:96px;" oninput="_pmProducts[${i}].subItems[${si}].qtySource=this.value;pmMarkDirty()">
+          <option value="" ${!sub.qtySource?'selected':''}>— Inherit —</option>
+          <option value="employees" ${sub.qtySource==='employees'?'selected':''}>Employees</option>
+          <option value="licensedUsers" ${sub.qtySource==='licensedUsers'?'selected':''}>Lic. Users</option>
+          <option value="workstations" ${sub.qtySource==='workstations'?'selected':''}>Workstations</option>
+          <option value="servers" ${sub.qtySource==='servers'?'selected':''}>Servers</option>
+          <option value="machines" ${sub.qtySource==='machines'?'selected':''}>Machines</option>
+          <option value="backedUpMachines" ${sub.qtySource==='backedUpMachines'?'selected':''}>Backed Up</option>
+          <option value="sites" ${sub.qtySource==='sites'?'selected':''}>Sites</option>
         </select>
         <button onclick="pmDeleteSubItem(${i},${si})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 2px;flex-shrink:0;" title="Remove">&#215;</button>
       </div>`).join(''):'';
@@ -3495,7 +3511,7 @@ function pmRender(){
             </div>`:''}
           </div>
           ${hasSubItems?`<div style="width:100%;margin-bottom:4px;">
-            <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;display:flex;gap:0;"><span style="flex:2;">Sub-item Name</span><span style="width:64px;">SA Cost</span><span style="width:64px;margin-left:6px;">Price</span><span style="width:80px;margin-left:6px;">Billing</span><span style="width:20px;"></span></div>
+            <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;display:flex;gap:0;"><span style="flex:2;">Sub-item Name</span><span style="width:64px;">SA Cost</span><span style="width:64px;margin-left:6px;">Client Price</span><span style="width:76px;margin-left:6px;">Billing</span><span style="width:76px;margin-left:6px;">Category</span><span style="width:96px;margin-left:6px;">Qty Source</span><span style="width:20px;"></span></div>
             ${subItemsHtml}
           </div>`:''}
           <button onclick="pmAddSubItem(${i})" style="background:none;border:1px dashed var(--border);border-radius:3px;color:var(--text3);cursor:pointer;font-size:10px;padding:2px 8px;margin-top:4px;" title="Add sub-item">+ Sub-item</button>
