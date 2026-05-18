@@ -2322,9 +2322,9 @@ function getSalesProducts(){
   const result=[];
   source.forEach(p=>{
     if(p.subItems?.length){
-      p.subItems.forEach(sub=>result.push({...sub,salesCategory:sub.salesCategory||p.salesCategory,qtySource:sub.qtySource||p.qtySource||'',parentLabel:p.label,parentId:p.id}));
+      p.subItems.forEach(sub=>result.push({...sub,billing:sub.billing||'monthly',salesCategory:sub.salesCategory||p.salesCategory,qtySource:sub.qtySource||p.qtySource||'',parentLabel:p.label,parentId:p.id}));
     }else{
-      result.push(p);
+      result.push({...p,billing:p.billing||'monthly'});
     }
   });
   return result;
@@ -3471,25 +3471,31 @@ function pmRender(){
           <div style="display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-bottom:${hasSubItems?'6px':'0'};">
             <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:90px;">
               <span class="pm-sales-label">Sales Category</span>
-              <select class="pm-sales-input" oninput="_pmProducts[${i}].salesCategory=this.value||undefined;pmMarkDirty()">
+              ${hasSubItems
+                ?`<select class="pm-sales-input" disabled style="opacity:0.45;cursor:default;"><option>— Per sub-item —</option></select>`
+                :`<select class="pm-sales-input" oninput="_pmProducts[${i}].salesCategory=this.value||undefined;pmMarkDirty()">
                 <option value="">— Not in sales —</option>
                 <option value="user" ${(p.salesCategory||'')==='user'?'selected':''}>User</option>
                 <option value="machine" ${(p.salesCategory||'')==='machine'?'selected':''}>Machine</option>
                 <option value="site" ${(p.salesCategory||'')==='site'?'selected':''}>Site</option>
-              </select>
+              </select>`}
             </div>
             <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:90px;">
               <span class="pm-sales-label">Qty Source</span>
-              <select class="pm-sales-input" oninput="_pmProducts[${i}].qtySource=this.value;pmMarkDirty()">
+              ${hasSubItems
+                ?`<select class="pm-sales-input" disabled style="opacity:0.45;cursor:default;"><option>— Per sub-item —</option></select>`
+                :`<select class="pm-sales-input" oninput="_pmProducts[${i}].qtySource=this.value;pmMarkDirty()">
                 ${qtyOpts.map(o=>`<option value="${o}" ${(p.qtySource||'')===(o)?'selected':''}>${o||'— Manual —'}</option>`).join('')}
-              </select>
+              </select>`}
             </div>
             <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:90px;">
               <span class="pm-sales-label">Requires</span>
-              <select class="pm-sales-input" oninput="_pmProducts[${i}].requires=this.value||undefined;pmMarkDirty()">
+              ${hasSubItems
+                ?`<select class="pm-sales-input" disabled style="opacity:0.45;cursor:default;"><option>— No requirement —</option></select>`
+                :`<select class="pm-sales-input" oninput="_pmProducts[${i}].requires=this.value||undefined;pmMarkDirty()">
                 <option value="">— No requirement —</option>
                 ${_pmProducts.filter((pp,j)=>j!==i&&pp.id).map(pp=>`<option value="${pp.id}" ${(p.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`).join('')}
-              </select>
+              </select>`}
             </div>
             ${!hasSubItems?`
             <div style="display:flex;flex-direction:column;gap:2px;width:72px;">
@@ -3526,7 +3532,7 @@ function pmRender(){
   if(_pmOpenIdx!==null)document.querySelectorAll('#pm-list .pm-row')[_pmOpenIdx]?.classList.add('sales-open');
 }
 function pmAddProduct(){
-  _pmProducts.push({id:'',label:'',desc:''});
+  _pmProducts.push({id:'',label:'',desc:'',billing:'monthly'});
   pmMarkDirty();
   pmRender();
   const lblInputs=document.querySelectorAll('#pm-list [data-lbl]');
@@ -3544,6 +3550,11 @@ function pmToggleSalesExpand(i){
 }
 function pmAddSubItem(i){
   if(!_pmProducts[i].subItems)_pmProducts[i].subItems=[];
+  if(_pmProducts[i].subItems.length===0){
+    _pmProducts[i].salesCategory=undefined;
+    _pmProducts[i].qtySource='';
+    _pmProducts[i].requires=undefined;
+  }
   _pmProducts[i].subItems.push({id:'sub-'+Date.now(),label:'',saCost:0,defaultPrice:0,billing:'monthly'});
   _pmOpenIdx=i;
   pmMarkDirty();pmRender();
