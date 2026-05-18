@@ -3423,10 +3423,16 @@ function pmRender(){
       <div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--border);">
         <input class="pm-sales-input" style="flex:2;min-width:80px;" value="${escHtml(sub.label)}" placeholder="Sub-item name"
           oninput="_pmProducts[${i}].subItems[${si}].label=this.value;pmMarkDirty()">
-        <input class="pm-sales-input" type="number" min="0" step="0.01" style="width:52px;text-align:right;" value="${sub.saCost||''}" placeholder="0.00"
-          oninput="_pmProducts[${i}].subItems[${si}].saCost=parseFloat(this.value)||0;pmMarkDirty()">
-        <input class="pm-sales-input" type="number" min="0" step="0.01" style="width:52px;text-align:right;" value="${sub.defaultPrice||''}" placeholder="0.00"
-          oninput="_pmProducts[${i}].subItems[${si}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty()">
+        <div style="position:relative;width:60px;flex-shrink:0;">
+          <span style="position:absolute;left:5px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--text3);pointer-events:none;user-select:none;">$</span>
+          <input class="pm-sales-input" type="number" min="0" step="0.01" style="width:100%;padding-left:13px;text-align:right;box-sizing:border-box;" value="${sub.saCost||''}" placeholder="0.00"
+            oninput="_pmProducts[${i}].subItems[${si}].saCost=parseFloat(this.value)||0;pmMarkDirty()">
+        </div>
+        <div style="position:relative;width:60px;flex-shrink:0;">
+          <span style="position:absolute;left:5px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--text3);pointer-events:none;user-select:none;">$</span>
+          <input class="pm-sales-input" type="number" min="0" step="0.01" style="width:100%;padding-left:13px;text-align:right;box-sizing:border-box;" value="${sub.defaultPrice||''}" placeholder="0.00"
+            oninput="_pmProducts[${i}].subItems[${si}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty()">
+        </div>
         <select class="pm-sales-input" style="width:76px;" oninput="_pmProducts[${i}].subItems[${si}].billing=this.value;pmMarkDirty()">
           <option value="monthly" ${(sub.billing||'monthly')==='monthly'?'selected':''}>Monthly</option>
           <option value="onetime" ${sub.billing==='onetime'?'selected':''}>One-Time</option>
@@ -3517,7 +3523,7 @@ function pmRender(){
             </div>`:''}
           </div>
           ${hasSubItems?`<div style="width:100%;margin-bottom:4px;">
-            <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;display:flex;gap:6px;"><span style="flex:2;">Sub-item Name</span><span style="width:52px;text-align:right;">SA Cost</span><span style="width:52px;text-align:right;">Client Price</span><span style="width:76px;">Billing</span><span style="width:76px;">Category</span><span style="width:96px;">Qty Source</span><span style="width:20px;"></span></div>
+            <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;display:flex;gap:6px;align-items:flex-end;"><span style="flex:2;white-space:nowrap;">Sub-item Name</span><span style="width:60px;text-align:right;white-space:nowrap;">SA Cost</span><span style="width:60px;text-align:right;white-space:nowrap;">Client $</span><span style="width:76px;white-space:nowrap;">Billing</span><span style="width:76px;white-space:nowrap;">Category</span><span style="width:96px;white-space:nowrap;">Qty Source</span><span style="width:20px;"></span></div>
             ${subItemsHtml}
           </div>`:''}
           <button onclick="pmAddSubItem(${i})" style="background:none;border:1px dashed var(--border);border-radius:3px;color:var(--text3);cursor:pointer;font-size:10px;padding:2px 8px;margin-top:4px;" title="Add sub-item">+ Sub-item</button>
