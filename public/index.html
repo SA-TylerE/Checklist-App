@@ -3387,6 +3387,7 @@ let _pmProducts=[];
 let _pmDrag=null;
 let _pmTouch=null;
 let _pmDirty=false;
+let _pmOpenIdx=null;
 function pmMarkDirty(){
   _pmDirty=true;
   const ind=document.getElementById('pm-dirty-indicator');
@@ -3471,7 +3472,7 @@ function pmRender(){
               <span class="pm-sales-label">Requires</span>
               <select class="pm-sales-input" oninput="_pmProducts[${i}].requires=this.value||undefined;pmMarkDirty()">
                 <option value="">— No requirement —</option>
-                ${_pmProducts.filter((pp,j)=>j!==i&&pp.id&&pp.salesCategory).map(pp=>`<option value="${pp.id}" ${(p.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`).join('')}
+                ${_pmProducts.filter((pp,j)=>j!==i&&pp.id).map(pp=>`<option value="${pp.id}" ${(p.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`).join('')}
               </select>
             </div>
             ${!hasSubItems?`
@@ -3506,6 +3507,7 @@ function pmRender(){
       </div>
     </div>`;
   }).join('');
+  if(_pmOpenIdx!==null)document.querySelectorAll('#pm-list .pm-row')[_pmOpenIdx]?.classList.add('sales-open');
 }
 function pmAddProduct(){
   _pmProducts.push({id:'',label:'',desc:''});
@@ -3521,12 +3523,13 @@ function pmToggleSalesExpand(i){
   const target=rows[i];
   const wasOpen=target?.classList.contains('sales-open');
   rows.forEach(r=>r.classList.remove('sales-open'));
+  _pmOpenIdx=wasOpen?null:i;
   if(!wasOpen)target?.classList.add('sales-open');
-  pmMarkDirty();
 }
 function pmAddSubItem(i){
   if(!_pmProducts[i].subItems)_pmProducts[i].subItems=[];
   _pmProducts[i].subItems.push({id:'sub-'+Date.now(),label:'',saCost:0,defaultPrice:0,billing:'monthly'});
+  _pmOpenIdx=i;
   pmMarkDirty();pmRender();
 }
 function pmDeleteSubItem(i,si){
@@ -3694,10 +3697,10 @@ async function checkForUpdates(){
     }
   }catch(e){statusEl.innerHTML=`<span style="color:var(--danger);">Failed: ${escHtml(e.message)}</span>`;}
 }
-async function applyUpdate(){
+function applyUpdate(){
+  styledConfirm('Pull latest changes and restart the server?',async()=>{
   const statusEl=document.getElementById('update-status');
   const applyBtn=document.getElementById('apply-update-btn');
-  if(!confirm('Pull latest changes and restart the server?')) return;
   if(applyBtn) applyBtn.disabled=true;
   statusEl&&(statusEl.textContent='Pulling…');
   try{
@@ -3723,6 +3726,7 @@ async function applyUpdate(){
     statusEl&&(statusEl.innerHTML=`<span style="color:var(--danger);">Failed: ${escHtml(e.message)}</span>`);
     if(applyBtn) applyBtn.disabled=false;
   }
+  });
 }
 
 function renderSidebar(filter){
@@ -4223,19 +4227,13 @@ function ensureMyName(){
   }
 }
 function editWhoWorking(){
-  const current=localStorage.getItem('myName')||'';
-  const n=prompt('Update your name:',current);
-  if(n===null) return;
-  const trimmed=n.trim();
-  localStorage.setItem('myName',trimmed);
-  document.querySelectorAll('.who-chip').forEach(c=>{c.innerHTML=`&#128100; ${trimmed||'Set your name'}`;});
+  openNameModal();
 }
 
 function addMeToWorking(clientId){
   const storedName=localStorage.getItem('myName')||'';
-  const name=storedName||prompt('Your name:');
-  if(!name) return;
-  if(!storedName) localStorage.setItem('myName',name);
+  if(!storedName){openNameModal();return;}
+  const name=storedName;
   sessionStorage.setItem('who-'+clientId,name);
   const input=document.getElementById('who-input-'+clientId);
   if(input){
