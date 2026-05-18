@@ -3419,31 +3419,22 @@ function pmRender(){
   const qtyOpts=['','employees','licensedUsers','workstations','servers','machines','backedUpMachines','sites'];
   document.getElementById('pm-list').innerHTML=_pmProducts.map((p,i)=>{
     const hasSubItems=p.subItems?.length>0;
+    const _si=(s,extra='')=>`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 5px;color:var(--text);font-size:11px;outline:none;width:100%;min-width:0;${extra}`;
     const subItemsHtml=hasSubItems?p.subItems.map((sub,si)=>`
-      <div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--border);">
-        <input class="pm-sales-input" style="flex:1;min-width:60px;" value="${escHtml(sub.label)}" placeholder="Sub-item name"
-          oninput="_pmProducts[${i}].subItems[${si}].label=this.value;pmMarkDirty()">
-        <div style="display:flex;align-items:center;width:52px;flex-shrink:0;">
-          <span style="font-size:10px;color:var(--text3);flex-shrink:0;line-height:1;">$</span>
-          <input class="pm-sales-input" type="number" min="0" step="0.01" style="flex:1;min-width:0;text-align:right;" value="${sub.saCost||''}" placeholder="0"
-            oninput="_pmProducts[${i}].subItems[${si}].saCost=parseFloat(this.value)||0;pmMarkDirty()">
-        </div>
-        <div style="display:flex;align-items:center;width:52px;flex-shrink:0;">
-          <span style="font-size:10px;color:var(--text3);flex-shrink:0;line-height:1;">$</span>
-          <input class="pm-sales-input" type="number" min="0" step="0.01" style="flex:1;min-width:0;text-align:right;" value="${sub.defaultPrice||''}" placeholder="0"
-            oninput="_pmProducts[${i}].subItems[${si}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty()">
-        </div>
-        <select class="pm-sales-input" style="width:70px;flex-shrink:0;" oninput="_pmProducts[${i}].subItems[${si}].billing=this.value;pmMarkDirty()">
+        <input style="${_si()}" value="${escHtml(sub.label)}" placeholder="Name" oninput="_pmProducts[${i}].subItems[${si}].label=this.value;pmMarkDirty()">
+        <input type="number" min="0" step="0.01" style="${_si('text-align:right;padding:3px 3px;')}" value="${sub.saCost||''}" placeholder="0" oninput="_pmProducts[${i}].subItems[${si}].saCost=parseFloat(this.value)||0;pmMarkDirty()">
+        <input type="number" min="0" step="0.01" style="${_si('text-align:right;padding:3px 3px;')}" value="${sub.defaultPrice||''}" placeholder="0" oninput="_pmProducts[${i}].subItems[${si}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty()">
+        <select style="${_si('padding:2px 2px;')}" oninput="_pmProducts[${i}].subItems[${si}].billing=this.value;pmMarkDirty()">
           <option value="monthly" ${(sub.billing||'monthly')==='monthly'?'selected':''}>Monthly</option>
           <option value="onetime" ${sub.billing==='onetime'?'selected':''}>One-Time</option>
         </select>
-        <select class="pm-sales-input" style="width:72px;flex-shrink:0;" oninput="_pmProducts[${i}].subItems[${si}].salesCategory=this.value||undefined;pmMarkDirty()">
+        <select style="${_si('padding:2px 2px;')}" oninput="_pmProducts[${i}].subItems[${si}].salesCategory=this.value||undefined;pmMarkDirty()">
           <option value="" ${!sub.salesCategory?'selected':''}>— Select —</option>
           <option value="user" ${sub.salesCategory==='user'?'selected':''}>User</option>
           <option value="machine" ${sub.salesCategory==='machine'?'selected':''}>Machine</option>
           <option value="site" ${sub.salesCategory==='site'?'selected':''}>Site</option>
         </select>
-        <select class="pm-sales-input" style="width:90px;flex-shrink:0;" oninput="_pmProducts[${i}].subItems[${si}].qtySource=this.value;pmMarkDirty()">
+        <select style="${_si('padding:2px 2px;')}" oninput="_pmProducts[${i}].subItems[${si}].qtySource=this.value;pmMarkDirty()">
           <option value="" ${!sub.qtySource?'selected':''}>— Select —</option>
           <option value="employees" ${sub.qtySource==='employees'?'selected':''}>Employees</option>
           <option value="licensedUsers" ${sub.qtySource==='licensedUsers'?'selected':''}>Lic. Users</option>
@@ -3453,8 +3444,7 @@ function pmRender(){
           <option value="backedUpMachines" ${sub.qtySource==='backedUpMachines'?'selected':''}>Backed Up</option>
           <option value="sites" ${sub.qtySource==='sites'?'selected':''}>Sites</option>
         </select>
-        <button onclick="pmDeleteSubItem(${i},${si})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 2px;flex-shrink:0;" title="Remove">&#215;</button>
-      </div>`).join(''):'';
+        <button onclick="pmDeleteSubItem(${i},${si})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0;line-height:1;" title="Remove">&#215;</button>`).join(''):'';
     return`
     <div class="pm-row" data-pi="${i}" draggable="true"
       ondragstart="pmDragStart(event,${i})" ondragover="pmDragOver(event,${i})"
@@ -3522,8 +3512,14 @@ function pmRender(){
               </select>
             </div>`:''}
           </div>
-          ${hasSubItems?`<div style="width:100%;margin-bottom:4px;">
-            <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;display:flex;gap:6px;align-items:flex-end;"><span style="flex:1;min-width:60px;white-space:nowrap;">Sub-item Name</span><span style="width:52px;text-align:right;white-space:nowrap;">SA $</span><span style="width:52px;text-align:right;white-space:nowrap;">Client $</span><span style="width:70px;white-space:nowrap;">Billing</span><span style="width:72px;white-space:nowrap;">Category</span><span style="width:90px;white-space:nowrap;">Qty Source</span><span style="width:20px;"></span></div>
+          ${hasSubItems?`<div style="display:grid;grid-template-columns:1fr 50px 50px 62px 64px 82px 16px;column-gap:5px;row-gap:4px;align-items:center;width:100%;margin-bottom:4px;">
+            <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;padding-bottom:2px;border-bottom:1px solid var(--border);">Name</span>
+            <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;text-align:right;padding-bottom:2px;border-bottom:1px solid var(--border);">SA $</span>
+            <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;text-align:right;padding-bottom:2px;border-bottom:1px solid var(--border);">Client $</span>
+            <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;padding-bottom:2px;border-bottom:1px solid var(--border);">Billing</span>
+            <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;padding-bottom:2px;border-bottom:1px solid var(--border);">Cat.</span>
+            <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;padding-bottom:2px;border-bottom:1px solid var(--border);">Qty Source</span>
+            <span style="border-bottom:1px solid var(--border);padding-bottom:2px;"></span>
             ${subItemsHtml}
           </div>`:''}
           <button onclick="pmAddSubItem(${i})" style="background:none;border:1px dashed var(--border);border-radius:3px;color:var(--text3);cursor:pointer;font-size:10px;padding:2px 8px;margin-top:4px;" title="Add sub-item">+ Sub-item</button>
