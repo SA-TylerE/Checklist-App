@@ -2504,8 +2504,8 @@ function loadSalesQuote(id){
     const groups=[];const seenParents=new Set();
     sp.forEach(p=>{
       if(p.parentId){
-        if(!seenParents.has(p.parentId)){seenParents.add(p.parentId);groups.push({type:'group',parentId:p.parentId,parentLabel:p.parentLabel,items:sp.filter(pp=>pp.parentId===p.parentId)});}
-      }else{groups.push({type:'item',p});}
+        if(!seenParents.has(p.parentId)){seenParents.add(p.parentId);groups.push({parentLabel:p.parentLabel,items:sp.filter(pp=>pp.parentId===p.parentId)});}
+      }else{groups.push({parentLabel:p.label,items:[p]});}
     });
     // Helper for rendering a standard product line
     const renderProductLine=(p,li,nid,indent)=>{
@@ -2519,7 +2519,7 @@ function loadSalesQuote(id){
         <div class="quote-line${on?'':' disabled'}">
           <div class="quote-check${on?' on':''}" onclick="toggleSalesLine('${id}','${p.id}')">${on?'✓':''}</div>
           <div class="quote-label" style="display:flex;align-items:center;gap:5px;min-width:0;">
-            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(p.label)}</span>
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(p.desc||'')}">${escHtml(p.label)}</span>
             <button class="quote-note-btn${li.note?' has-note':''}" onclick="toggleQuoteNote('${nid}')" title="Notes">&#9998;</button>
           </div>
           <input class="quote-input" style="width:52px;" type="number" min="0" value="${li.qty}" oninput="onQuoteInputChange('${id}','${p.id}','qty',this.valueAsNumber||0)" onblur="saveQuoteInput('${id}','${p.id}','qty',this.valueAsNumber||0)" title="Quantity">
@@ -2534,17 +2534,12 @@ function loadSalesQuote(id){
       </div>`;
     };
     groups.forEach(g=>{
-      if(g.type==='group'){
-        html+=`<div class="quote-group-header">${escHtml(g.parentLabel)}</div>`;
-        g.items.forEach(p=>{
-          const li=q.lineItems?.[p.id]||{enabled:false,qty:0,unitPrice:p.defaultPrice||0,note:''};
-          html+=renderProductLine(p,li,`qln-${id}-${p.id}`,true);
-        });
-      }else{
-        const p=g.p;
+      html+=`<div class="quote-group-header">${escHtml(g.parentLabel)}</div>`;
+      const indent=g.items.length>1;
+      g.items.forEach(p=>{
         const li=q.lineItems?.[p.id]||{enabled:false,qty:0,unitPrice:p.defaultPrice||0,note:''};
-        html+=renderProductLine(p,li,`qln-${id}-${p.id}`,false);
-      }
+        html+=renderProductLine(p,li,`qln-${id}-${p.id}`,indent);
+      });
     });
     // Custom items
     secCustom.forEach(c=>{
@@ -3172,7 +3167,16 @@ function renderSettingsView(){
       <div class="settings-block">
         <div class="settings-block-header">Products</div>
         <div class="settings-block-body">
-          <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Manage products for the onboarding checklist and sales quoting tool. Expand the 💲 panel on any product to configure its sales pricing.</p>
+          <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Manage products for the onboarding checklist and sales quoting tool.</p>
+          <div style="margin-bottom:14px;">
+            <label style="font-size:12px;font-weight:500;display:block;margin-bottom:4px;">Default Product Margin</label>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <input type="number" id="setting-margin" min="1" max="99" step="1" value="${appSettings.productMargin||''}" placeholder="e.g. 80" style="width:70px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:12px;outline:none;font-family:var(--sans);">
+              <span style="font-size:12px;color:var(--text2);">%</span>
+              <button class="btn-secondary" onclick="saveProductMargin()">Save</button>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-top:4px;">Sets the recommended client price in the product manager. Formula: Client Cost = SA Cost ÷ (1 − Margin%)</div>
+          </div>
           <button class="btn-secondary" onclick="openProductsModal()">Manage Products</button>
         </div>
       </div>
@@ -3419,32 +3423,66 @@ function pmRender(){
   const qtyOpts=['','employees','licensedUsers','workstations','servers','machines','backedUpMachines','sites'];
   document.getElementById('pm-list').innerHTML=_pmProducts.map((p,i)=>{
     const hasSubItems=p.subItems?.length>0;
-    const _si=(s,extra='')=>`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 5px;color:var(--text);font-size:11px;outline:none;width:100%;min-width:0;${extra}`;
-    const subItemsHtml=hasSubItems?p.subItems.map((sub,si)=>`
-        <input style="${_si()}" value="${escHtml(sub.label)}" placeholder="Name" oninput="_pmProducts[${i}].subItems[${si}].label=this.value;pmMarkDirty()">
-        <div style="display:flex;align-items:center;gap:1px;min-width:0;"><span style="font-size:10px;color:var(--text3);flex-shrink:0;line-height:1;">$</span><input type="text" inputmode="decimal" style="flex:1;min-width:0;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 2px;color:var(--text);font-size:11px;outline:none;" value="${(sub.saCost||0).toFixed(2)}" placeholder="0.00" oninput="_pmProducts[${i}].subItems[${si}].saCost=parseFloat(this.value)||0;pmMarkDirty()" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);"></div>
-        <div style="display:flex;align-items:center;gap:1px;min-width:0;"><span style="font-size:10px;color:var(--text3);flex-shrink:0;line-height:1;">$</span><input type="text" inputmode="decimal" style="flex:1;min-width:0;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 2px;color:var(--text);font-size:11px;outline:none;" value="${(sub.defaultPrice||0).toFixed(2)}" placeholder="0.00" oninput="_pmProducts[${i}].subItems[${si}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty()" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);"></div>
-        <select style="${_si('padding:2px 2px;')}" oninput="_pmProducts[${i}].subItems[${si}].billing=this.value;pmMarkDirty()">
-          <option value="monthly" ${(sub.billing||'monthly')==='monthly'?'selected':''}>Monthly</option>
-          <option value="onetime" ${sub.billing==='onetime'?'selected':''}>One-Time</option>
-        </select>
-        <select style="${_si('padding:2px 2px;')}" oninput="_pmProducts[${i}].subItems[${si}].salesCategory=this.value||undefined;pmMarkDirty()">
-          <option value="" ${!sub.salesCategory?'selected':''}>— Select —</option>
-          <option value="user" ${sub.salesCategory==='user'?'selected':''}>User</option>
-          <option value="machine" ${sub.salesCategory==='machine'?'selected':''}>Machine</option>
-          <option value="site" ${sub.salesCategory==='site'?'selected':''}>Site</option>
-        </select>
-        <select style="${_si('padding:2px 2px;')}" oninput="_pmProducts[${i}].subItems[${si}].qtySource=this.value;pmMarkDirty()">
-          <option value="" ${!sub.qtySource?'selected':''}>— Select —</option>
-          <option value="employees" ${sub.qtySource==='employees'?'selected':''}>Employees</option>
-          <option value="licensedUsers" ${sub.qtySource==='licensedUsers'?'selected':''}>Lic. Users</option>
-          <option value="workstations" ${sub.qtySource==='workstations'?'selected':''}>Workstations</option>
-          <option value="servers" ${sub.qtySource==='servers'?'selected':''}>Servers</option>
-          <option value="machines" ${sub.qtySource==='machines'?'selected':''}>Machines</option>
-          <option value="backedUpMachines" ${sub.qtySource==='backedUpMachines'?'selected':''}>Backed Up</option>
-          <option value="sites" ${sub.qtySource==='sites'?'selected':''}>Sites</option>
-        </select>
-        <button onclick="pmDeleteSubItem(${i},${si})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0;line-height:1;" title="Remove">&#215;</button>`).join(''):'';
+    const _subInp=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 5px;color:var(--text);font-size:11px;outline:none;min-width:0;`;
+    const _subSel=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 3px;color:var(--text);font-size:11px;outline:none;min-width:0;width:76px;flex-shrink:0;`;
+    const _subCost=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 2px;color:var(--text);font-size:11px;outline:none;flex:1;min-width:0;text-align:center;`;
+    const subItemsHtml=hasSubItems?p.subItems.map((sub,si)=>{
+      const rec=(()=>{const m=appSettings.productMargin;const r=(m>0&&m<100)?(sub.saCost||0)/(1-m/100):0;return r>0?'$'+r.toFixed(2):'—';})();
+      return`<div style="border:1px solid var(--border);border-radius:5px;padding:5px 7px;display:flex;flex-direction:column;gap:4px;">
+        <div style="display:flex;gap:5px;align-items:center;">
+          <input style="${_subInp}flex:1;" value="${escHtml(sub.label)}" placeholder="Name" oninput="_pmProducts[${i}].subItems[${si}].label=this.value;pmMarkDirty()">
+          <input style="${_subInp}flex:2;" value="${escHtml(sub.desc||'')}" placeholder="Description (optional)" oninput="_pmProducts[${i}].subItems[${si}].desc=this.value;pmMarkDirty()">
+          <select style="${_subSel}width:120px;" oninput="_pmProducts[${i}].subItems[${si}].requires=this.value||undefined;pmMarkDirty()">
+            <option value="">— No requirement —</option>
+            ${_pmProducts.filter((pp,j)=>j!==i&&pp.id).map(pp=>`<option value="${pp.id}" ${(sub.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`).join('')}
+          </select>
+          <button onclick="pmDeleteSubItem(${i},${si})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0;line-height:1;flex-shrink:0;" title="Remove">&#215;</button>
+        </div>
+        <div style="display:flex;gap:5px;align-items:center;">
+          <div style="display:flex;flex-direction:column;gap:1px;">
+            <span style="font-size:9px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;">SA Cost</span>
+            <div style="display:flex;align-items:center;gap:1px;width:60px;"><span style="font-size:10px;color:var(--text3);flex-shrink:0;">$</span><input type="text" inputmode="decimal" style="${_subCost}" value="${(sub.saCost||0).toFixed(2)}" placeholder="0.00" oninput="const v=parseFloat(this.value)||0;_pmProducts[${i}].subItems[${si}].saCost=v;const m=appSettings.productMargin;const rec=(m>0&&m<100)?v/(1-m/100):0;const el=document.getElementById('pmrec-${i}-${si}');if(el)el.textContent=rec>0?'$'+rec.toFixed(2):'—';pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);"></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:1px;">
+            <span style="font-size:9px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Recommended</span>
+            <span id="pmrec-${i}-${si}" style="font-size:11px;color:var(--text3);padding:3px 0;white-space:nowrap;width:60px;display:inline-block;">${rec}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:1px;">
+            <span style="font-size:9px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Client Cost</span>
+            <div style="display:flex;align-items:center;gap:1px;width:60px;"><span style="font-size:10px;color:var(--text3);flex-shrink:0;">$</span><input type="text" inputmode="decimal" style="${_subCost}" value="${(sub.defaultPrice||0).toFixed(2)}" placeholder="0.00" oninput="_pmProducts[${i}].subItems[${si}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);"></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:1px;">
+            <span style="font-size:9px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Billing</span>
+            <select style="${_subSel}" oninput="_pmProducts[${i}].subItems[${si}].billing=this.value;pmMarkDirty()">
+              <option value="monthly" ${(sub.billing||'monthly')==='monthly'?'selected':''}>Monthly</option>
+              <option value="onetime" ${sub.billing==='onetime'?'selected':''}>One-Time</option>
+            </select>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:1px;">
+            <span style="font-size:9px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Category</span>
+            <select style="${_subSel}" oninput="_pmProducts[${i}].subItems[${si}].salesCategory=this.value||undefined;pmMarkDirty()">
+              <option value="" ${!sub.salesCategory?'selected':''}>— Select —</option>
+              <option value="user" ${sub.salesCategory==='user'?'selected':''}>User</option>
+              <option value="machine" ${sub.salesCategory==='machine'?'selected':''}>Machine</option>
+              <option value="site" ${sub.salesCategory==='site'?'selected':''}>Site</option>
+            </select>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:1px;">
+            <span style="font-size:9px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Qty Source</span>
+            <select style="${_subSel}" oninput="_pmProducts[${i}].subItems[${si}].qtySource=this.value;pmMarkDirty()">
+              <option value="" ${!sub.qtySource?'selected':''}>— Select —</option>
+              <option value="employees" ${sub.qtySource==='employees'?'selected':''}>Employees</option>
+              <option value="licensedUsers" ${sub.qtySource==='licensedUsers'?'selected':''}>Lic. Users</option>
+              <option value="workstations" ${sub.qtySource==='workstations'?'selected':''}>Workstations</option>
+              <option value="servers" ${sub.qtySource==='servers'?'selected':''}>Servers</option>
+              <option value="machines" ${sub.qtySource==='machines'?'selected':''}>Machines</option>
+              <option value="backedUpMachines" ${sub.qtySource==='backedUpMachines'?'selected':''}>Backed Up</option>
+              <option value="sites" ${sub.qtySource==='sites'?'selected':''}>Sites</option>
+            </select>
+          </div>
+        </div>
+      </div>`;
+    }).join(''):'';
     return`
     <div class="pm-row" data-pi="${i}" draggable="true"
       ondragstart="pmDragStart(event,${i})" ondragover="pmDragOver(event,${i})"
@@ -3494,15 +3532,17 @@ function pmRender(){
               </select>`}
             </div>
             ${!hasSubItems?`
-            <div style="display:flex;flex-direction:column;gap:2px;width:72px;">
+            <div style="display:flex;flex-direction:column;gap:2px;">
               <span class="pm-sales-label">SA Cost</span>
-              <input class="pm-sales-input" type="number" min="0" step="0.01" value="${p.saCost||''}" placeholder="0.00"
-                oninput="_pmProducts[${i}].saCost=parseFloat(this.value)||0;pmMarkDirty()">
+              <div style="display:flex;align-items:center;gap:1px;"><span style="font-size:10px;color:var(--text3);">$</span><input type="text" inputmode="decimal" style="width:52px;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 2px;color:var(--text);font-size:11px;outline:none;" value="${(p.saCost||0).toFixed(2)}" placeholder="0.00" oninput="const v=parseFloat(this.value)||0;_pmProducts[${i}].saCost=v;const m=appSettings.productMargin;const rec=(m>0&&m<100)?v/(1-m/100):0;const el=document.getElementById('pmrec-${i}');if(el)el.textContent=rec>0?'$'+rec.toFixed(2):'—';pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);"></div>
             </div>
-            <div style="display:flex;flex-direction:column;gap:2px;width:72px;">
-              <span class="pm-sales-label">Client Price</span>
-              <input class="pm-sales-input" type="number" min="0" step="0.01" value="${p.defaultPrice||''}" placeholder="0.00"
-                oninput="_pmProducts[${i}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty()">
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <span class="pm-sales-label">Recommended</span>
+              <span id="pmrec-${i}" style="font-size:11px;color:var(--text3);padding:3px 0;white-space:nowrap;">${(()=>{const m=appSettings.productMargin;const r=(m>0&&m<100)?(p.saCost||0)/(1-m/100):0;return r>0?'$'+r.toFixed(2):'—';})()}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <span class="pm-sales-label">Client Cost</span>
+              <div style="display:flex;align-items:center;gap:1px;"><span style="font-size:10px;color:var(--text3);">$</span><input type="text" inputmode="decimal" style="width:52px;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 2px;color:var(--text);font-size:11px;outline:none;" value="${(p.defaultPrice||0).toFixed(2)}" placeholder="0.00" oninput="_pmProducts[${i}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);"></div>
             </div>
             <div style="display:flex;flex-direction:column;gap:2px;width:80px;">
               <span class="pm-sales-label">Billing</span>
@@ -3512,16 +3552,7 @@ function pmRender(){
               </select>
             </div>`:''}
           </div>
-          ${hasSubItems?`<div style="display:grid;grid-template-columns:1fr 54px 54px 76px 76px 76px 16px;column-gap:5px;row-gap:4px;align-items:center;width:100%;margin-bottom:4px;">
-            <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;padding-bottom:2px;border-bottom:1px solid var(--border);">Name</span>
-            <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;padding-bottom:2px;border-bottom:1px solid var(--border);">SA $</span>
-            <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;padding-bottom:2px;border-bottom:1px solid var(--border);">Client $</span>
-            <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;padding-bottom:2px;border-bottom:1px solid var(--border);">Billing</span>
-            <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;padding-bottom:2px;border-bottom:1px solid var(--border);">Category</span>
-            <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;padding-bottom:2px;border-bottom:1px solid var(--border);">Qty Source</span>
-            <span style="border-bottom:1px solid var(--border);padding-bottom:2px;"></span>
-            ${subItemsHtml}
-          </div>`:''}
+          ${hasSubItems?`<div style="display:flex;flex-direction:column;gap:5px;width:100%;margin-bottom:4px;">${subItemsHtml}</div>`:''}
           <button onclick="pmAddSubItem(${i})" style="background:none;border:1px dashed var(--border);border-radius:3px;color:var(--text3);cursor:pointer;font-size:10px;padding:2px 8px;margin-top:4px;" title="Add sub-item">+ Sub-item</button>
         </div>
       </div>
@@ -3703,6 +3734,14 @@ function renderUpdateHint(hint){
     <strong style="color:var(--danger);">Fix required:</strong> ${escHtml(hint)}
     <button onclick="navigator.clipboard.writeText(${JSON.stringify(hint)}).then(()=>showToast('Copied'))" style="margin-left:8px;font-size:10px;padding:1px 7px;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text3);cursor:pointer;">Copy</button>
   </div>`:'';
+}
+async function saveProductMargin(){
+  const v=parseFloat(document.getElementById('setting-margin')?.value);
+  if(isNaN(v)||v<=0||v>=100){showToast('Margin must be 1–99%','error');return;}
+  appSettings.productMargin=v;
+  const r=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
+  if(r.ok) showToast('Margin saved');
+  else showToast('Failed to save','error');
 }
 async function checkForUpdates(){
   const statusEl=document.getElementById('update-status');
