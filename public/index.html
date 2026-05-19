@@ -2524,7 +2524,7 @@ function loadSalesQuote(id){
           </div>
           <input class="quote-input" style="width:52px;" type="number" min="0" value="${li.qty}" oninput="onQuoteInputChange('${id}','${p.id}','qty',this.valueAsNumber||0)" onblur="saveQuoteInput('${id}','${p.id}','qty',this.valueAsNumber||0)" title="Quantity">
           <div class="quote-list">${listStr}</div>
-          <input class="quote-input" style="width:72px;" type="number" min="0" step="0.05" value="${(li.unitPrice||0).toFixed(2)}" oninput="onQuoteInputChange('${id}','${p.id}','unitPrice',this.valueAsNumber||0)" onblur="saveQuoteInput('${id}','${p.id}','unitPrice',this.valueAsNumber||0)" title="Price per unit">
+          <div style="display:flex;align-items:center;width:72px;flex-shrink:0;"><span style="font-size:11px;color:var(--text3);flex-shrink:0;">$</span><input class="quote-input" style="width:62px;" type="number" min="0" step="0.05" value="${(li.unitPrice||0).toFixed(2)}" oninput="onQuoteInputChange('${id}','${p.id}','unitPrice',this.valueAsNumber||0)" onblur="saveQuoteInput('${id}','${p.id}','unitPrice',this.valueAsNumber||0)" title="Price per unit"></div>
           <div class="${discCls}" id="qdisc-${id}-${p.id}">${discStr}</div>
           <div class="quote-col${cost>0?' active':''}" id="qcost-${id}-${p.id}">${cost>0?'$'+cost.toFixed(2):'-'}</div>
           <span class="quote-billing-tag" style="width:64px;text-align:center;">${p.billing==='onetime'?'One Time':'Monthly'}</span>
@@ -3173,7 +3173,7 @@ function renderSettingsView(){
             <div style="display:flex;align-items:center;gap:6px;">
               <input type="number" id="setting-margin" min="1" max="99" step="1" value="${appSettings.productMargin||''}" placeholder="e.g. 80" style="width:70px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:12px;outline:none;font-family:var(--sans);">
               <span style="font-size:12px;color:var(--text2);">%</span>
-              <button class="btn-secondary" onclick="saveProductMargin()">Save</button>
+              <button class="btn-primary" onclick="saveProductMargin()">Save</button>
             </div>
             <div style="font-size:11px;color:var(--text3);margin-top:4px;">Sets the recommended client price in the product manager. Formula: Client Cost = SA Cost ÷ (1 − Margin%)</div>
           </div>
@@ -3437,22 +3437,24 @@ function pmRender(){
             <input style="${_subInp}flex:2;" value="${escHtml(sub.desc||'')}" placeholder="Description" oninput="_pmProducts[${i}].subItems[${si}].desc=this.value;pmMarkDirty()">
           </div>
           <div style="display:flex;gap:5px;align-items:center;">
-            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:0;gap:3px;">
-              <span style="font-size:9px;color:var(--text3);flex-shrink:0;pointer-events:none;user-select:none;">Cost $</span>
-              <input type="number" step="0.05" min="0" style="flex:1;min-width:0;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(sub.saCost||0).toFixed(2)}" oninput="const v=parseFloat(this.value)||0;_pmProducts[${i}].subItems[${si}].saCost=v;const m=appSettings.productMargin;const r=(m>0&&m<100)?v/(1-m/100):0;const el=document.getElementById('pmrec-${i}-${si}');if(el)el.textContent=r>0?'$'+r.toFixed(2):'—';pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
+            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:0;">
+              <span style="font-size:9px;color:var(--text3);flex:1;pointer-events:none;user-select:none;">Cost</span>
+              <span style="font-size:11px;color:var(--text3);">$</span>
+              <input type="number" step="0.05" min="0" style="width:48px;background:transparent;border:none;padding:2px 0 2px 1px;color:var(--text);font-size:11px;outline:none;text-align:left;" value="${(sub.saCost||0).toFixed(2)}" oninput="const v=parseFloat(this.value)||0;_pmProducts[${i}].subItems[${si}].saCost=v;const m=appSettings.productMargin;const r=(m>0&&m<100)?v/(1-m/100):0;const el=document.getElementById('pmrec-${i}-${si}');if(el)el.textContent=r>0?'$'+r.toFixed(2):'—';pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
             </div>
-            <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid transparent;border-radius:4px;padding:1px 5px;flex:1;min-width:0;gap:3px;cursor:default;">
-              <span style="font-size:9px;color:var(--text3);flex-shrink:0;user-select:none;">Margin</span>
-              <span id="pmrec-${i}-${si}" style="flex:1;font-size:11px;color:var(--text3);text-align:right;white-space:nowrap;">${rec}</span>
+            <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid transparent;border-radius:4px;padding:1px 5px;flex:1;min-width:0;cursor:default;">
+              <span style="font-size:9px;color:var(--text3);flex:1;user-select:none;">Margin${appSettings.productMargin?` (${appSettings.productMargin}%)`:''}</span>
+              <span id="pmrec-${i}-${si}" style="font-size:11px;color:var(--text3);white-space:nowrap;">${rec}</span>
             </div>
-            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:0;gap:3px;">
-              <span style="font-size:9px;color:var(--text3);flex-shrink:0;pointer-events:none;user-select:none;">Price $</span>
-              <input type="number" step="0.05" min="0" style="flex:1;min-width:0;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(sub.defaultPrice||0).toFixed(2)}" oninput="_pmProducts[${i}].subItems[${si}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
+            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:0;">
+              <span style="font-size:9px;color:var(--text3);flex:1;pointer-events:none;user-select:none;">Price</span>
+              <span style="font-size:11px;color:var(--text3);">$</span>
+              <input type="number" step="0.05" min="0" style="width:48px;background:transparent;border:none;padding:2px 0 2px 1px;color:var(--text);font-size:11px;outline:none;text-align:left;" value="${(sub.defaultPrice||0).toFixed(2)}" oninput="_pmProducts[${i}].subItems[${si}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
             </div>
           </div>
           <div style="display:flex;gap:5px;align-items:center;">
             <select style="${_subSel}" oninput="_pmProducts[${i}].subItems[${si}].requires=this.value||undefined;pmMarkDirty()">
-              <option value="">Requires</option>
+              <option value="">— Requires —</option>
               ${_pmProducts.filter((pp,j)=>j!==i&&pp.id).map(pp=>`<option value="${pp.id}" ${(sub.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`).join('')}
             </select>
             <select style="${_subSel}" oninput="_pmProducts[${i}].subItems[${si}].billing=this.value;pmMarkDirty()">
@@ -3460,13 +3462,13 @@ function pmRender(){
               <option value="onetime" ${sub.billing==='onetime'?'selected':''}>One-Time</option>
             </select>
             <select style="${_subSel}" oninput="_pmProducts[${i}].subItems[${si}].salesCategory=this.value||undefined;pmMarkDirty()">
-              <option value="" ${!sub.salesCategory?'selected':''}>Category</option>
+              <option value="" ${!sub.salesCategory?'selected':''}>— Category —</option>
               <option value="user" ${sub.salesCategory==='user'?'selected':''}>User</option>
               <option value="machine" ${sub.salesCategory==='machine'?'selected':''}>Machine</option>
               <option value="site" ${sub.salesCategory==='site'?'selected':''}>Site</option>
             </select>
             <select style="${_subSel}" oninput="_pmProducts[${i}].subItems[${si}].qtySource=this.value;pmMarkDirty()">
-              <option value="" ${!sub.qtySource?'selected':''}>Qty Source</option>
+              <option value="" ${!sub.qtySource?'selected':''}>— Qty Source —</option>
               <option value="employees" ${sub.qtySource==='employees'?'selected':''}>Employees</option>
               <option value="licensedUsers" ${sub.qtySource==='licensedUsers'?'selected':''}>Lic. Users</option>
               <option value="workstations" ${sub.qtySource==='workstations'?'selected':''}>Workstations</option>
@@ -3483,10 +3485,10 @@ function pmRender(){
       </div>`;
     }).join(''):'';
     return`
-    <div class="pm-row" data-pi="${i}" draggable="true"
-      ondragstart="pmDragStart(event,${i})" ondragover="pmDragOver(event,${i})"
-      ondragleave="pmDragLeave(event)" ondrop="pmDrop(event,${i})" ondragend="pmDragEnd(event)">
-      <span class="pm-drag" ontouchstart="pmTouchStart(event,${i})">⠿</span>
+    <div class="pm-row" data-pi="${i}"
+      ondragover="pmDragOver(event,${i})"
+      ondragleave="pmDragLeave(event)" ondrop="pmDrop(event,${i})">
+      <span class="pm-drag" draggable="true" ondragstart="pmDragStart(event,${i})" ondragend="pmDragEnd(event)" ontouchstart="pmTouchStart(event,${i})">⠿</span>
       <div class="pm-fields">
         <div class="pm-row-top">
           <input class="pm-label-input pm-id-input" value="${escHtml(p.id)}" placeholder="product-id"
@@ -3533,15 +3535,21 @@ function pmRender(){
             ${!hasSubItems?`
             <div style="display:flex;flex-direction:column;gap:2px;">
               <span class="pm-sales-label">SA Cost</span>
-              <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;gap:3px;"><span style="font-size:9px;color:var(--text3);flex-shrink:0;pointer-events:none;user-select:none;">$</span><input type="number" step="0.05" min="0" style="width:48px;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(p.saCost||0).toFixed(2)}" oninput="const v=parseFloat(this.value)||0;_pmProducts[${i}].saCost=v;const m=appSettings.productMargin;const rec=(m>0&&m<100)?v/(1-m/100):0;const el=document.getElementById('pmrec-${i}');if(el)el.textContent=rec>0?'$'+rec.toFixed(2):'—';pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);"></div>
+              <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;">
+                <span style="font-size:11px;color:var(--text3);">$</span>
+                <input type="number" step="0.05" min="0" style="width:52px;background:transparent;border:none;padding:2px 0 2px 1px;color:var(--text);font-size:11px;outline:none;text-align:left;" value="${(p.saCost||0).toFixed(2)}" oninput="const v=parseFloat(this.value)||0;_pmProducts[${i}].saCost=v;const m=appSettings.productMargin;const rec=(m>0&&m<100)?v/(1-m/100):0;const el=document.getElementById('pmrec-${i}');if(el)el.textContent=rec>0?'$'+rec.toFixed(2):'—';pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
+              </div>
             </div>
             <div style="display:flex;flex-direction:column;gap:2px;">
-              <span class="pm-sales-label">Recommended</span>
+              <span class="pm-sales-label">Recommended${appSettings.productMargin?' ('+appSettings.productMargin+'%)':''}</span>
               <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid transparent;border-radius:4px;padding:1px 5px;cursor:default;"><span id="pmrec-${i}" style="font-size:11px;color:var(--text3);white-space:nowrap;">${(()=>{const m=appSettings.productMargin;const r=(m>0&&m<100)?(p.saCost||0)/(1-m/100):0;return r>0?'$'+r.toFixed(2):'—';})()}</span></div>
             </div>
             <div style="display:flex;flex-direction:column;gap:2px;">
               <span class="pm-sales-label">Client Cost</span>
-              <div style="display:flex;align-items:center;gap:1px;"><span style="font-size:10px;color:var(--text3);">$</span><input type="text" inputmode="decimal" style="width:52px;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 2px;color:var(--text);font-size:11px;outline:none;" value="${(p.defaultPrice||0).toFixed(2)}" placeholder="0.00" oninput="_pmProducts[${i}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);"></div>
+              <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;">
+                <span style="font-size:11px;color:var(--text3);">$</span>
+                <input type="number" step="0.05" min="0" style="width:52px;background:transparent;border:none;padding:2px 0 2px 1px;color:var(--text);font-size:11px;outline:none;text-align:left;" value="${(p.defaultPrice||0).toFixed(2)}" oninput="_pmProducts[${i}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
+              </div>
             </div>
             <div style="display:flex;flex-direction:column;gap:2px;width:80px;">
               <span class="pm-sales-label">Billing</span>
@@ -3596,7 +3604,7 @@ function pmDeleteSubItem(i,si){
   if(!_pmProducts[i].subItems.length)delete _pmProducts[i].subItems;
   pmMarkDirty();pmRender();
 }
-function pmDragStart(e,i){if(!e.target.closest('.pm-drag')){e.preventDefault();return;}_pmDrag=i;e.dataTransfer.effectAllowed='move';}
+function pmDragStart(e,i){_pmDrag=i;e.dataTransfer.effectAllowed='move';}
 function pmDragOver(e,i){
   e.preventDefault();
   document.querySelectorAll('.pm-row').forEach(r=>r.classList.remove('drag-over-before','drag-over-after'));
