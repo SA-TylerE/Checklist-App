@@ -2317,7 +2317,7 @@ let salesQuotes={};
 let activeSalesQuoteId=null;
 
 function getSalesProducts(){
-  const src=(appSettings.products||DEFAULT_PRODUCTS||[]).filter(p=>p.salesCategory);
+  const src=(appSettings.products||DEFAULT_PRODUCTS||[]).filter(p=>p.salesCategory||p.subItems?.length);
   const source=src.length?src:DEFAULT_SALES_PRODUCTS;
   const result=[];
   source.forEach(p=>{
