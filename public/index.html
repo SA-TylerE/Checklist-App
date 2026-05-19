@@ -3485,7 +3485,9 @@ function pmRender(){
     return`
     <div class="pm-row" data-pi="${i}"
       ondragover="pmDragOver(event,${i})"
-      ondragleave="pmDragLeave(event)" ondrop="pmDrop(event,${i})">
+      ondragleave="pmDragLeave(event)" ondrop="pmDrop(event,${i})"
+      onclick="if(!event.target.closest('input,select,button,textarea,.pm-drag'))pmToggleSalesExpand(${i})"
+      style="cursor:pointer;">
       <span class="pm-drag" draggable="true" ondragstart="pmDragStart(event,${i})" ondragend="pmDragEnd(event)" ontouchstart="pmTouchStart(event,${i})">⠿</span>
       <div class="pm-fields">
         <div class="pm-row-top">
@@ -3525,23 +3527,17 @@ function pmRender(){
                 ${_pmProducts.filter((pp,j)=>j!==i&&pp.id).map(pp=>`<option value="${pp.id}" ${(p.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`).join('')}
               </select>
             </div>
-            <div style="display:flex;flex-direction:column;gap:2px;">
-              <span class="pm-sales-label">SA Cost</span>
-              <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;">
-                <input type="number" step="0.05" min="0" style="width:60px;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(p.saCost||0).toFixed(2)}" oninput="const v=parseFloat(this.value)||0;_pmProducts[${i}].saCost=v;const m=appSettings.productMargin;const rec=(m>0&&m<100)?v/(1-m/100):0;const el=document.getElementById('pmrec-${i}');if(el)el.value=rec>0?rec.toFixed(2):'—';pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
-              </div>
+            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;">
+              <span style="font-size:9px;color:var(--text3);flex:1;pointer-events:none;user-select:none;">Cost</span>
+              <input type="number" step="0.05" min="0" style="width:60px;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(p.saCost||0).toFixed(2)}" oninput="const v=parseFloat(this.value)||0;_pmProducts[${i}].saCost=v;const m=appSettings.productMargin;const rec=(m>0&&m<100)?v/(1-m/100):0;const el=document.getElementById('pmrec-${i}');if(el)el.value=rec>0?rec.toFixed(2):'—';pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
             </div>
-            <div style="display:flex;flex-direction:column;gap:2px;">
-              <span class="pm-sales-label">Recommended${appSettings.productMargin?' ('+appSettings.productMargin+'%)':''}</span>
-              <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;cursor:default;">
-                <input type="text" readonly tabindex="-1" id="pmrec-${i}" style="width:60px;background:transparent;border:none;padding:2px 0;color:var(--text3);font-size:11px;outline:none;text-align:right;cursor:default;" value="${(()=>{const m=appSettings.productMargin;const r=(m>0&&m<100)?(p.saCost||0)/(1-m/100):0;return r>0?r.toFixed(2):'—';})()}">
-              </div>
+            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;cursor:default;">
+              <span style="font-size:9px;color:var(--text3);flex:1;user-select:none;">Margin${appSettings.productMargin?' ('+appSettings.productMargin+'%)':''}</span>
+              <input type="text" readonly tabindex="-1" id="pmrec-${i}" style="width:60px;background:transparent;border:none;padding:2px 0;color:var(--text3);font-size:11px;outline:none;text-align:right;cursor:default;" value="${(()=>{const m=appSettings.productMargin;const r=(m>0&&m<100)?(p.saCost||0)/(1-m/100):0;return r>0?r.toFixed(2):'—';})()}">
             </div>
-            <div style="display:flex;flex-direction:column;gap:2px;">
-              <span class="pm-sales-label">Client Cost</span>
-              <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;">
-                <input type="number" step="0.05" min="0" style="width:60px;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(p.defaultPrice||0).toFixed(2)}" oninput="_pmProducts[${i}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
-              </div>
+            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;">
+              <span style="font-size:9px;color:var(--text3);flex:1;pointer-events:none;user-select:none;">Price</span>
+              <input type="number" step="0.05" min="0" style="width:60px;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(p.defaultPrice||0).toFixed(2)}" oninput="_pmProducts[${i}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
             </div>
             <div style="display:flex;flex-direction:column;gap:2px;width:80px;">
               <span class="pm-sales-label">Billing</span>
@@ -3552,12 +3548,11 @@ function pmRender(){
             </div>
           </div>`:''}
           ${hasSubItems?`<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:4px;width:100%;">${subItemsHtml}</div>`:''}
-          <button onclick="pmAddSubItem(${i})" style="background:none;border:1px dashed var(--border);border-radius:3px;color:var(--text3);cursor:pointer;font-size:10px;padding:2px 8px;margin-top:4px;" title="Add sub-item">+ Sub-item</button>
+          <button onclick="pmAddSubItem(${i})" style="background:none;border:1px dashed var(--border);border-radius:3px;color:var(--text3);cursor:pointer;font-size:10px;padding:2px 8px;margin-top:4px;transition:all 0.15s;" title="Add sub-item" onmouseenter="this.style.borderColor='var(--accent)';this.style.color='var(--accent)';this.style.background='rgba(59,130,246,0.08)';" onmouseleave="this.style.borderColor='';this.style.color='';this.style.background='';">+ Sub-item</button>
         </div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:4px;align-items:center;flex-shrink:0;">
-        <button class="pm-del-btn" onclick="pmDelete(${i})" title="Remove">&#215;</button>
-        <button class="pm-sales-toggle" onclick="pmToggleSalesExpand(${i})" title="Sales settings">💲</button>
+      <div onclick="styledConfirm('Remove this product?',()=>pmDelete(${i}))" title="Remove" style="flex-shrink:0;align-self:stretch;border-left:1px solid var(--border);background:rgba(239,68,68,0.06);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background 0.15s;padding:0 8px;" onmouseenter="this.style.background='rgba(239,68,68,0.18)'" onmouseleave="this.style.background='rgba(239,68,68,0.06)'">
+        <span style="color:var(--danger);font-size:16px;line-height:1;">&#215;</span>
       </div>
     </div>`;
   }).join('');
