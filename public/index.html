@@ -3437,12 +3437,18 @@ function pmRender(){
             <input style="${_subInp}flex:2;" value="${escHtml(sub.desc||'')}" placeholder="Description" oninput="_pmProducts[${i}].subItems[${si}].desc=this.value;pmMarkDirty()">
           </div>
           <div style="display:flex;gap:5px;align-items:center;">
-            <span style="${_dlbl}">Cost</span>
-            <div style="display:flex;align-items:center;gap:1px;flex:1;min-width:0;"><span style="${_dp}">$</span><input type="number" step="0.05" min="0" style="${_subCost}" value="${(sub.saCost||0).toFixed(2)}" placeholder="0.00" oninput="const v=parseFloat(this.value)||0;_pmProducts[${i}].subItems[${si}].saCost=v;const m=appSettings.productMargin;const r=(m>0&&m<100)?v/(1-m/100):0;const el=document.getElementById('pmrec-${i}-${si}');if(el)el.value=r>0?'$'+r.toFixed(2):'—';pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);"></div>
-            <span style="${_dlbl}">Margin</span>
-            <input type="text" readonly tabindex="-1" id="pmrec-${i}-${si}" style="${_subCost}color:var(--text3);cursor:default;" value="${rec}">
-            <span style="${_dlbl}">Price</span>
-            <div style="display:flex;align-items:center;gap:1px;flex:1;min-width:0;"><span style="${_dp}">$</span><input type="number" step="0.05" min="0" style="${_subCost}" value="${(sub.defaultPrice||0).toFixed(2)}" placeholder="0.00" oninput="_pmProducts[${i}].subItems[${si}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);"></div>
+            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:0;gap:3px;">
+              <span style="font-size:9px;color:var(--text3);flex-shrink:0;pointer-events:none;user-select:none;">Cost $</span>
+              <input type="number" step="0.05" min="0" style="flex:1;min-width:0;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(sub.saCost||0).toFixed(2)}" oninput="const v=parseFloat(this.value)||0;_pmProducts[${i}].subItems[${si}].saCost=v;const m=appSettings.productMargin;const r=(m>0&&m<100)?v/(1-m/100):0;const el=document.getElementById('pmrec-${i}-${si}');if(el)el.textContent=r>0?'$'+r.toFixed(2):'—';pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
+            </div>
+            <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid transparent;border-radius:4px;padding:1px 5px;flex:1;min-width:0;gap:3px;cursor:default;">
+              <span style="font-size:9px;color:var(--text3);flex-shrink:0;user-select:none;">Margin</span>
+              <span id="pmrec-${i}-${si}" style="flex:1;font-size:11px;color:var(--text3);text-align:right;white-space:nowrap;">${rec}</span>
+            </div>
+            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:0;gap:3px;">
+              <span style="font-size:9px;color:var(--text3);flex-shrink:0;pointer-events:none;user-select:none;">Price $</span>
+              <input type="number" step="0.05" min="0" style="flex:1;min-width:0;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(sub.defaultPrice||0).toFixed(2)}" oninput="_pmProducts[${i}].subItems[${si}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
+            </div>
           </div>
           <div style="display:flex;gap:5px;align-items:center;">
             <select style="${_subSel}" oninput="_pmProducts[${i}].subItems[${si}].requires=this.value||undefined;pmMarkDirty()">
@@ -3527,11 +3533,11 @@ function pmRender(){
             ${!hasSubItems?`
             <div style="display:flex;flex-direction:column;gap:2px;">
               <span class="pm-sales-label">SA Cost</span>
-              <div style="display:flex;align-items:center;gap:1px;"><span style="font-size:10px;color:var(--text3);">$</span><input type="text" inputmode="decimal" style="width:52px;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 2px;color:var(--text);font-size:11px;outline:none;" value="${(p.saCost||0).toFixed(2)}" placeholder="0.00" oninput="const v=parseFloat(this.value)||0;_pmProducts[${i}].saCost=v;const m=appSettings.productMargin;const rec=(m>0&&m<100)?v/(1-m/100):0;const el=document.getElementById('pmrec-${i}');if(el)el.value=rec>0?'$'+rec.toFixed(2):'—';pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);"></div>
+              <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;gap:3px;"><span style="font-size:9px;color:var(--text3);flex-shrink:0;pointer-events:none;user-select:none;">$</span><input type="number" step="0.05" min="0" style="width:48px;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(p.saCost||0).toFixed(2)}" oninput="const v=parseFloat(this.value)||0;_pmProducts[${i}].saCost=v;const m=appSettings.productMargin;const rec=(m>0&&m<100)?v/(1-m/100):0;const el=document.getElementById('pmrec-${i}');if(el)el.textContent=rec>0?'$'+rec.toFixed(2):'—';pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);"></div>
             </div>
             <div style="display:flex;flex-direction:column;gap:2px;">
               <span class="pm-sales-label">Recommended</span>
-              <div style="display:flex;align-items:center;gap:1px;"><span style="font-size:10px;color:var(--text3);">$</span><input type="text" readonly tabindex="-1" id="pmrec-${i}" style="width:52px;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 2px;color:var(--text3);font-size:11px;outline:none;cursor:default;" value="${(()=>{const m=appSettings.productMargin;const r=(m>0&&m<100)?(p.saCost||0)/(1-m/100):0;return r>0?r.toFixed(2):'0.00';})()}"></div>
+              <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid transparent;border-radius:4px;padding:1px 5px;cursor:default;"><span id="pmrec-${i}" style="font-size:11px;color:var(--text3);white-space:nowrap;">${(()=>{const m=appSettings.productMargin;const r=(m>0&&m<100)?(p.saCost||0)/(1-m/100):0;return r>0?'$'+r.toFixed(2):'—';})()}</span></div>
             </div>
             <div style="display:flex;flex-direction:column;gap:2px;">
               <span class="pm-sales-label">Client Cost</span>
@@ -3590,7 +3596,7 @@ function pmDeleteSubItem(i,si){
   if(!_pmProducts[i].subItems.length)delete _pmProducts[i].subItems;
   pmMarkDirty();pmRender();
 }
-function pmDragStart(e,i){_pmDrag=i;e.dataTransfer.effectAllowed='move';}
+function pmDragStart(e,i){if(!e.target.closest('.pm-drag')){e.preventDefault();return;}_pmDrag=i;e.dataTransfer.effectAllowed='move';}
 function pmDragOver(e,i){
   e.preventDefault();
   document.querySelectorAll('.pm-row').forEach(r=>r.classList.remove('drag-over-before','drag-over-after'));
