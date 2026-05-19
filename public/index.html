@@ -3423,80 +3423,50 @@ function pmRender(){
   const qtyOpts=['','employees','licensedUsers','workstations','servers','machines','backedUpMachines','sites'];
   document.getElementById('pm-list').innerHTML=_pmProducts.map((p,i)=>{
     const hasSubItems=p.subItems?.length>0;
-    const _lbl=`font-size:9px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:2px;white-space:nowrap;`;
+    const _lbl=`font-size:9px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;`;
     const _subInp=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 5px;color:var(--text);font-size:11px;outline:none;width:100%;min-width:0;box-sizing:border-box;`;
     const _subCost=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 2px;color:var(--text);font-size:11px;outline:none;flex:1;min-width:0;text-align:center;box-sizing:border-box;`;
     const _subSel=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 3px;color:var(--text);font-size:11px;outline:none;width:100%;min-width:0;box-sizing:border-box;`;
-    const _col1=`display:flex;flex-direction:column;flex:1;min-width:65px;`;
-    const _col2=`display:flex;flex-direction:column;flex:1;min-width:70px;`;
     const subItemsHtml=hasSubItems?p.subItems.map((sub,si)=>{
       const rec=(()=>{const m=appSettings.productMargin;const r=(m>0&&m<100)?(sub.saCost||0)/(1-m/100):0;return r>0?'$'+r.toFixed(2):'—';})();
-      return`<div style="border:1px solid var(--border);border-radius:5px;padding:5px 7px;display:flex;flex-direction:column;gap:5px;">
-        <div style="display:flex;gap:5px;align-items:flex-end;">
-          <div style="display:flex;flex-direction:column;flex:1;min-width:60px;">
-            <span style="${_lbl}">Name</span>
-            <input style="${_subInp}" value="${escHtml(sub.label)}" placeholder="Sub-item name" oninput="_pmProducts[${i}].subItems[${si}].label=this.value;pmMarkDirty()">
-          </div>
-          <div style="display:flex;flex-direction:column;flex:2;min-width:80px;">
-            <span style="${_lbl}">Description</span>
-            <input style="${_subInp}" value="${escHtml(sub.desc||'')}" placeholder="Description (optional)" oninput="_pmProducts[${i}].subItems[${si}].desc=this.value;pmMarkDirty()">
-          </div>
-          <div style="display:flex;flex-direction:column;flex:1;min-width:100px;">
-            <span style="${_lbl}">Requires</span>
-            <select style="${_subSel}" oninput="_pmProducts[${i}].subItems[${si}].requires=this.value||undefined;pmMarkDirty()">
+      const sep=si>0?'border-top:1px solid var(--border);':'';
+      return`
+        <div style="${sep}padding:5px 8px 3px;">
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input style="${_subInp}flex:1;" value="${escHtml(sub.label)}" placeholder="Name" oninput="_pmProducts[${i}].subItems[${si}].label=this.value;pmMarkDirty()">
+            <input style="${_subInp}flex:2;" value="${escHtml(sub.desc||'')}" placeholder="Description" oninput="_pmProducts[${i}].subItems[${si}].desc=this.value;pmMarkDirty()">
+            <select style="${_subSel}flex:1;min-width:90px;" oninput="_pmProducts[${i}].subItems[${si}].requires=this.value||undefined;pmMarkDirty()">
               <option value="">N/A</option>
               ${_pmProducts.filter((pp,j)=>j!==i&&pp.id).map(pp=>`<option value="${pp.id}" ${(sub.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`).join('')}
             </select>
-          </div>
-          <div style="display:flex;flex-direction:column;flex-shrink:0;">
-            <span style="${_lbl};color:transparent;">·</span>
-            <button onclick="pmDeleteSubItem(${i},${si})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0;line-height:1;" title="Remove">&#215;</button>
+            <button onclick="pmDeleteSubItem(${i},${si})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0;line-height:1;flex-shrink:0;" title="Remove">&#215;</button>
           </div>
         </div>
-        <div style="display:flex;gap:5px;align-items:flex-end;">
-          <div style="${_col1}">
-            <span style="${_lbl}">SA Cost</span>
-            <div style="display:flex;align-items:center;gap:1px;"><span style="font-size:10px;color:var(--text3);flex-shrink:0;">$</span><input type="text" inputmode="decimal" style="${_subCost}" value="${(sub.saCost||0).toFixed(2)}" placeholder="0.00" oninput="const v=parseFloat(this.value)||0;_pmProducts[${i}].subItems[${si}].saCost=v;const m=appSettings.productMargin;const rec=(m>0&&m<100)?v/(1-m/100):0;const el=document.getElementById('pmrec-${i}-${si}');if(el)el.textContent=rec>0?'$'+rec.toFixed(2):'—';pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);"></div>
-          </div>
-          <div style="${_col1}">
-            <span style="${_lbl}">Recommended</span>
-            <div id="pmrec-${i}-${si}" style="font-size:11px;color:var(--text3);background:var(--bg3);border:1px solid transparent;border-radius:4px;padding:3px 5px;white-space:nowrap;">${rec}</div>
-          </div>
-          <div style="${_col1}">
-            <span style="${_lbl}">Client Cost</span>
-            <div style="display:flex;align-items:center;gap:1px;"><span style="font-size:10px;color:var(--text3);flex-shrink:0;">$</span><input type="text" inputmode="decimal" style="${_subCost}" value="${(sub.defaultPrice||0).toFixed(2)}" placeholder="0.00" oninput="_pmProducts[${i}].subItems[${si}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);"></div>
-          </div>
-          <div style="${_col2}">
-            <span style="${_lbl}">Billing</span>
-            <select style="${_subSel}" oninput="_pmProducts[${i}].subItems[${si}].billing=this.value;pmMarkDirty()">
-              <option value="monthly" ${(sub.billing||'monthly')==='monthly'?'selected':''}>Monthly</option>
-              <option value="onetime" ${sub.billing==='onetime'?'selected':''}>One-Time</option>
-            </select>
-          </div>
-          <div style="${_col2}">
-            <span style="${_lbl}">Category</span>
-            <select style="${_subSel}" oninput="_pmProducts[${i}].subItems[${si}].salesCategory=this.value||undefined;pmMarkDirty()">
-              <option value="" ${!sub.salesCategory?'selected':''}>— Select —</option>
-              <option value="user" ${sub.salesCategory==='user'?'selected':''}>User</option>
-              <option value="machine" ${sub.salesCategory==='machine'?'selected':''}>Machine</option>
-              <option value="site" ${sub.salesCategory==='site'?'selected':''}>Site</option>
-            </select>
-          </div>
-          <div style="${_col2}">
-            <span style="${_lbl}">Qty Source</span>
-            <select style="${_subSel}" oninput="_pmProducts[${i}].subItems[${si}].qtySource=this.value;pmMarkDirty()">
-              <option value="" ${!sub.qtySource?'selected':''}>— Select —</option>
-              <option value="employees" ${sub.qtySource==='employees'?'selected':''}>Employees</option>
-              <option value="licensedUsers" ${sub.qtySource==='licensedUsers'?'selected':''}>Lic. Users</option>
-              <option value="workstations" ${sub.qtySource==='workstations'?'selected':''}>Workstations</option>
-              <option value="servers" ${sub.qtySource==='servers'?'selected':''}>Servers</option>
-              <option value="machines" ${sub.qtySource==='machines'?'selected':''}>Machines</option>
-              <option value="backedUpMachines" ${sub.qtySource==='backedUpMachines'?'selected':''}>Backed Up</option>
-              <option value="sites" ${sub.qtySource==='sites'?'selected':''}>Sites</option>
-            </select>
-          </div>
-        </div>
-      </div>`;
+        <div style="display:flex;gap:6px;align-items:center;padding:3px 8px 5px;background:rgba(0,0,0,0.12);">
+          <div style="display:flex;align-items:center;gap:1px;flex:1;min-width:60px;"><span style="font-size:10px;color:var(--text3);flex-shrink:0;">$</span><input type="text" inputmode="decimal" style="${_subCost}" value="${(sub.saCost||0).toFixed(2)}" placeholder="0.00" oninput="const v=parseFloat(this.value)||0;_pmProducts[${i}].subItems[${si}].saCost=v;const m=appSettings.productMargin;const r=(m>0&&m<100)?v/(1-m/100):0;const el=document.getElementById('pmrec-${i}-${si}');if(el)el.textContent=r>0?'$'+r.toFixed(2):'—';pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);"></div>
+          <div id="pmrec-${i}-${si}" style="flex:1;min-width:60px;font-size:11px;color:var(--text3);padding:3px 4px;background:var(--bg3);border:1px solid transparent;border-radius:4px;white-space:nowrap;">${rec}</div>
+          <div style="display:flex;align-items:center;gap:1px;flex:1;min-width:60px;"><span style="font-size:10px;color:var(--text3);flex-shrink:0;">$</span><input type="text" inputmode="decimal" style="${_subCost}" value="${(sub.defaultPrice||0).toFixed(2)}" placeholder="0.00" oninput="_pmProducts[${i}].subItems[${si}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);"></div>
+          <select style="${_subSel}flex:1;min-width:70px;" oninput="_pmProducts[${i}].subItems[${si}].billing=this.value;pmMarkDirty()">
+            <option value="monthly" ${(sub.billing||'monthly')==='monthly'?'selected':''}>Monthly</option>
+            <option value="onetime" ${sub.billing==='onetime'?'selected':''}>One-Time</option>
+          </select>
+          <select style="${_subSel}flex:1;min-width:70px;" oninput="_pmProducts[${i}].subItems[${si}].salesCategory=this.value||undefined;pmMarkDirty()">
+            <option value="" ${!sub.salesCategory?'selected':''}>— Select —</option>
+            <option value="user" ${sub.salesCategory==='user'?'selected':''}>User</option>
+            <option value="machine" ${sub.salesCategory==='machine'?'selected':''}>Machine</option>
+            <option value="site" ${sub.salesCategory==='site'?'selected':''}>Site</option>
+          </select>
+          <select style="${_subSel}flex:1;min-width:70px;" oninput="_pmProducts[${i}].subItems[${si}].qtySource=this.value;pmMarkDirty()">
+            <option value="" ${!sub.qtySource?'selected':''}>— Select —</option>
+            <option value="employees" ${sub.qtySource==='employees'?'selected':''}>Employees</option>
+            <option value="licensedUsers" ${sub.qtySource==='licensedUsers'?'selected':''}>Lic. Users</option>
+            <option value="workstations" ${sub.qtySource==='workstations'?'selected':''}>Workstations</option>
+            <option value="servers" ${sub.qtySource==='servers'?'selected':''}>Servers</option>
+            <option value="machines" ${sub.qtySource==='machines'?'selected':''}>Machines</option>
+            <option value="backedUpMachines" ${sub.qtySource==='backedUpMachines'?'selected':''}>Backed Up</option>
+            <option value="sites" ${sub.qtySource==='sites'?'selected':''}>Sites</option>
+          </select>
+        </div>`;
     }).join(''):'';
     return`
     <div class="pm-row" data-pi="${i}" draggable="true"
@@ -3567,7 +3537,23 @@ function pmRender(){
               </select>
             </div>`:''}
           </div>
-          ${hasSubItems?`<div style="display:flex;flex-direction:column;gap:5px;width:100%;margin-bottom:4px;">${subItemsHtml}</div>`:''}
+          ${hasSubItems?`<div style="border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:4px;">
+            <div style="display:flex;gap:6px;padding:3px 8px;background:var(--bg3);border-bottom:1px solid var(--border);">
+              <span style="${_lbl}flex:1;">Name</span>
+              <span style="${_lbl}flex:2;">Description</span>
+              <span style="${_lbl}flex:1;min-width:90px;">Requires</span>
+              <span style="width:14px;flex-shrink:0;"></span>
+            </div>
+            <div style="display:flex;gap:6px;padding:3px 8px;background:rgba(0,0,0,0.2);border-bottom:2px solid var(--border);">
+              <span style="${_lbl}flex:1;min-width:60px;">SA Cost</span>
+              <span style="${_lbl}flex:1;min-width:60px;">Recommended</span>
+              <span style="${_lbl}flex:1;min-width:60px;">Client Cost</span>
+              <span style="${_lbl}flex:1;min-width:70px;">Billing</span>
+              <span style="${_lbl}flex:1;min-width:70px;">Category</span>
+              <span style="${_lbl}flex:1;min-width:70px;">Qty Source</span>
+            </div>
+            ${subItemsHtml}
+          </div>`:''}
           <button onclick="pmAddSubItem(${i})" style="background:none;border:1px dashed var(--border);border-radius:3px;color:var(--text3);cursor:pointer;font-size:10px;padding:2px 8px;margin-top:4px;" title="Add sub-item">+ Sub-item</button>
         </div>
       </div>
