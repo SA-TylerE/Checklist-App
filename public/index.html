@@ -3432,7 +3432,7 @@ function pmRender(){
     const hasSubItems=p.subItems?.length>0;
     const _subInp=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 5px;color:var(--text);font-size:11px;outline:none;flex:1;min-width:0;box-sizing:border-box;`;
     const _subCost=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 4px;color:var(--text);font-size:11px;outline:none;flex:1;min-width:0;text-align:right;box-sizing:border-box;`;
-    const _subSel=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 3px;color:var(--text);font-size:11px;outline:none;flex:1;min-width:0;box-sizing:border-box;text-align-last:center;`;
+    const _subSel=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 3px;color:var(--text);font-size:11px;outline:none;flex:1;min-width:110px;box-sizing:border-box;text-align-last:center;`;
     const _dlbl=`font-size:9px;color:var(--text3);flex-shrink:0;`;
     const _dp=`font-size:10px;color:var(--text3);flex-shrink:0;`;
     const subItemsHtml=hasSubItems?p.subItems.map((sub,si)=>{
@@ -3440,26 +3440,26 @@ function pmRender(){
       return`<div class="pm-sub-item" data-si="${si}" style="border:1px solid var(--border);border-radius:6px;background:var(--bg3);display:flex;overflow:hidden;">
         <span class="pm-drag" onmousedown="pmMouseDown(event,${i},'sub',${si})" ontouchstart="pmSubTouchStart(event,${i},${si})" style="border-right:1px solid var(--border);padding:0 5px;display:flex;align-items:center;">⠿</span>
         <div style="flex:1;padding:7px 10px;display:flex;flex-direction:column;gap:5px;">
-          <div style="display:flex;gap:5px;align-items:center;">
-            <input style="${_subInp}" value="${escHtml(sub.label)}" placeholder="Name" oninput="_pmProducts[${i}].subItems[${si}].label=this.value;pmMarkDirty()">
-            <input style="${_subInp}flex:2;" value="${escHtml(sub.desc||'')}" placeholder="Description" oninput="_pmProducts[${i}].subItems[${si}].desc=this.value;pmMarkDirty()">
+          <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
+            <input style="${_subInp}min-width:130px;" value="${escHtml(sub.label)}" placeholder="Name" oninput="_pmProducts[${i}].subItems[${si}].label=this.value;pmMarkDirty()">
+            <input style="${_subInp}flex:2;min-width:160px;" value="${escHtml(sub.desc||'')}" placeholder="Description" oninput="_pmProducts[${i}].subItems[${si}].desc=this.value;pmMarkDirty()">
           </div>
           <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
-            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:100px;">
+            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:80px;">
               <span style="font-size:9px;color:var(--text3);flex:1;pointer-events:none;user-select:none;">Cost</span>
               <input type="number" step="0.05" min="0" style="width:56px;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(sub.saCost||0).toFixed(2)}" oninput="const v=parseFloat(this.value)||0;_pmProducts[${i}].subItems[${si}].saCost=v;const m=appSettings.productMargin;const r=(m>0&&m<100)?v/(1-m/100):0;const el=document.getElementById('pmrec-${i}-${si}');if(el)el.value=r>0?r.toFixed(2):'—';pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
             </div>
-            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:100px;cursor:default;">
+            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:80px;cursor:default;">
               <span style="font-size:9px;color:var(--text3);flex:1;user-select:none;">Margin${appSettings.productMargin?` (${appSettings.productMargin}%)`:''}</span>
               <input type="text" readonly tabindex="-1" id="pmrec-${i}-${si}" style="width:56px;background:transparent;border:none;padding:2px 0;color:var(--text3);font-size:11px;outline:none;text-align:right;cursor:default;" value="${(()=>{const m=appSettings.productMargin;const r=(m>0&&m<100)?(sub.saCost||0)/(1-m/100):0;return r>0?r.toFixed(2):'—';})()}">
             </div>
-            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:100px;">
+            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:80px;">
               <span style="font-size:9px;color:var(--text3);flex:1;pointer-events:none;user-select:none;">Price</span>
               <input type="number" step="0.05" min="0" style="width:56px;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(sub.defaultPrice||0).toFixed(2)}" oninput="_pmProducts[${i}].subItems[${si}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
             </div>
           </div>
           <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
-            <select style="${_subSel}min-width:100px;" title="Must be enabled before this sub-item can be selected in a quote" oninput="_pmProducts[${i}].subItems[${si}].requires=this.value||undefined;pmMarkDirty()">
+            <select style="${_subSel}" title="Must be enabled before this sub-item can be selected in a quote" oninput="_pmProducts[${i}].subItems[${si}].requires=this.value||undefined;pmMarkDirty()">
               <option value="">— Requires —</option>
               ${_pmProducts.filter((pp,j)=>j!==i&&pp.id).map(pp=>`<option value="${pp.id}" ${(sub.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`).join('')}
             </select>
@@ -3732,7 +3732,7 @@ function pmSubTouchStart(e,parentI,subI){
   const rect=row.getBoundingClientRect();
   const ghost=row.cloneNode(true);
   Object.assign(ghost.style,{position:'fixed',left:rect.left+'px',top:rect.top+'px',width:rect.width+'px',
-    margin:'0',boxSizing:'border-box',opacity:'0.88',pointerEvents:'none',
+    margin:'0',boxSizing:'border-box',opacity:'0.88',pointerEvents:'none',display:'flex',
     zIndex:'9999',transform:'scale(1.02)',boxShadow:'0 8px 24px rgba(0,0,0,0.5)',borderRadius:'6px'});
   document.body.appendChild(ghost);
   _pmSubTouch={parentI,subI,ghost,row,container:row.parentNode,offsetY:touch.clientY-rect.top};
