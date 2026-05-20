@@ -534,8 +534,9 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .pm-expand-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 4px;line-height:1;transition:transform 0.2s,opacity 0.15s;flex-shrink:0;opacity:0.55;}
 .pm-expand-btn:hover{opacity:1;}
 .pm-row.sales-open .pm-expand-btn{transform:rotate(180deg);}
-.pm-sub-item.drag-over-before{border-top:2px solid var(--accent);}
-.pm-sub-item.drag-over-after{border-bottom:2px solid var(--accent);}
+.pm-sub-item.drag-over-before{box-shadow:0 -3px 0 var(--accent),0 0 0 1px var(--border);}
+.pm-sub-item.drag-over-after{box-shadow:0 3px 0 var(--accent),0 0 0 1px var(--border);}
+.pm-sub-item.dragging{opacity:0.35;}
 .theme-pill{display:flex;background:var(--bg3);border:1px solid var(--border);border-radius:20px;overflow:hidden;margin-left:auto;}
 .theme-btn{padding:3px 8px;font-size:10px;color:var(--text3);cursor:pointer;background:none;border:none;border-radius:20px;transition:all 0.15s;}
 .theme-btn.active{background:var(--accent);color:white;}
@@ -3461,21 +3462,21 @@ function pmRender(){
             </div>
           </div>
           <div style="display:flex;gap:5px;align-items:center;">
-            <select style="${_subSel}" oninput="_pmProducts[${i}].subItems[${si}].requires=this.value||undefined;pmMarkDirty()">
+            <select style="${_subSel}" title="Must be enabled before this sub-item can be selected in a quote" oninput="_pmProducts[${i}].subItems[${si}].requires=this.value||undefined;pmMarkDirty()">
               <option value="">— Requires —</option>
               ${_pmProducts.filter((pp,j)=>j!==i&&pp.id).map(pp=>`<option value="${pp.id}" ${(sub.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`).join('')}
             </select>
-            <select style="${_subSel}" oninput="_pmProducts[${i}].subItems[${si}].billing=this.value;pmMarkDirty()">
+            <select style="${_subSel}" title="Monthly = recurring charge each period. One-Time = charged once at sale" oninput="_pmProducts[${i}].subItems[${si}].billing=this.value;pmMarkDirty()">
               <option value="monthly" ${(sub.billing||'monthly')==='monthly'?'selected':''}>Monthly</option>
               <option value="onetime" ${sub.billing==='onetime'?'selected':''}>One-Time</option>
             </select>
-            <select style="${_subSel}" oninput="_pmProducts[${i}].subItems[${si}].salesCategory=this.value||undefined;pmMarkDirty()">
+            <select style="${_subSel}" title="Which pricing section this item appears in on the quote (User, Machine, or Site)" oninput="_pmProducts[${i}].subItems[${si}].salesCategory=this.value||undefined;pmMarkDirty()">
               <option value="" ${!sub.salesCategory?'selected':''}>— Category —</option>
               <option value="user" ${sub.salesCategory==='user'?'selected':''}>User</option>
               <option value="machine" ${sub.salesCategory==='machine'?'selected':''}>Machine</option>
               <option value="site" ${sub.salesCategory==='site'?'selected':''}>Site</option>
             </select>
-            <select style="${_subSel}" oninput="_pmProducts[${i}].subItems[${si}].qtySource=this.value;pmMarkDirty()">
+            <select style="${_subSel}" title="Auto-populates quantity from the client's headcount data. Leave blank to enter manually" oninput="_pmProducts[${i}].subItems[${si}].qtySource=this.value;pmMarkDirty()">
               <option value="" ${!sub.qtySource?'selected':''}>— Qty Source —</option>
               <option value="employees" ${sub.qtySource==='employees'?'selected':''}>Employees</option>
               <option value="licensedUsers" ${sub.qtySource==='licensedUsers'?'selected':''}>Lic. Users</option>
@@ -3511,49 +3512,39 @@ function pmRender(){
           onfocus="this.setSelectionRange(this.value.length,this.value.length)">
         <div class="pm-sales-expand"${hasSubItems?' style="border-top:none;"':''}>
           ${!hasSubItems?`
-          <div style="width:100%;font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Sales Pricing</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-bottom:6px;">
-            <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:90px;">
-              <span class="pm-sales-label">Sales Category</span>
-              <select class="pm-sales-input" oninput="_pmProducts[${i}].salesCategory=this.value||undefined;pmMarkDirty()">
-                <option value="">— Not in sales —</option>
-                <option value="user" ${(p.salesCategory||'')==='user'?'selected':''}>User</option>
-                <option value="machine" ${(p.salesCategory||'')==='machine'?'selected':''}>Machine</option>
-                <option value="site" ${(p.salesCategory||'')==='site'?'selected':''}>Site</option>
-              </select>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:90px;">
-              <span class="pm-sales-label">Qty Source</span>
-              <select class="pm-sales-input" oninput="_pmProducts[${i}].qtySource=this.value;pmMarkDirty()">
-                ${qtyOpts.map(o=>`<option value="${o}" ${(p.qtySource||'')===(o)?'selected':''}>${o||'— Manual —'}</option>`).join('')}
-              </select>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:90px;">
-              <span class="pm-sales-label">Requires</span>
-              <select class="pm-sales-input" oninput="_pmProducts[${i}].requires=this.value||undefined;pmMarkDirty()">
-                <option value="">— No requirement —</option>
-                ${_pmProducts.filter((pp,j)=>j!==i&&pp.id).map(pp=>`<option value="${pp.id}" ${(p.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`).join('')}
-              </select>
-            </div>
-            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;">
+          <div style="width:100%;font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">Sales Pricing</div>
+          <div style="display:flex;gap:5px;align-items:center;width:100%;margin-bottom:5px;">
+            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:0;" title="Your internal cost for this service">
               <span style="font-size:9px;color:var(--text3);flex:1;pointer-events:none;user-select:none;">Cost</span>
-              <input type="number" step="0.05" min="0" style="width:60px;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(p.saCost||0).toFixed(2)}" oninput="const v=parseFloat(this.value)||0;_pmProducts[${i}].saCost=v;const m=appSettings.productMargin;const rec=(m>0&&m<100)?v/(1-m/100):0;const el=document.getElementById('pmrec-${i}');if(el)el.value=rec>0?rec.toFixed(2):'—';pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
+              <input type="number" step="0.05" min="0" style="width:56px;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(p.saCost||0).toFixed(2)}" oninput="const v=parseFloat(this.value)||0;_pmProducts[${i}].saCost=v;const m=appSettings.productMargin;const rec=(m>0&&m<100)?v/(1-m/100):0;const el=document.getElementById('pmrec-${i}');if(el)el.value=rec>0?rec.toFixed(2):'—';pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
             </div>
-            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;cursor:default;">
+            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:0;cursor:default;" title="Recommended client price calculated from your configured margin %">
               <span style="font-size:9px;color:var(--text3);flex:1;user-select:none;">Margin${appSettings.productMargin?' ('+appSettings.productMargin+'%)':''}</span>
-              <input type="text" readonly tabindex="-1" id="pmrec-${i}" style="width:60px;background:transparent;border:none;padding:2px 0;color:var(--text3);font-size:11px;outline:none;text-align:right;cursor:default;" value="${(()=>{const m=appSettings.productMargin;const r=(m>0&&m<100)?(p.saCost||0)/(1-m/100):0;return r>0?r.toFixed(2):'—';})()}">
+              <input type="text" readonly tabindex="-1" id="pmrec-${i}" style="width:56px;background:transparent;border:none;padding:2px 0;color:var(--text3);font-size:11px;outline:none;text-align:right;cursor:default;" value="${(()=>{const m=appSettings.productMargin;const r=(m>0&&m<100)?(p.saCost||0)/(1-m/100):0;return r>0?r.toFixed(2):'—';})()}">
             </div>
-            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;">
+            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:0;" title="The price the client is billed for this service">
               <span style="font-size:9px;color:var(--text3);flex:1;pointer-events:none;user-select:none;">Price</span>
-              <input type="number" step="0.05" min="0" style="width:60px;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(p.defaultPrice||0).toFixed(2)}" oninput="_pmProducts[${i}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
+              <input type="number" step="0.05" min="0" style="width:56px;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(p.defaultPrice||0).toFixed(2)}" oninput="_pmProducts[${i}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
             </div>
-            <div style="display:flex;flex-direction:column;gap:2px;width:80px;">
-              <span class="pm-sales-label">Billing</span>
-              <select class="pm-sales-input" oninput="_pmProducts[${i}].billing=this.value;pmMarkDirty()">
-                <option value="monthly" ${(p.billing||'monthly')==='monthly'?'selected':''}>Monthly</option>
-                <option value="onetime" ${p.billing==='onetime'?'selected':''}>One-Time</option>
-              </select>
-            </div>
+          </div>
+          <div style="display:flex;gap:5px;align-items:center;width:100%;margin-bottom:6px;">
+            <select style="${_subSel}" title="Must be enabled before this product can be selected in a quote" oninput="_pmProducts[${i}].requires=this.value||undefined;pmMarkDirty()">
+              <option value="">— No requirement —</option>
+              ${_pmProducts.filter((pp,j)=>j!==i&&pp.id).map(pp=>`<option value="${pp.id}" ${(p.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`).join('')}
+            </select>
+            <select style="${_subSel}" title="Monthly = recurring charge each period. One-Time = charged once at sale" oninput="_pmProducts[${i}].billing=this.value;pmMarkDirty()">
+              <option value="monthly" ${(p.billing||'monthly')==='monthly'?'selected':''}>Monthly</option>
+              <option value="onetime" ${p.billing==='onetime'?'selected':''}>One-Time</option>
+            </select>
+            <select style="${_subSel}" title="Which pricing section this product appears in on the quote (User, Machine, or Site)" oninput="_pmProducts[${i}].salesCategory=this.value||undefined;pmMarkDirty()">
+              <option value="">— Not in sales —</option>
+              <option value="user" ${(p.salesCategory||'')==='user'?'selected':''}>User</option>
+              <option value="machine" ${(p.salesCategory||'')==='machine'?'selected':''}>Machine</option>
+              <option value="site" ${(p.salesCategory||'')==='site'?'selected':''}>Site</option>
+            </select>
+            <select style="${_subSel}" title="Auto-populates quantity from the client's headcount data. Leave blank to enter manually" oninput="_pmProducts[${i}].qtySource=this.value;pmMarkDirty()">
+              ${qtyOpts.map(o=>`<option value="${o}" ${(p.qtySource||'')===(o)?'selected':''}>${o||'— Manual —'}</option>`).join('')}
+            </select>
           </div>`:''}
           ${hasSubItems?`<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:4px;width:100%;">${subItemsHtml}</div>`:''}
           <button onclick="pmAddSubItem(${i})" style="background:none;border:1px dashed var(--border);border-radius:3px;color:var(--text3);cursor:pointer;font-size:10px;padding:2px 8px;margin-top:4px;transition:all 0.15s;" title="Add sub-item" onmouseenter="this.style.borderColor='var(--accent)';this.style.color='var(--accent)';this.style.background='rgba(59,130,246,0.08)';" onmouseleave="this.style.borderColor='';this.style.color='';this.style.background='';">+ Sub-item</button>
@@ -3611,7 +3602,7 @@ function pmDragOver(e,i){
 }
 function pmDragLeave(e){if(!e.currentTarget.contains(e.relatedTarget))e.currentTarget.classList.remove('drag-over-before','drag-over-after');}
 function pmDragEnd(e){document.querySelectorAll('.pm-row').forEach(r=>r.classList.remove('drag-over-before','drag-over-after'));}
-function pmSubDragStart(e,i,si){_pmSubDrag={i,si};e.dataTransfer.effectAllowed='move';}
+function pmSubDragStart(e,i,si){_pmSubDrag={i,si};e.dataTransfer.effectAllowed='move';const el=e.target.closest('.pm-sub-item');if(el)setTimeout(()=>el.classList.add('dragging'),0);}
 function pmSubDragOver(e,i,si){
   e.preventDefault();
   if(!_pmSubDrag||_pmSubDrag.i!==i)return;
@@ -3621,7 +3612,7 @@ function pmSubDragOver(e,i,si){
   e.currentTarget.classList.toggle('drag-over-after',!upper);
 }
 function pmSubDragLeave(e){if(!e.currentTarget.contains(e.relatedTarget))e.currentTarget.classList.remove('drag-over-before','drag-over-after');}
-function pmSubDragEnd(e){document.querySelectorAll('.pm-sub-item').forEach(r=>r.classList.remove('drag-over-before','drag-over-after'));_pmSubDrag=null;}
+function pmSubDragEnd(e){document.querySelectorAll('.pm-sub-item').forEach(r=>r.classList.remove('drag-over-before','drag-over-after','dragging'));_pmSubDrag=null;}
 function pmSubDrop(e,i,si){
   e.preventDefault();
   document.querySelectorAll('.pm-sub-item').forEach(r=>r.classList.remove('drag-over-before','drag-over-after'));
