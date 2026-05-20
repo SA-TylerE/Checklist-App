@@ -3438,28 +3438,28 @@ function pmRender(){
     const subItemsHtml=hasSubItems?p.subItems.map((sub,si)=>{
       const rec=(()=>{const m=appSettings.productMargin;const r=(m>0&&m<100)?(sub.saCost||0)/(1-m/100):0;return r>0?'$'+r.toFixed(2):'—';})();
       return`<div class="pm-sub-item" data-si="${si}" style="border:1px solid var(--border);border-radius:6px;background:var(--bg3);display:flex;overflow:hidden;">
-        <span class="pm-drag" onmousedown="pmMouseDown(event,${i},'sub',${si})" style="border-right:1px solid var(--border);padding:0 5px;display:flex;align-items:center;">⠿</span>
+        <span class="pm-drag" onmousedown="pmMouseDown(event,${i},'sub',${si})" ontouchstart="pmSubTouchStart(event,${i},${si})" style="border-right:1px solid var(--border);padding:0 5px;display:flex;align-items:center;">⠿</span>
         <div style="flex:1;padding:7px 10px;display:flex;flex-direction:column;gap:5px;">
           <div style="display:flex;gap:5px;align-items:center;">
             <input style="${_subInp}" value="${escHtml(sub.label)}" placeholder="Name" oninput="_pmProducts[${i}].subItems[${si}].label=this.value;pmMarkDirty()">
             <input style="${_subInp}flex:2;" value="${escHtml(sub.desc||'')}" placeholder="Description" oninput="_pmProducts[${i}].subItems[${si}].desc=this.value;pmMarkDirty()">
           </div>
-          <div style="display:flex;gap:5px;align-items:center;">
-            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:0;">
+          <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:100px;">
               <span style="font-size:9px;color:var(--text3);flex:1;pointer-events:none;user-select:none;">Cost</span>
               <input type="number" step="0.05" min="0" style="width:56px;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(sub.saCost||0).toFixed(2)}" oninput="const v=parseFloat(this.value)||0;_pmProducts[${i}].subItems[${si}].saCost=v;const m=appSettings.productMargin;const r=(m>0&&m<100)?v/(1-m/100):0;const el=document.getElementById('pmrec-${i}-${si}');if(el)el.value=r>0?r.toFixed(2):'—';pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
             </div>
-            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:0;cursor:default;">
+            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:100px;cursor:default;">
               <span style="font-size:9px;color:var(--text3);flex:1;user-select:none;">Margin${appSettings.productMargin?` (${appSettings.productMargin}%)`:''}</span>
               <input type="text" readonly tabindex="-1" id="pmrec-${i}-${si}" style="width:56px;background:transparent;border:none;padding:2px 0;color:var(--text3);font-size:11px;outline:none;text-align:right;cursor:default;" value="${(()=>{const m=appSettings.productMargin;const r=(m>0&&m<100)?(sub.saCost||0)/(1-m/100):0;return r>0?r.toFixed(2):'—';})()}">
             </div>
-            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:100px;">
               <span style="font-size:9px;color:var(--text3);flex:1;pointer-events:none;user-select:none;">Price</span>
               <input type="number" step="0.05" min="0" style="width:56px;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(sub.defaultPrice||0).toFixed(2)}" oninput="_pmProducts[${i}].subItems[${si}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
             </div>
           </div>
-          <div style="display:flex;gap:5px;align-items:center;">
-            <select style="${_subSel}" title="Must be enabled before this sub-item can be selected in a quote" oninput="_pmProducts[${i}].subItems[${si}].requires=this.value||undefined;pmMarkDirty()">
+          <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
+            <select style="${_subSel}min-width:100px;" title="Must be enabled before this sub-item can be selected in a quote" oninput="_pmProducts[${i}].subItems[${si}].requires=this.value||undefined;pmMarkDirty()">
               <option value="">— Requires —</option>
               ${_pmProducts.filter((pp,j)=>j!==i&&pp.id).map(pp=>`<option value="${pp.id}" ${(sub.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`).join('')}
             </select>
@@ -3653,8 +3653,9 @@ function pmMouseDown(e,i,type,si){
   const ph=document.createElement('div');
   ph.style.cssText=`height:${el.offsetHeight}px;background:rgba(59,130,246,0.07);border:2px dashed rgba(59,130,246,0.45);border-radius:6px;box-sizing:border-box;flex-shrink:0;`;
   el.parentNode.insertBefore(ph,el);
+  const origDisplay=el.style.display;
   el.style.display='none';
-  _pmDragState={type,i,si,ghost,ph,el,container,offsetX,offsetY};
+  _pmDragState={type,i,si,ghost,ph,el,container,offsetX,offsetY,origDisplay};
   document.addEventListener('mousemove',_pmDragMove,{passive:false});
   document.addEventListener('mouseup',_pmDragUp);
 }
@@ -3683,7 +3684,7 @@ function _pmDragUp(){
   const cls=s.type==='row'?'pm-row':'pm-sub-item';
   for(let k=phIdx+1;k<children.length;k++){if(children[k].classList.contains(cls)){nextEl=children[k];break;}}
   s.ph.remove();
-  s.el.style.display='';
+  s.el.style.display=s.origDisplay;
   if(s.type==='row'){
     const srcI=s.i;
     let targetI=nextEl?parseInt(nextEl.dataset.pi):_pmProducts.length-1;
@@ -3723,7 +3724,41 @@ function pmTouchStart(e,i){
   row.style.opacity='0.3';
   e.preventDefault();
 }
+let _pmSubTouch=null;
+function pmSubTouchStart(e,parentI,subI){
+  const touch=e.touches[0];
+  const row=e.target.closest('.pm-sub-item');
+  if(!row)return;
+  const rect=row.getBoundingClientRect();
+  const ghost=row.cloneNode(true);
+  Object.assign(ghost.style,{position:'fixed',left:rect.left+'px',top:rect.top+'px',width:rect.width+'px',
+    margin:'0',boxSizing:'border-box',opacity:'0.88',pointerEvents:'none',
+    zIndex:'9999',transform:'scale(1.02)',boxShadow:'0 8px 24px rgba(0,0,0,0.5)',borderRadius:'6px'});
+  document.body.appendChild(ghost);
+  _pmSubTouch={parentI,subI,ghost,row,container:row.parentNode,offsetY:touch.clientY-rect.top};
+  row.style.opacity='0.25';
+  e.preventDefault();
+}
 document.addEventListener('touchmove',e=>{
+  if(_pmSubTouch){
+    e.preventDefault();
+    const touch=e.touches[0];
+    _pmSubTouch.ghost.style.top=(touch.clientY-_pmSubTouch.offsetY)+'px';
+    _pmSubTouch.ghost.style.display='none';
+    const under=document.elementFromPoint(touch.clientX,touch.clientY);
+    _pmSubTouch.ghost.style.display='';
+    const targetSub=under?.closest?.('.pm-sub-item');
+    document.querySelectorAll('.pm-sub-item').forEach(r=>r.classList.remove('drag-over-before','drag-over-after'));
+    if(targetSub&&targetSub!==_pmSubTouch.row&&_pmSubTouch.container.contains(targetSub)){
+      const rect=targetSub.getBoundingClientRect();
+      const upper=touch.clientY<rect.top+rect.height/2;
+      targetSub.classList.toggle('drag-over-before',upper);
+      targetSub.classList.toggle('drag-over-after',!upper);
+      _pmSubTouch.tgtSi=parseInt(targetSub.dataset.si);
+      _pmSubTouch.upper=upper;
+    }else{_pmSubTouch.tgtSi=null;}
+    return;
+  }
   if(!_pmTouch) return;
   e.preventDefault();
   const touch=e.touches[0];
@@ -3743,6 +3778,20 @@ document.addEventListener('touchmove',e=>{
   } else {_pmTouch.tgtIdx=null;}
 },{passive:false});
 document.addEventListener('touchend',e=>{
+  if(_pmSubTouch){
+    _pmSubTouch.ghost.remove();
+    _pmSubTouch.row.style.opacity='';
+    document.querySelectorAll('.pm-sub-item').forEach(r=>r.classList.remove('drag-over-before','drag-over-after'));
+    const{parentI,subI:srcSi,tgtSi,upper,container}=_pmSubTouch;
+    _pmSubTouch=null;
+    if(tgtSi==null||tgtSi===srcSi)return;
+    const items=_pmProducts[parentI]?.subItems;if(!items)return;
+    const[m]=items.splice(srcSi,1);
+    let ins=srcSi<tgtSi?(upper?tgtSi-1:tgtSi):(upper?tgtSi:tgtSi+1);
+    items.splice(Math.max(0,ins),0,m);
+    _pmOpenIdx=parentI;pmMarkDirty();pmRender();
+    return;
+  }
   if(!_pmTouch) return;
   _pmTouch.ghost.remove();
   _pmTouch.row.style.opacity='';
