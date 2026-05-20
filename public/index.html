@@ -531,6 +531,9 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .pm-id-input{flex:0 0 90px;font-family:monospace;font-size:11px;color:var(--text2);}
 .pm-desc-input{color:var(--text3);font-size:11px;width:100%;}
 .pm-del-btn{flex-shrink:0;background:none;border:none;color:var(--danger);cursor:pointer;font-size:18px;padding:0 2px;line-height:1;}
+.pm-expand-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 4px;line-height:1;transition:transform 0.2s,opacity 0.15s;flex-shrink:0;opacity:0.55;}
+.pm-expand-btn:hover{opacity:1;}
+.pm-row.sales-open .pm-expand-btn{transform:rotate(180deg);}
 .theme-pill{display:flex;background:var(--bg3);border:1px solid var(--border);border-radius:20px;overflow:hidden;margin-left:auto;}
 .theme-btn{padding:3px 8px;font-size:10px;color:var(--text3);cursor:pointer;background:none;border:none;border-radius:20px;transition:all 0.15s;}
 .theme-btn.active{background:var(--accent);color:white;}
@@ -3485,9 +3488,7 @@ function pmRender(){
     return`
     <div class="pm-row" data-pi="${i}"
       ondragover="pmDragOver(event,${i})"
-      ondragleave="pmDragLeave(event)" ondrop="pmDrop(event,${i})"
-      onclick="if(!event.target.closest('input,select,button,textarea,.pm-drag'))pmToggleSalesExpand(${i})"
-      style="cursor:pointer;">
+      ondragleave="pmDragLeave(event)" ondrop="pmDrop(event,${i})">
       <span class="pm-drag" draggable="true" ondragstart="pmDragStart(event,${i})" ondragend="pmDragEnd(event)" ontouchstart="pmTouchStart(event,${i})">⠿</span>
       <div class="pm-fields">
         <div class="pm-row-top">
@@ -3551,8 +3552,9 @@ function pmRender(){
           <button onclick="pmAddSubItem(${i})" style="background:none;border:1px dashed var(--border);border-radius:3px;color:var(--text3);cursor:pointer;font-size:10px;padding:2px 8px;margin-top:4px;transition:all 0.15s;" title="Add sub-item" onmouseenter="this.style.borderColor='var(--accent)';this.style.color='var(--accent)';this.style.background='rgba(59,130,246,0.08)';" onmouseleave="this.style.borderColor='';this.style.color='';this.style.background='';">+ Sub-item</button>
         </div>
       </div>
-      <div onclick="styledConfirm('Remove this product?',()=>pmDelete(${i}))" title="Remove" style="flex-shrink:0;align-self:stretch;border-left:1px solid var(--border);background:rgba(239,68,68,0.06);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background 0.15s;padding:0 8px;" onmouseenter="this.style.background='rgba(239,68,68,0.18)'" onmouseleave="this.style.background='rgba(239,68,68,0.06)'">
-        <span style="color:var(--danger);font-size:16px;line-height:1;">&#215;</span>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:center;flex-shrink:0;">
+        <button class="pm-del-btn" onclick="styledConfirm('Remove this product?',()=>pmDelete(${i}))" title="Remove">&#215;</button>
+        <button class="pm-expand-btn" onclick="pmToggleSalesExpand(${i})" title="Sales pricing">▼</button>
       </div>
     </div>`;
   }).join('');
