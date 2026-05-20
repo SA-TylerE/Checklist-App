@@ -3437,11 +3437,8 @@ function pmRender(){
     const _dp=`font-size:10px;color:var(--text3);flex-shrink:0;`;
     const subItemsHtml=hasSubItems?p.subItems.map((sub,si)=>{
       const rec=(()=>{const m=appSettings.productMargin;const r=(m>0&&m<100)?(sub.saCost||0)/(1-m/100):0;return r>0?'$'+r.toFixed(2):'—';})();
-      return`<div class="pm-sub-item" style="border:1px solid var(--border);border-radius:6px;background:var(--bg3);display:flex;overflow:hidden;"
-        ondragover="pmSubDragOver(event,${i},${si})"
-        ondragleave="pmSubDragLeave(event)"
-        ondrop="pmSubDrop(event,${i},${si})">
-        <span class="pm-drag" draggable="true" ondragstart="pmSubDragStart(event,${i},${si})" ondragend="pmSubDragEnd(event)" style="border-right:1px solid var(--border);padding:0 5px;display:flex;align-items:center;">⠿</span>
+      return`<div class="pm-sub-item" data-si="${si}" style="border:1px solid var(--border);border-radius:6px;background:var(--bg3);display:flex;overflow:hidden;">
+        <span class="pm-drag" onmousedown="pmMouseDown(event,${i},'sub',${si})" style="border-right:1px solid var(--border);padding:0 5px;display:flex;align-items:center;">⠿</span>
         <div style="flex:1;padding:7px 10px;display:flex;flex-direction:column;gap:5px;">
           <div style="display:flex;gap:5px;align-items:center;">
             <input style="${_subInp}" value="${escHtml(sub.label)}" placeholder="Name" oninput="_pmProducts[${i}].subItems[${si}].label=this.value;pmMarkDirty()">
@@ -3494,10 +3491,8 @@ function pmRender(){
       </div>`;
     }).join(''):'';
     return`
-    <div class="pm-row" data-pi="${i}"
-      ondragover="pmDragOver(event,${i})"
-      ondragleave="pmDragLeave(event)" ondrop="pmDrop(event,${i})">
-      <span class="pm-drag" draggable="true" ondragstart="pmDragStart(event,${i})" ondragend="pmDragEnd(event)" ontouchstart="pmTouchStart(event,${i})">⠿</span>
+    <div class="pm-row" data-pi="${i}">
+      <span class="pm-drag" onmousedown="pmMouseDown(event,${i},'row')" ontouchstart="pmTouchStart(event,${i})">⠿</span>
       <div class="pm-fields">
         <div class="pm-row-top">
           <input class="pm-label-input pm-id-input" value="${escHtml(p.id)}" placeholder="product-id"
@@ -3634,6 +3629,73 @@ function pmReorder(si,ti,upper){
   ins=Math.max(0,Math.min(ins,_pmProducts.length));
   _pmProducts.splice(ins,0,item);
   pmMarkDirty();pmRender();
+}
+let _pmDragState=null;
+function pmMouseDown(e,i,type,si){
+  if(e.button!==0)return;
+  e.preventDefault();
+  let el,container;
+  if(type==='row'){
+    el=document.querySelector(`#pm-list .pm-row[data-pi="${i}"]`);
+    container=document.getElementById('pm-list');
+  }else{
+    el=e.target.closest('.pm-sub-item');
+    container=el?.parentNode;
+  }
+  if(!el||!container)return;
+  const rect=el.getBoundingClientRect();
+  const offsetX=e.clientX-rect.left,offsetY=e.clientY-rect.top;
+  const ghost=el.cloneNode(true);
+  Object.assign(ghost.style,{position:'fixed',left:rect.left+'px',top:rect.top+'px',width:rect.width+'px',
+    opacity:'0.88',pointerEvents:'none',zIndex:'9999',transform:'scale(1.02) rotate(0.5deg)',
+    boxShadow:'0 8px 28px rgba(0,0,0,0.5)',borderRadius:'6px',margin:'0',boxSizing:'border-box',transition:'none'});
+  document.body.appendChild(ghost);
+  const ph=document.createElement('div');
+  ph.style.cssText=`height:${el.offsetHeight}px;background:rgba(59,130,246,0.07);border:2px dashed rgba(59,130,246,0.45);border-radius:6px;box-sizing:border-box;flex-shrink:0;`;
+  el.parentNode.insertBefore(ph,el);
+  el.style.display='none';
+  _pmDragState={type,i,si,ghost,ph,el,container,offsetX,offsetY};
+  document.addEventListener('mousemove',_pmDragMove,{passive:false});
+  document.addEventListener('mouseup',_pmDragUp);
+}
+function _pmDragMove(e){
+  const s=_pmDragState;if(!s)return;
+  s.ghost.style.left=(e.clientX-s.offsetX)+'px';
+  s.ghost.style.top=(e.clientY-s.offsetY)+'px';
+  const cls=s.type==='row'?'pm-row':'pm-sub-item';
+  const sibs=[...s.container.children].filter(c=>c!==s.ph&&c.style.display!=='none'&&c.classList.contains(cls));
+  let placed=false;
+  for(const sib of sibs){
+    const r=sib.getBoundingClientRect();
+    if(e.clientY<r.top+r.height/2){s.container.insertBefore(s.ph,sib);placed=true;break;}
+  }
+  if(!placed)s.container.appendChild(s.ph);
+}
+function _pmDragUp(){
+  document.removeEventListener('mousemove',_pmDragMove);
+  document.removeEventListener('mouseup',_pmDragUp);
+  const s=_pmDragState;_pmDragState=null;
+  if(!s)return;
+  s.ghost.remove();
+  const children=[...s.container.children];
+  const phIdx=children.indexOf(s.ph);
+  let nextEl=null;
+  const cls=s.type==='row'?'pm-row':'pm-sub-item';
+  for(let k=phIdx+1;k<children.length;k++){if(children[k].classList.contains(cls)){nextEl=children[k];break;}}
+  s.ph.remove();
+  s.el.style.display='';
+  if(s.type==='row'){
+    const srcI=s.i;
+    let targetI=nextEl?parseInt(nextEl.dataset.pi):_pmProducts.length-1;
+    if(nextEl&&srcI<parseInt(nextEl.dataset.pi))targetI--;
+    if(targetI!==srcI){const[m]=_pmProducts.splice(srcI,1);_pmProducts.splice(Math.max(0,targetI),0,m);pmMarkDirty();pmRender();}
+  }else{
+    const srcSi=s.si,parentI=s.i;
+    const items=_pmProducts[parentI]?.subItems;if(!items)return;
+    let targetSi=nextEl?parseInt(nextEl.dataset.si):items.length-1;
+    if(nextEl&&srcSi<parseInt(nextEl.dataset.si))targetSi--;
+    if(targetSi!==srcSi){const[m]=items.splice(srcSi,1);items.splice(Math.max(0,targetSi),0,m);_pmOpenIdx=parentI;pmMarkDirty();pmRender();}
+  }
 }
 function pmDrop(e,ti){
   e.preventDefault();
