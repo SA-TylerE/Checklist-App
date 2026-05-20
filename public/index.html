@@ -530,10 +530,12 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .pm-label-input:focus{border-color:var(--accent);}
 .pm-id-input{flex:0 0 90px;font-family:monospace;font-size:11px;color:var(--text2);}
 .pm-desc-input{color:var(--text3);font-size:11px;width:100%;}
-.pm-del-btn{flex-shrink:0;background:none;border:none;color:var(--danger);cursor:pointer;font-size:18px;padding:0 2px;line-height:1;}
+.pm-del-btn{flex-shrink:0;background:none;border:none;color:var(--danger);cursor:pointer;font-size:18px;padding:0 2px;line-height:1;min-height:26px;display:flex;align-items:center;}
 .pm-expand-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:2px 4px;line-height:1;transition:transform 0.2s,opacity 0.15s;flex-shrink:0;opacity:0.55;}
 .pm-expand-btn:hover{opacity:1;}
 .pm-row.sales-open .pm-expand-btn{transform:rotate(180deg);}
+.pm-sub-item.drag-over-before{border-top:2px solid var(--accent);}
+.pm-sub-item.drag-over-after{border-bottom:2px solid var(--accent);}
 .theme-pill{display:flex;background:var(--bg3);border:1px solid var(--border);border-radius:20px;overflow:hidden;margin-left:auto;}
 .theme-btn{padding:3px 8px;font-size:10px;color:var(--text3);cursor:pointer;background:none;border:none;border-radius:20px;transition:all 0.15s;}
 .theme-btn.active{background:var(--accent);color:white;}
@@ -3393,6 +3395,7 @@ function startServerRestartPolling(){
 let _pmProducts=[];
 let _pmDrag=null;
 let _pmTouch=null;
+let _pmSubDrag=null;
 let _pmDirty=false;
 let _pmOpenIdx=null;
 function pmMarkDirty(){
@@ -3433,7 +3436,11 @@ function pmRender(){
     const _dp=`font-size:10px;color:var(--text3);flex-shrink:0;`;
     const subItemsHtml=hasSubItems?p.subItems.map((sub,si)=>{
       const rec=(()=>{const m=appSettings.productMargin;const r=(m>0&&m<100)?(sub.saCost||0)/(1-m/100):0;return r>0?'$'+r.toFixed(2):'—';})();
-      return`<div style="border:1px solid var(--border);border-radius:6px;background:var(--bg3);display:flex;overflow:hidden;">
+      return`<div class="pm-sub-item" style="border:1px solid var(--border);border-radius:6px;background:var(--bg3);display:flex;overflow:hidden;"
+        ondragover="pmSubDragOver(event,${i},${si})"
+        ondragleave="pmSubDragLeave(event)"
+        ondrop="pmSubDrop(event,${i},${si})">
+        <span class="pm-drag" draggable="true" ondragstart="pmSubDragStart(event,${i},${si})" ondragend="pmSubDragEnd(event)" style="border-right:1px solid var(--border);padding:0 5px;display:flex;align-items:center;">⠿</span>
         <div style="flex:1;padding:7px 10px;display:flex;flex-direction:column;gap:5px;">
           <div style="display:flex;gap:5px;align-items:center;">
             <input style="${_subInp}" value="${escHtml(sub.label)}" placeholder="Name" oninput="_pmProducts[${i}].subItems[${si}].label=this.value;pmMarkDirty()">
@@ -3552,7 +3559,7 @@ function pmRender(){
           <button onclick="pmAddSubItem(${i})" style="background:none;border:1px dashed var(--border);border-radius:3px;color:var(--text3);cursor:pointer;font-size:10px;padding:2px 8px;margin-top:4px;transition:all 0.15s;" title="Add sub-item" onmouseenter="this.style.borderColor='var(--accent)';this.style.color='var(--accent)';this.style.background='rgba(59,130,246,0.08)';" onmouseleave="this.style.borderColor='';this.style.color='';this.style.background='';">+ Sub-item</button>
         </div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:4px;align-items:center;flex-shrink:0;">
+      <div style="display:flex;flex-direction:column;gap:5px;align-items:center;flex-shrink:0;">
         <button class="pm-del-btn" onclick="styledConfirm('Remove this product?',()=>pmDelete(${i}))" title="Remove">&#215;</button>
         <button class="pm-expand-btn" onclick="pmToggleSalesExpand(${i})" title="Sales pricing">▼</button>
       </div>
@@ -3604,6 +3611,31 @@ function pmDragOver(e,i){
 }
 function pmDragLeave(e){if(!e.currentTarget.contains(e.relatedTarget))e.currentTarget.classList.remove('drag-over-before','drag-over-after');}
 function pmDragEnd(e){document.querySelectorAll('.pm-row').forEach(r=>r.classList.remove('drag-over-before','drag-over-after'));}
+function pmSubDragStart(e,i,si){_pmSubDrag={i,si};e.dataTransfer.effectAllowed='move';}
+function pmSubDragOver(e,i,si){
+  e.preventDefault();
+  if(!_pmSubDrag||_pmSubDrag.i!==i)return;
+  document.querySelectorAll('.pm-sub-item').forEach(r=>r.classList.remove('drag-over-before','drag-over-after'));
+  const upper=e.clientY<e.currentTarget.getBoundingClientRect().top+e.currentTarget.getBoundingClientRect().height/2;
+  e.currentTarget.classList.toggle('drag-over-before',upper);
+  e.currentTarget.classList.toggle('drag-over-after',!upper);
+}
+function pmSubDragLeave(e){if(!e.currentTarget.contains(e.relatedTarget))e.currentTarget.classList.remove('drag-over-before','drag-over-after');}
+function pmSubDragEnd(e){document.querySelectorAll('.pm-sub-item').forEach(r=>r.classList.remove('drag-over-before','drag-over-after'));_pmSubDrag=null;}
+function pmSubDrop(e,i,si){
+  e.preventDefault();
+  document.querySelectorAll('.pm-sub-item').forEach(r=>r.classList.remove('drag-over-before','drag-over-after'));
+  if(!_pmSubDrag||_pmSubDrag.i!==i){_pmSubDrag=null;return;}
+  const srcSi=_pmSubDrag.si;_pmSubDrag=null;
+  if(srcSi===si)return;
+  const upper=e.clientY<e.currentTarget.getBoundingClientRect().top+e.currentTarget.getBoundingClientRect().height/2;
+  const items=_pmProducts[i].subItems;
+  const[moved]=items.splice(srcSi,1);
+  let insertAt=upper?si:si+1;
+  if(srcSi<si)insertAt--;
+  items.splice(Math.max(0,insertAt),0,moved);
+  _pmOpenIdx=i;pmMarkDirty();pmRender();
+}
 function pmReorder(si,ti,upper){
   if(si==null||ti==null||si===ti) return;
   const [item]=_pmProducts.splice(si,1);
