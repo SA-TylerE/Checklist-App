@@ -2588,18 +2588,24 @@ async function toggleSalesLine(quoteId,productId){
   if(!q.lineItems[productId])q.lineItems[productId]={enabled:false,qty:0,unitPrice:getSalesProducts().find(p=>p.id===productId)?.defaultPrice||0,note:''};
   const wantEnable=!q.lineItems[productId].enabled;
   const p=getSalesProducts().find(pp=>pp.id===productId);
-  // Dependency check: require another product to be enabled first
-  if(wantEnable&&p?.requires){
-    const reqEnabled=q.lineItems[p.requires]?.enabled;
-    if(!reqEnabled){
-      const reqProd=getSalesProducts().find(pp=>pp.id===p.requires);
-      showToast(`"${p.label}" requires "${reqProd?.label||p.requires}" to be enabled first`,'warn');
-      return;
+  // Dependency check: all required items must be enabled first
+  if(wantEnable){
+    const reqIds=Array.isArray(p?.requires)?p.requires:p?.requires?[p.requires]:[];
+    for(const rid of reqIds){
+      if(!q.lineItems[rid]?.enabled){
+        const rp=getSalesProducts().find(pp=>pp.id===rid);
+        showToast(`"${p.label}" requires "${rp?.label||rid}" to be enabled first`,'warn');
+        return;
+      }
     }
   }
   // When disabling, auto-disable any dependents
   if(!wantEnable){
-    const dependents=getSalesProducts().filter(pp=>pp.requires===productId&&q.lineItems[pp.id]?.enabled);
+    const allProds=getSalesProducts();
+    const dependents=allProds.filter(pp=>{
+      const reqs=Array.isArray(pp.requires)?pp.requires:pp.requires?[pp.requires]:[];
+      return reqs.includes(productId)&&q.lineItems[pp.id]?.enabled;
+    });
     if(dependents.length){
       dependents.forEach(pp=>{q.lineItems[pp.id].enabled=false;});
       showToast(`Also disabled ${dependents.length} dependent item${dependents.length>1?'s':''}`,'warn');
@@ -3437,6 +3443,8 @@ function _doCloseProducts(){
 }
 function pmRender(){
   const qtyOpts=['','employees','licensedUsers','workstations','servers','machines','backedUpMachines','sites'];
+  const _reqLabel=id=>{for(const pp of _pmProducts){if(pp.id===id)return escHtml(pp.label||pp.id);if(pp.subItems){const s=pp.subItems.find(s=>s.id===id);if(s)return escHtml((pp.label||pp.id)+' — '+(s.label||s.id));}}return escHtml(id);};
+  const _reqChipStyle='display:flex;align-items:center;gap:3px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);border-radius:4px;padding:2px 5px;font-size:10px;color:var(--text2);';
   document.getElementById('pm-list').innerHTML=_pmProducts.map((p,i)=>{
     const hasSubItems=p.subItems?.length>0;
     const _subInp=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 5px;color:var(--text);font-size:11px;outline:none;flex:1;min-width:0;box-sizing:border-box;`;
@@ -3469,15 +3477,16 @@ function pmRender(){
             </div>
           </div>
           <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
-            <select style="${_subSel}" title="Must be enabled before this sub-item can be selected in a quote" oninput="_pmProducts[${i}].subItems[${si}].requires=this.value||undefined;pmMarkDirty()">
-              <option value="">— Requires —</option>
-              ${_pmProducts.flatMap((pp,j)=>{
-                if(pp.subItems?.length){
-                  return pp.subItems.filter((s,sk)=>s.id&&!(j===i&&sk===si)).map(s=>`<option value="${s.id}" ${(sub.requires||'')===(s.id)?'selected':''}>${escHtml((pp.label||pp.id)+' — '+(s.label||s.id))}</option>`);
-                }
-                return pp.id&&j!==i?[`<option value="${pp.id}" ${(sub.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`]:[];
-              }).join('')}
-            </select>
+            <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:130px;">
+              ${_normReqs(sub.requires).map(rid=>`<div style="${_reqChipStyle}"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_reqLabel(rid)}</span><button onclick="pmRemoveReq(${i},${si},'${rid}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0;line-height:1;flex-shrink:0;" title="Remove">×</button></div>`).join('')}
+              <select style="${_subSel}min-width:0;" onchange="if(this.value)pmAddReq(${i},${si},this.value);">
+                <option value="">+ Add requirement…</option>
+                ${_pmProducts.flatMap((pp,j)=>{
+                  if(pp.subItems?.length){return pp.subItems.filter((s,sk)=>s.id&&!(j===i&&sk===si)&&!_normReqs(sub.requires).includes(s.id)).map(s=>`<option value="${s.id}">${escHtml((pp.label||pp.id)+' — '+(s.label||s.id))}</option>`);}
+                  return pp.id&&j!==i&&!_normReqs(sub.requires).includes(pp.id)?[`<option value="${pp.id}">${escHtml(pp.label||pp.id)}</option>`]:[];
+                }).join('')}
+              </select>
+            </div>
             <select style="${_subSel}" title="Monthly = recurring charge each period. One-Time = charged once at sale" oninput="_pmProducts[${i}].subItems[${si}].billing=this.value;pmMarkDirty()">
               <option value="monthly" ${(sub.billing||'monthly')==='monthly'?'selected':''}>Monthly</option>
               <option value="onetime" ${sub.billing==='onetime'?'selected':''}>One-Time</option>
@@ -3538,15 +3547,16 @@ function pmRender(){
             </div>
           </div>
           <div style="display:flex;gap:5px;align-items:center;width:100%;flex-wrap:wrap;margin-bottom:6px;">
-            <select style="${_subSel}" title="Must be enabled before this product can be selected in a quote" oninput="_pmProducts[${i}].requires=this.value||undefined;pmMarkDirty()">
-              <option value="">— No requirement —</option>
-              ${_pmProducts.flatMap((pp,j)=>{
-                if(pp.subItems?.length){
-                  return pp.subItems.filter(s=>s.id).map(s=>`<option value="${s.id}" ${(p.requires||'')===(s.id)?'selected':''}>${escHtml((pp.label||pp.id)+' — '+(s.label||s.id))}</option>`);
-                }
-                return pp.id&&j!==i?[`<option value="${pp.id}" ${(p.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`]:[];
-              }).join('')}
-            </select>
+            <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:130px;">
+              ${_normReqs(p.requires).map(rid=>`<div style="${_reqChipStyle}"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_reqLabel(rid)}</span><button onclick="pmRemoveReq(${i},null,'${rid}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0;line-height:1;flex-shrink:0;" title="Remove">×</button></div>`).join('')}
+              <select style="${_subSel}min-width:0;" onchange="if(this.value)pmAddReq(${i},null,this.value);">
+                <option value="">+ Add requirement…</option>
+                ${_pmProducts.flatMap((pp,j)=>{
+                  if(pp.subItems?.length){return pp.subItems.filter(s=>s.id&&!_normReqs(p.requires).includes(s.id)).map(s=>`<option value="${s.id}">${escHtml((pp.label||pp.id)+' — '+(s.label||s.id))}</option>`);}
+                  return pp.id&&j!==i&&!_normReqs(p.requires).includes(pp.id)?[`<option value="${pp.id}">${escHtml(pp.label||pp.id)}</option>`]:[];
+                }).join('')}
+              </select>
+            </div>
             <select style="${_subSel}" title="Monthly = recurring charge each period. One-Time = charged once at sale" oninput="_pmProducts[${i}].billing=this.value;pmMarkDirty()">
               <option value="monthly" ${(p.billing||'monthly')==='monthly'?'selected':''}>Monthly</option>
               <option value="onetime" ${p.billing==='onetime'?'selected':''}>One-Time</option>
@@ -3573,6 +3583,20 @@ function pmRender(){
     </div>`;
   }).join('');
   if(_pmOpenIdx!==null)document.querySelectorAll('#pm-list .pm-row')[_pmOpenIdx]?.classList.add('sales-open');
+}
+function _normReqs(v){return Array.isArray(v)?v:v?[v]:[];}
+function pmAddReq(parentIdx,subIdx,id){
+  const t=subIdx!=null?_pmProducts[parentIdx]?.subItems?.[subIdx]:_pmProducts[parentIdx];
+  if(!t||!id)return;
+  const reqs=_normReqs(t.requires);
+  if(!reqs.includes(id)){t.requires=[...reqs,id];pmMarkDirty();_pmOpenIdx=parentIdx;pmRender();}
+}
+function pmRemoveReq(parentIdx,subIdx,id){
+  const t=subIdx!=null?_pmProducts[parentIdx]?.subItems?.[subIdx]:_pmProducts[parentIdx];
+  if(!t)return;
+  const reqs=_normReqs(t.requires).filter(r=>r!==id);
+  t.requires=reqs.length?reqs:undefined;
+  pmMarkDirty();_pmOpenIdx=parentIdx;pmRender();
 }
 function pmAddProduct(){
   _pmProducts.push({id:'',label:'',desc:'',billing:'monthly'});
