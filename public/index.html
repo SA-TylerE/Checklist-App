@@ -3461,7 +3461,7 @@ document.getElementById('pm-list').innerHTML=_pmProducts.map((p,i)=>{
     const _dp=`font-size:10px;color:var(--text3);flex-shrink:0;`;
     const subItemsHtml=hasSubItems?p.subItems.map((sub,si)=>{
       const rec=(()=>{const m=appSettings.productMargin;const r=(m>0&&m<100)?(sub.saCost||0)/(1-m/100):0;return r>0?'$'+r.toFixed(2):'—';})();
-      return`<div class="pm-sub-item" data-si="${si}" style="border:1px solid var(--border);border-radius:6px;background:var(--bg3);display:flex;overflow:hidden;">
+      return`<div class="pm-sub-item" data-si="${si}" style="border:1px solid var(--border);border-radius:6px;background:var(--bg3);display:flex;">
         <span class="pm-drag" onmousedown="pmMouseDown(event,${i},'sub',${si})" ontouchstart="pmSubTouchStart(event,${i},${si})" style="border-right:1px solid var(--border);padding:0 5px;display:flex;align-items:center;">⠿</span>
         <div style="flex:1;padding:7px 10px;display:flex;flex-direction:column;gap:5px;">
           <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
