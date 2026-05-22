@@ -177,6 +177,15 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .pm-sales-expand{display:none;flex-wrap:wrap;gap:6px;padding:6px 0 2px 0;border-top:1px solid var(--border);margin-top:6px;}
 .pm-row.sales-open .pm-sales-expand{display:flex;}
 .pm-sales-toggle{font-size:14px;color:var(--text3);background:none;border:none;cursor:pointer;padding:2px 4px;line-height:1;flex-shrink:0;opacity:0.6;transition:opacity 0.15s;}.pm-sales-toggle:hover{opacity:1;}
+.pm-req-dd{position:relative;flex:1;min-width:130px;}
+.pm-req-trigger{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text2);font-size:11px;cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:4px;outline:none;font-family:var(--sans);box-sizing:border-box;}
+.pm-req-trigger:hover{border-color:var(--accent);}
+.pm-req-panel{display:none;position:absolute;top:calc(100% + 2px);left:0;min-width:100%;max-width:280px;max-height:180px;overflow-y:auto;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;z-index:300;box-shadow:0 4px 14px rgba(0,0,0,0.4);padding:3px 0;}
+.pm-req-dd.open .pm-req-panel{display:block;}
+.pm-req-opt{display:flex;align-items:center;gap:6px;padding:5px 10px;cursor:pointer;font-size:11px;color:var(--text);user-select:none;}
+.pm-req-opt:hover{background:var(--bg3);}
+.pm-req-opt input[type=checkbox]{margin:0;cursor:pointer;accent-color:var(--accent);}
+.pm-req-opt.checked{color:var(--accent);}
 .pm-sales-input{flex:1;min-width:80px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 6px;color:var(--text);font-size:11px;outline:none;}
 .pm-sales-input:focus{border-color:var(--accent);}
 .pm-sales-label{font-size:9px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;display:block;margin-bottom:2px;}
@@ -3443,9 +3452,7 @@ function _doCloseProducts(){
 }
 function pmRender(){
   const qtyOpts=['','employees','licensedUsers','workstations','servers','machines','backedUpMachines','sites'];
-  const _reqLabel=id=>{for(const pp of _pmProducts){if(pp.id===id)return escHtml(pp.label||pp.id);if(pp.subItems){const s=pp.subItems.find(s=>s.id===id);if(s)return escHtml((pp.label||pp.id)+' — '+(s.label||s.id));}}return escHtml(id);};
-  const _reqChipStyle='display:flex;align-items:center;gap:3px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);border-radius:4px;padding:2px 5px;font-size:10px;color:var(--text2);';
-  document.getElementById('pm-list').innerHTML=_pmProducts.map((p,i)=>{
+document.getElementById('pm-list').innerHTML=_pmProducts.map((p,i)=>{
     const hasSubItems=p.subItems?.length>0;
     const _subInp=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 5px;color:var(--text);font-size:11px;outline:none;flex:1;min-width:0;box-sizing:border-box;`;
     const _subCost=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 4px;color:var(--text);font-size:11px;outline:none;flex:1;min-width:0;text-align:right;box-sizing:border-box;`;
@@ -3477,15 +3484,19 @@ function pmRender(){
             </div>
           </div>
           <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
-            <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:130px;">
-              ${_normReqs(sub.requires).map(rid=>`<div style="${_reqChipStyle}"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_reqLabel(rid)}</span><button onclick="pmRemoveReq(${i},${si},'${rid}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0;line-height:1;flex-shrink:0;" title="Remove">×</button></div>`).join('')}
-              <select style="${_subSel}min-width:0;" onchange="if(this.value)pmAddReq(${i},${si},this.value);">
-                <option value="">+ Add requirement…</option>
+            <div class="pm-req-dd" id="pmreqdd-${i}-${si}" tabindex="-1" onfocusout="if(!this.contains(event.relatedTarget))this.classList.remove('open')">
+              <button type="button" class="pm-req-trigger" onclick="this.closest('.pm-req-dd').classList.toggle('open')">
+                <span class="pm-req-sum">${(()=>{const c=_normReqs(sub.requires).length;return c?c+' req.':'None';})()}</span>
+                <span style="font-size:9px;opacity:0.5;">▼</span>
+              </button>
+              <div class="pm-req-panel">
                 ${_pmProducts.flatMap((pp,j)=>{
-                  if(pp.subItems?.length){return pp.subItems.filter((s,sk)=>s.id&&!(j===i&&sk===si)&&!_normReqs(sub.requires).includes(s.id)).map(s=>`<option value="${s.id}">${escHtml((pp.label||pp.id)+' — '+(s.label||s.id))}</option>`);}
-                  return pp.id&&j!==i&&!_normReqs(sub.requires).includes(pp.id)?[`<option value="${pp.id}">${escHtml(pp.label||pp.id)}</option>`]:[];
+                  if(pp.subItems?.length){return pp.subItems.filter((s,sk)=>s.id&&!(j===i&&sk===si)).map(s=>{const chk=_normReqs(sub.requires).includes(s.id);return`<label class="pm-req-opt${chk?' checked':''}" data-rid="${s.id}"><input type="checkbox" ${chk?'checked':''} onchange="pmToggleReq(${i},${si},this.checked,'${s.id}')">${escHtml((pp.label||pp.id)+' — '+(s.label||s.id))}</label>`;});}
+                  if(!pp.id||j===i)return[];
+                  const chk=_normReqs(sub.requires).includes(pp.id);
+                  return[`<label class="pm-req-opt${chk?' checked':''}" data-rid="${pp.id}"><input type="checkbox" ${chk?'checked':''} onchange="pmToggleReq(${i},${si},this.checked,'${pp.id}')">${escHtml(pp.label||pp.id)}</label>`];
                 }).join('')}
-              </select>
+              </div>
             </div>
             <select style="${_subSel}" title="Monthly = recurring charge each period. One-Time = charged once at sale" oninput="_pmProducts[${i}].subItems[${si}].billing=this.value;pmMarkDirty()">
               <option value="monthly" ${(sub.billing||'monthly')==='monthly'?'selected':''}>Monthly</option>
@@ -3547,15 +3558,20 @@ function pmRender(){
             </div>
           </div>
           <div style="display:flex;gap:5px;align-items:center;width:100%;flex-wrap:wrap;margin-bottom:6px;">
-            <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:130px;">
-              ${_normReqs(p.requires).map(rid=>`<div style="${_reqChipStyle}"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_reqLabel(rid)}</span><button onclick="pmRemoveReq(${i},null,'${rid}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0;line-height:1;flex-shrink:0;" title="Remove">×</button></div>`).join('')}
-              <select style="${_subSel}min-width:0;" onchange="if(this.value)pmAddReq(${i},null,this.value);">
-                <option value="">+ Add requirement…</option>
+            <div class="pm-req-dd" id="pmreqdd-${i}-p" tabindex="-1" onfocusout="if(!this.contains(event.relatedTarget))this.classList.remove('open')" style="flex:1;min-width:130px;">
+              <button type="button" class="pm-req-trigger" onclick="this.closest('.pm-req-dd').classList.toggle('open')">
+                <span class="pm-req-sum">${(()=>{const c=_normReqs(p.requires).length;return c?c+' req.':'Requires…';})()}</span>
+                <span style="font-size:9px;opacity:0.5;">▼</span>
+              </button>
+              <div class="pm-req-panel">
                 ${_pmProducts.flatMap((pp,j)=>{
-                  if(pp.subItems?.length){return pp.subItems.filter(s=>s.id&&!_normReqs(p.requires).includes(s.id)).map(s=>`<option value="${s.id}">${escHtml((pp.label||pp.id)+' — '+(s.label||s.id))}</option>`);}
-                  return pp.id&&j!==i&&!_normReqs(p.requires).includes(pp.id)?[`<option value="${pp.id}">${escHtml(pp.label||pp.id)}</option>`]:[];
+                  if(j===i)return[];
+                  if(pp.subItems?.length){return pp.subItems.filter(s=>s.id).map(s=>{const chk=_normReqs(p.requires).includes(s.id);return`<label class="pm-req-opt${chk?' checked':''}" data-rid="${s.id}"><input type="checkbox" ${chk?'checked':''} onchange="pmToggleReq(${i},null,this.checked,'${s.id}')">${escHtml((pp.label||pp.id)+' — '+(s.label||s.id))}</label>`;});}
+                  if(!pp.id)return[];
+                  const chk=_normReqs(p.requires).includes(pp.id);
+                  return[`<label class="pm-req-opt${chk?' checked':''}" data-rid="${pp.id}"><input type="checkbox" ${chk?'checked':''} onchange="pmToggleReq(${i},null,this.checked,'${pp.id}')">${escHtml(pp.label||pp.id)}</label>`];
                 }).join('')}
-              </select>
+              </div>
             </div>
             <select style="${_subSel}" title="Monthly = recurring charge each period. One-Time = charged once at sale" oninput="_pmProducts[${i}].billing=this.value;pmMarkDirty()">
               <option value="monthly" ${(p.billing||'monthly')==='monthly'?'selected':''}>Monthly</option>
@@ -3585,18 +3601,18 @@ function pmRender(){
   if(_pmOpenIdx!==null)document.querySelectorAll('#pm-list .pm-row')[_pmOpenIdx]?.classList.add('sales-open');
 }
 function _normReqs(v){return Array.isArray(v)?v:v?[v]:[];}
-function pmAddReq(parentIdx,subIdx,id){
-  const t=subIdx!=null?_pmProducts[parentIdx]?.subItems?.[subIdx]:_pmProducts[parentIdx];
-  if(!t||!id)return;
-  const reqs=_normReqs(t.requires);
-  if(!reqs.includes(id)){t.requires=[...reqs,id];pmMarkDirty();_pmOpenIdx=parentIdx;pmRender();}
-}
-function pmRemoveReq(parentIdx,subIdx,id){
+function pmToggleReq(parentIdx,subIdx,checked,reqId){
   const t=subIdx!=null?_pmProducts[parentIdx]?.subItems?.[subIdx]:_pmProducts[parentIdx];
   if(!t)return;
-  const reqs=_normReqs(t.requires).filter(r=>r!==id);
-  t.requires=reqs.length?reqs:undefined;
-  pmMarkDirty();_pmOpenIdx=parentIdx;pmRender();
+  const reqs=_normReqs(t.requires);
+  t.requires=checked?[...reqs.filter(r=>r!==reqId),reqId]:reqs.filter(r=>r!==reqId);
+  if(!t.requires.length)t.requires=undefined;
+  pmMarkDirty();
+  const ddId=`pmreqdd-${parentIdx}-${subIdx??'p'}`;
+  const sumEl=document.getElementById(ddId)?.querySelector('.pm-req-sum');
+  if(sumEl){const c=_normReqs(t.requires).length;sumEl.textContent=c?c+' req.':'None';}
+  const lbl=document.getElementById(ddId)?.querySelector(`.pm-req-opt[data-rid="${reqId}"]`);
+  if(lbl)lbl.classList.toggle('checked',checked);
 }
 function pmAddProduct(){
   _pmProducts.push({id:'',label:'',desc:'',billing:'monthly'});
