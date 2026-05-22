@@ -3471,7 +3471,12 @@ function pmRender(){
           <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
             <select style="${_subSel}" title="Must be enabled before this sub-item can be selected in a quote" oninput="_pmProducts[${i}].subItems[${si}].requires=this.value||undefined;pmMarkDirty()">
               <option value="">— Requires —</option>
-              ${_pmProducts.filter((pp,j)=>j!==i&&pp.id).map(pp=>`<option value="${pp.id}" ${(sub.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`).join('')}
+              ${_pmProducts.flatMap((pp,j)=>{
+                if(pp.subItems?.length){
+                  return pp.subItems.filter((s,sk)=>s.id&&!(j===i&&sk===si)).map(s=>`<option value="${s.id}" ${(sub.requires||'')===(s.id)?'selected':''}>${escHtml((pp.label||pp.id)+' — '+(s.label||s.id))}</option>`);
+                }
+                return pp.id&&j!==i?[`<option value="${pp.id}" ${(sub.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`]:[];
+              }).join('')}
             </select>
             <select style="${_subSel}" title="Monthly = recurring charge each period. One-Time = charged once at sale" oninput="_pmProducts[${i}].subItems[${si}].billing=this.value;pmMarkDirty()">
               <option value="monthly" ${(sub.billing||'monthly')==='monthly'?'selected':''}>Monthly</option>
@@ -3535,7 +3540,12 @@ function pmRender(){
           <div style="display:flex;gap:5px;align-items:center;width:100%;flex-wrap:wrap;margin-bottom:6px;">
             <select style="${_subSel}" title="Must be enabled before this product can be selected in a quote" oninput="_pmProducts[${i}].requires=this.value||undefined;pmMarkDirty()">
               <option value="">— No requirement —</option>
-              ${_pmProducts.filter((pp,j)=>j!==i&&pp.id).map(pp=>`<option value="${pp.id}" ${(p.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`).join('')}
+              ${_pmProducts.flatMap((pp,j)=>{
+                if(pp.subItems?.length){
+                  return pp.subItems.filter(s=>s.id).map(s=>`<option value="${s.id}" ${(p.requires||'')===(s.id)?'selected':''}>${escHtml((pp.label||pp.id)+' — '+(s.label||s.id))}</option>`);
+                }
+                return pp.id&&j!==i?[`<option value="${pp.id}" ${(p.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`]:[];
+              }).join('')}
             </select>
             <select style="${_subSel}" title="Monthly = recurring charge each period. One-Time = charged once at sale" oninput="_pmProducts[${i}].billing=this.value;pmMarkDirty()">
               <option value="monthly" ${(p.billing||'monthly')==='monthly'?'selected':''}>Monthly</option>
