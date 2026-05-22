@@ -60,9 +60,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .quote-disc.inc{color:var(--danger);}
 .quote-disc.dec{color:var(--success);}
 #quote-content[data-customer] .qst-sa,
-#quote-content[data-customer] .qst-profit,
-#quote-content[data-customer] .quote-disc,
-#quote-content[data-customer] .quote-disc-hdr{display:none!important;}
+#quote-content[data-customer] .qst-profit{display:none!important;}
 .customer-view-badge{display:inline-block;background:rgba(34,197,94,0.15);border:1px solid var(--success);color:var(--success);font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;margin-left:8px;}
 .quote-totals{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-top:14px;}
 .quote-total-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;}
@@ -2524,9 +2522,12 @@ function loadSalesQuote(id){
       return`<div class="qline-wrap${li.note?' note-open':''}" id="${nid}"${indent?' style="padding-left:12px;"':''}>
         <div class="quote-line${on?'':' disabled'}">
           <div class="quote-check${on?' on':''}" onclick="toggleSalesLine('${id}','${p.id}')">${on?'✓':''}</div>
-          <div class="quote-label" style="display:flex;align-items:center;gap:5px;min-width:0;">
-            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(p.desc||'')}">${escHtml(p.label)}</span>
-            <button class="quote-note-btn${li.note?' has-note':''}" onclick="toggleQuoteNote('${nid}')" title="Notes">&#9998;</button>
+          <div class="quote-label" style="display:flex;flex-direction:column;justify-content:center;min-width:0;gap:1px;">
+            <div style="display:flex;align-items:center;gap:5px;min-width:0;">
+              <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(p.label)}</span>
+              <button class="quote-note-btn${li.note?' has-note':''}" onclick="toggleQuoteNote('${nid}')" title="Notes">&#9998;</button>
+            </div>
+            ${p.desc?`<span style="font-size:10px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2;">${escHtml(p.desc)}</span>`:''}
           </div>
           <input class="quote-input" style="width:52px;" type="number" min="0" value="${li.qty}" oninput="onQuoteInputChange('${id}','${p.id}','qty',this.valueAsNumber||0)" onblur="saveQuoteInput('${id}','${p.id}','qty',this.valueAsNumber||0)" title="Quantity">
           <div class="quote-list">${listStr}</div>
@@ -3432,7 +3433,7 @@ function pmRender(){
     const hasSubItems=p.subItems?.length>0;
     const _subInp=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 5px;color:var(--text);font-size:11px;outline:none;flex:1;min-width:0;box-sizing:border-box;`;
     const _subCost=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 4px;color:var(--text);font-size:11px;outline:none;flex:1;min-width:0;text-align:right;box-sizing:border-box;`;
-    const _subSel=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 3px;color:var(--text);font-size:11px;outline:none;flex:1;min-width:110px;box-sizing:border-box;text-align-last:center;`;
+    const _subSel=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 3px;color:var(--text);font-size:11px;outline:none;flex:1;min-width:130px;box-sizing:border-box;text-align-last:center;`;
     const _dlbl=`font-size:9px;color:var(--text3);flex-shrink:0;`;
     const _dp=`font-size:10px;color:var(--text3);flex-shrink:0;`;
     const subItemsHtml=hasSubItems?p.subItems.map((sub,si)=>{
