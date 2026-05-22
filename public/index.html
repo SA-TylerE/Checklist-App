@@ -2605,6 +2605,14 @@ async function toggleSalesLine(quoteId,productId){
       showToast(`Also disabled ${dependents.length} dependent item${dependents.length>1?'s':''}`,'warn');
     }
   }
+  // Exclusion group: auto-deselect conflicting items
+  if(wantEnable&&p?.exclusionGroup){
+    const conflicts=getSalesProducts().filter(pp=>pp.exclusionGroup===p.exclusionGroup&&pp.id!==productId&&q.lineItems[pp.id]?.enabled);
+    if(conflicts.length){
+      conflicts.forEach(pp=>{q.lineItems[pp.id].enabled=false;});
+      showToast(`Switched to ${p.label} — deselected ${conflicts.map(pp=>pp.label).join(', ')}`, 'info');
+    }
+  }
   q.lineItems[productId].enabled=wantEnable;
   q.lastModified=new Date().toISOString();
   await saveSalesQuotes();
@@ -3433,7 +3441,7 @@ function pmRender(){
     const hasSubItems=p.subItems?.length>0;
     const _subInp=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 5px;color:var(--text);font-size:11px;outline:none;flex:1;min-width:0;box-sizing:border-box;`;
     const _subCost=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 4px;color:var(--text);font-size:11px;outline:none;flex:1;min-width:0;text-align:right;box-sizing:border-box;`;
-    const _subSel=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 3px;color:var(--text);font-size:11px;outline:none;flex:1;min-width:130px;box-sizing:border-box;text-align-last:center;`;
+    const _subSel=`background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 3px;color:var(--text);font-size:11px;outline:none;flex:1;min-width:70px;box-sizing:border-box;text-align-last:center;`;
     const _dlbl=`font-size:9px;color:var(--text3);flex-shrink:0;`;
     const _dp=`font-size:10px;color:var(--text3);flex-shrink:0;`;
     const subItemsHtml=hasSubItems?p.subItems.map((sub,si)=>{
@@ -3444,6 +3452,7 @@ function pmRender(){
           <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
             <input style="${_subInp}min-width:130px;" value="${escHtml(sub.label)}" placeholder="Name" oninput="_pmProducts[${i}].subItems[${si}].label=this.value;pmMarkDirty()">
             <input style="${_subInp}flex:2;min-width:160px;" value="${escHtml(sub.desc||'')}" placeholder="Description" oninput="_pmProducts[${i}].subItems[${si}].desc=this.value;pmMarkDirty()">
+            <input type="text" style="${_subInp}min-width:80px;flex:0.8;" placeholder="Excl. Group" value="${escHtml(sub.exclusionGroup||'')}" oninput="_pmProducts[${i}].subItems[${si}].exclusionGroup=this.value.trim()||undefined;pmMarkDirty();" title="Sub-items sharing the same group name are mutually exclusive — selecting one auto-deselects the others">
           </div>
           <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
             <div style="display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;flex:1;min-width:80px;">
@@ -3523,7 +3532,7 @@ function pmRender(){
               <input type="number" step="0.05" min="0" style="width:56px;background:transparent;border:none;padding:2px 0;color:var(--text);font-size:11px;outline:none;text-align:right;" value="${(p.defaultPrice||0).toFixed(2)}" oninput="_pmProducts[${i}].defaultPrice=parseFloat(this.value)||0;pmMarkDirty();" onblur="this.value=(parseFloat(this.value)||0).toFixed(2);">
             </div>
           </div>
-          <div style="display:flex;gap:5px;align-items:center;width:100%;margin-bottom:6px;">
+          <div style="display:flex;gap:5px;align-items:center;width:100%;flex-wrap:wrap;margin-bottom:6px;">
             <select style="${_subSel}" title="Must be enabled before this product can be selected in a quote" oninput="_pmProducts[${i}].requires=this.value||undefined;pmMarkDirty()">
               <option value="">— No requirement —</option>
               ${_pmProducts.filter((pp,j)=>j!==i&&pp.id).map(pp=>`<option value="${pp.id}" ${(p.requires||'')===(pp.id)?'selected':''}>${escHtml(pp.label||pp.id)}</option>`).join('')}
@@ -3541,6 +3550,7 @@ function pmRender(){
             <select style="${_subSel}" title="Auto-populates quantity from the client's headcount data. Leave blank to enter manually" oninput="_pmProducts[${i}].qtySource=this.value;pmMarkDirty()">
               ${qtyOpts.map(o=>`<option value="${o}" ${(p.qtySource||'')===(o)?'selected':''}>${o||'— Manual —'}</option>`).join('')}
             </select>
+            <input type="text" style="${_subInp}min-width:80px;flex:0.8;" placeholder="Excl. Group" value="${escHtml(p.exclusionGroup||'')}" oninput="_pmProducts[${i}].exclusionGroup=this.value.trim()||undefined;pmMarkDirty();" title="Products sharing the same group name are mutually exclusive — selecting one auto-deselects the others in a quote">
           </div>`:''}
           ${hasSubItems?`<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:4px;width:100%;">${subItemsHtml}</div>`:''}
           <button onclick="pmAddSubItem(${i})" style="background:none;border:1px dashed var(--border);border-radius:3px;color:var(--text3);cursor:pointer;font-size:10px;padding:2px 8px;margin-top:4px;transition:all 0.15s;" title="Add sub-item" onmouseenter="this.style.borderColor='var(--accent)';this.style.color='var(--accent)';this.style.background='rgba(59,130,246,0.08)';" onmouseleave="this.style.borderColor='';this.style.color='';this.style.background='';">+ Sub-item</button>
