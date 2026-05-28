@@ -190,9 +190,19 @@ app.get('/api/backup-data', async (req, res) => {
 
     let text;
     if (rawUrl) {
-      let content = await fetchUrl(rawUrl);
-      text = encKey ? decryptBkContent(content, encKey) : content;
-      // Cache to disk so Refresh works even if remote is temporarily unavailable
+      const content = await fetchUrl(rawUrl);
+      const trimmed = content.trim();
+      if (encKey) {
+        const buf = Buffer.from(trimmed, 'base64');
+        if (buf.length < 17) {
+          return res.status(500).json({
+            error: `Fetched content is too short to be encrypted data (${buf.length} bytes decoded from ${trimmed.length} chars). Raw preview: "${trimmed.slice(0, 120)}"`
+          });
+        }
+        text = decryptBkContent(trimmed, encKey);
+      } else {
+        text = trimmed;
+      }
       atomicWrite(BACKUP_DATA_FILE, text);
     } else if (fs.existsSync(BACKUP_DATA_FILE)) {
       text = fs.readFileSync(BACKUP_DATA_FILE, 'utf8');
