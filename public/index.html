@@ -609,9 +609,10 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .bk-client-item:hover .bk-client-del{opacity:0.5;}
 .bk-client-del:hover{opacity:1!important;color:var(--danger);}
 .bk-warn{color:#f59e0b!important;font-weight:600;}
-.bk-expand-toggle{background:none;border:none;color:var(--text3);cursor:pointer;font-size:10px;padding:1px 3px;line-height:1;flex-shrink:0;opacity:0.5;transition:opacity 0.15s,transform 0.18s;margin-top:3px;}
-.bk-expand-toggle:hover{opacity:1;}
+.bk-expand-toggle{background:none;border:none;color:var(--text2);cursor:pointer;font-size:14px;padding:2px 5px;line-height:1;flex-shrink:0;opacity:0.7;transition:opacity 0.15s,transform 0.18s;}
+.bk-expand-toggle:hover{opacity:1;color:var(--accent);}
 .bk-expand-toggle.open{transform:rotate(90deg);}
+span.bk-expand-toggle{opacity:0;pointer-events:none;}
 .bk-expand-row td{border-top:none!important;}
 .bk-note-row td{border-top:none!important;}
 .bk-expand-table{width:100%;border-collapse:collapse;font-size:11px;}
@@ -619,6 +620,14 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .bk-expand-table th:last-child,.bk-expand-table td:last-child{padding-right:0;}
 .bk-expand-table td{padding:6px 28px 6px 0;border-top:1px solid var(--border);color:var(--text2);white-space:nowrap;vertical-align:middle;}
 .bk-expand-table td.bk-exp-freq{padding-right:16px;}
+/* sticky client column */
+.bk-table th.bk-th-name{position:sticky;left:0;z-index:2;background:var(--bg3);box-shadow:2px 0 5px rgba(0,0,0,0.18);}
+.bk-table td.bk-td-name{position:sticky;left:0;z-index:1;background:var(--bg);box-shadow:2px 0 5px rgba(0,0,0,0.12);}
+.bk-table tbody tr:hover td.bk-td-name{background:var(--bg3);}
+/* sidebar jump button */
+.bk-client-jump{background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:0 2px;line-height:1;opacity:0;transition:opacity 0.15s;flex-shrink:0;}
+.bk-client-item:hover .bk-client-jump{opacity:0.5;}
+.bk-client-jump:hover{opacity:1!important;color:var(--accent);}
 
 /* Styled confirm dialog */
 #confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:600;align-items:center;justify-content:center;}
@@ -942,7 +951,7 @@ body.light{
       <button class="ah-nav-btn" id="ah-btn-onboarding" onclick="switchSection('onboarding')">Onboarding</button>
       <button class="ah-nav-btn" id="ah-btn-sales" onclick="switchSection('sales')">Sales</button>
       <button class="ah-nav-btn" id="ah-btn-reference" onclick="switchSection('reference')">Reference</button>
-      <button class="ah-nav-btn" id="ah-btn-backups" onclick="switchSection('backups')">Backups</button>
+      <button class="ah-nav-btn" id="ah-btn-backups" onclick="switchSection('backups')">Backups<span id="bk-nav-badge" style="display:none;background:#ef4444;color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 5px;margin-left:4px;vertical-align:middle;line-height:1.5;"></span></button>
     </nav>
     <div class="ah-right">
       <button class="ah-name-btn" id="ah-name-display" onclick="openNameModal()" title="Edit your name" style="display:none;"></button>
@@ -3175,16 +3184,49 @@ let _bkTab='overview';
 let _bkFetching=false;
 let _bkExpanded=new Set();
 let _bkNoteOpen=new Set();
+let _bkHideInactive=false;
 
 function bkGetClients(){return appSettings.backupClients||DEFAULT_BACKUP_CLIENTS;}
 
 function bkCalcCost(usedGB,devices){
   if(!usedGB&&!devices)return 0;
-  return Math.ceil(usedGB/500)*40+devices*25;
+  const bs=appSettings.bkBlockSizeGB||500,cb=appSettings.bkCostPerBlock||40,cd=appSettings.bkCostPerDevice||25;
+  return Math.ceil(usedGB/bs)*cb+devices*cd;
 }
 function bkEstCost(allottedGB,contractDevices){
   if(allottedGB<=0)return 0;
-  return Math.ceil(allottedGB/500)*40+contractDevices*25;
+  const bs=appSettings.bkBlockSizeGB||500,cb=appSettings.bkCostPerBlock||40,cd=appSettings.bkCostPerDevice||25;
+  return Math.ceil(allottedGB/bs)*cb+contractDevices*cd;
+}
+function bkUpdateNavBadge(){
+  const badge=document.getElementById('bk-nav-badge');
+  if(!badge)return;
+  const errCount=bkGetClients().filter(c=>bkRowStatus(c,_backupLiveData?.[c.syncrifyId])==='error').length;
+  badge.textContent=errCount;
+  badge.style.display=errCount>0?'':'none';
+}
+function bkScrollToClient(id){
+  const scroll=document.querySelector('.bk-scroll');
+  const row=scroll&&scroll.querySelector(`tr[data-client-id="${id}"]`);
+  if(row)row.scrollIntoView({block:'center',behavior:'smooth'});
+}
+function bkExportCsv(){
+  const clients=bkGetClients();
+  const rows=[['Client','Syncrify ID','Allotted GB','Contract Devices','Est Cost','Charged','Used GB','Live Devices','Calc Cost','Diff','Syncrify','Wasabi','Frequency','VPN','Notes']];
+  clients.forEach(c=>{
+    const live=_backupLiveData?.[c.syncrifyId];
+    const usedGB=live?live.usedBytes/1e9:null;
+    const tp=live?live.profiles.length:null;
+    const calc=usedGB!==null?bkCalcCost(usedGB,tp):null;
+    const diff=calc!==null&&c.charged!==undefined?c.charged-calc:null;
+    const est=c.allottedGB>0?bkEstCost(c.allottedGB,c.contractDevices):null;
+    rows.push([c.name,c.syncrifyId||'',c.allottedGB||0,c.contractDevices||0,est??'',c.charged||0,usedGB!=null?usedGB.toFixed(1):'',tp??'',calc??'',diff??'',c.syncrify,c.wasabi,c.frequency,c.vpnHost||'',c.notes||'']);
+  });
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='backup-clients-'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
 }
 function bkIsCompliant(lastAccessMs,frequency){
   if(!lastAccessMs)return null;
@@ -3225,11 +3267,17 @@ async function bkFetchLive(){
       _backupLiveData[e.client].usedBytes+=e.diskSize;
       _backupLiveData[e.client].profiles.push(e);
     }
-  }catch(err){_bkFetchError=err.message;_backupLiveData={};}finally{_bkFetching=false;}
+  }catch(err){_bkFetchError=err.message;_backupLiveData={};}finally{_bkFetching=false;bkUpdateNavBadge();}
 }
 
 function bkSwitchClient(id){
   _bkActiveClient=id;
+  if(id==='all'){
+    _bkExpanded.clear();
+    _bkNoteOpen.clear();
+  } else {
+    _bkExpanded.add(id);
+  }
   document.querySelectorAll('.bk-client-item').forEach(el=>el.classList.toggle('active',el.dataset.bkid===id));
   bkRenderMain();
 }
@@ -3243,7 +3291,7 @@ function renderBackupsSidebar(){
     +clients.map(c=>{
       const live=_backupLiveData?.[c.syncrifyId];
       const st=bkRowStatus(c,live);
-      return`<div class="bk-client-item${_bkActiveClient===c.id?' active':''}" data-bkid="${c.id}" onclick="bkSwitchClient('${c.id}')"><span class="bk-dot bk-dot-${st}"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(c.name)}</span><button class="bk-client-del" onclick="event.stopPropagation();bkRemoveClient('${c.id}')" title="Remove client">×</button></div>`;
+      return`<div class="bk-client-item${_bkActiveClient===c.id?' active':''}" data-bkid="${c.id}" onclick="bkSwitchClient('${c.id}')"><span class="bk-dot bk-dot-${st}"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(c.name)}</span><button class="bk-client-jump" onclick="event.stopPropagation();bkSwitchClient('${c.id}');setTimeout(()=>bkScrollToClient('${c.id}'),60);" title="Scroll to row">⇢</button><button class="bk-client-del" onclick="event.stopPropagation();bkRemoveClient('${c.id}')" title="Remove client">×</button></div>`;
     }).join('');
 }
 
@@ -3260,9 +3308,12 @@ function bkRenderMain(){
   if(!el)return;
   const tabs=[{id:'overview',lbl:'Overview'},{id:'profiles',lbl:'Profiles'}];
   const hasUrl=!!(appSettings.backupDataUrl||'').trim();
+  const isStale=_bkLastUpdated&&(Date.now()-new Date(_bkLastUpdated).getTime())>86400000;
   el.innerHTML=`<div class="bk-tabs">
     ${tabs.map(t=>`<button class="bk-tab${_bkTab===t.id?' active':''}" onclick="bkSwitchTab('${t.id}')">${t.lbl}</button>`).join('')}
+    ${isStale?`<span style="font-size:10px;color:var(--warn);padding:0 6px;align-self:center;">⚠ Data ${Math.floor((Date.now()-new Date(_bkLastUpdated).getTime())/86400000)}d old</span>`:''}
     <div class="bk-tabs-right">
+      ${_bkTab==='overview'?`<button class="btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="_bkHideInactive=!_bkHideInactive;bkRenderMain()">${_bkHideInactive?'Show All':'Hide Inactive'}</button><button class="btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="bkExportCsv()" title="Export to CSV">↓ CSV</button>`:''}
       ${_backupLiveData===null
         ?(hasUrl?'<span style="font-size:11px;color:var(--text3);">Loading live data…</span>':'<button class="btn-ghost" style="font-size:11px;" onclick="openSettings()">Configure backup data URL in Settings ↗</button>')
         :_bkFetchError
@@ -3320,6 +3371,7 @@ function bkSaveClient(id,field,val){
   const scrollTop=scroll?scroll.scrollTop:0;
   renderBackupsSidebar();
   bkRenderMain();
+  bkUpdateNavBadge();
   if(scrollTop)requestAnimationFrame(()=>{const s=document.querySelector('.bk-scroll');if(s)s.scrollTop=scrollTop;});
 }
 function bkAddClient(){
@@ -3342,23 +3394,34 @@ function bkRemoveClient(id){
 function bkRenderOverview(){
   let clients=bkGetClients();
   if(_bkActiveClient!=='all')clients=clients.filter(c=>c.id===_bkActiveClient);
+  if(_bkHideInactive)clients=clients.filter(c=>c.syncrify==='Active'||c.wasabi==='Active');
 
-  let sumAllotted=0,sumCharged=0,sumUsed=0,sumCalc=0;
+  let sumAllotted=0,sumCharged=0,sumUsed=0,sumCalc=0,issueCount=0;
   clients.forEach(c=>{
     if(c.allottedGB>0)sumAllotted+=c.allottedGB;
     sumCharged+=c.charged||0;
     const live=_backupLiveData?.[c.syncrifyId];
     if(live){const g=live.usedBytes/1e9;sumUsed+=g;sumCalc+=bkCalcCost(g,live.profiles.length);}
+    const st=bkRowStatus(c,live);
+    if(st==='error'||st==='warn')issueCount++;
   });
+
+  let unmatchedHtml='';
+  if(_backupLiveData&&_bkActiveClient==='all'){
+    const clientIds=new Set(bkGetClients().map(c=>c.syncrifyId).filter(Boolean));
+    const unmatched=Object.keys(_backupLiveData).filter(k=>!clientIds.has(k));
+    if(unmatched.length)unmatchedHtml=`<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:8px 14px;margin-bottom:12px;font-size:11px;"><span style="color:var(--warn);font-weight:600;">⚠ ${unmatched.length} unmatched Syncrify ID${unmatched.length>1?'s':''} in live data:</span><span style="color:var(--text3);margin-left:6px;">${unmatched.map(k=>`<code style="background:var(--bg3);padding:1px 4px;border-radius:3px;">${escHtml(k)}</code>`).join(' ')}</span></div>`;
+  }
 
   const sel=(id,field,opts,val)=>`<select class="bk-cell-select" onchange="bkSaveClient('${id}','${field}',this.value)">${opts.map(o=>`<option value="${o}"${val===o?' selected':''}>${o}</option>`).join('')}</select>`;
 
-  return(_bkActiveClient==='all'?`<div class="bk-summary-bar">
+  return unmatchedHtml+(_bkActiveClient==='all'?`<div class="bk-summary-bar">
     <div class="bk-sum-card"><div class="bk-sum-lbl">Total Used</div><div class="bk-sum-val">${bkFmt(sumUsed)}</div></div>
     <div class="bk-sum-card"><div class="bk-sum-lbl">Total Allotted</div><div class="bk-sum-val">${bkFmt(sumAllotted)}</div></div>
     <div class="bk-sum-card"><div class="bk-sum-lbl">Total Charged</div><div class="bk-sum-val">${bkFmtCur(sumCharged)}</div></div>
     <div class="bk-sum-card"><div class="bk-sum-lbl">Calculated</div><div class="bk-sum-val">${bkFmtCur(sumCalc)}</div></div>
     <div class="bk-sum-card"><div class="bk-sum-lbl">Difference</div><div class="bk-sum-val ${sumCharged-sumCalc<0?'bk-neg':''}">${bkFmtCur(sumCharged-sumCalc)}</div></div>
+    ${issueCount>0?`<div class="bk-sum-card" style="border-color:rgba(239,68,68,0.35);"><div class="bk-sum-lbl" style="color:var(--danger);">Issues</div><div class="bk-sum-val" style="color:var(--danger);">${issueCount}</div></div>`:''}
   </div>`:'')
   +`<div class="bk-table-wrap"><table class="bk-table">
     <thead>
@@ -3395,10 +3458,11 @@ function bkRenderOverview(){
         const num=(field,val,step=1)=>`<input type="number" class="bk-cell-input bk-cell-num" min="0" step="${step}" value="${val||0}" onblur="bkSaveClient('${c.id}','${field}',this.value)" onkeydown="if(event.key==='Enter')this.blur()">`;
         const chevron=hasProfiles
           ?`<button class="bk-expand-toggle${expanded?' open':''}" onclick="bkToggleExpand('${c.id}')" title="${expanded?'Collapse':'Expand'} profiles">▸</button>`
-          :`<span class="bk-expand-toggle" style="opacity:0;pointer-events:none;">▸</span>`;
+          :`<span class="bk-expand-toggle">▸</span>`;
+        const hasOverride=live&&c.profileSettings&&live.profiles.some(p=>c.profileSettings[p.profile]?.frequency);
         const profilesCell=totalProfiles===null?'—'
           :compliantCount===null?`<span class="bk-dim">${totalProfiles}</span>`
-          :`<span class="${compliantCount===totalProfiles?'bk-pos':compliantCount===0?'bk-neg':'bk-warn'}">${compliantCount}/${totalProfiles}</span>`;
+          :`<span class="${compliantCount===totalProfiles?'bk-pos':compliantCount===0?'bk-neg':'bk-warn'}">${compliantCount}/${totalProfiles}</span>${hasOverride?'<span title="Has per-profile frequency overrides" style="color:var(--text3);font-size:9px;margin-left:2px;">*</span>':''}`;
         const vpnSel=['Zywall','Unifi','Other'].includes(c.vpnHost)?c.vpnHost:(c.vpnHost?'Other':'');
         const noteRow=_bkNoteOpen.has(c.id)?`<tr class="bk-note-row">
           <td colspan="16" style="padding:4px 12px 8px 44px;background:rgba(245,158,11,0.04);border-bottom:1px solid var(--border);">
@@ -3439,11 +3503,11 @@ function bkRenderOverview(){
             </table>
           </td>
         </tr>`:'';
-        return`<tr class="bk-row-${st}">
+        return`<tr class="bk-row-${st}" data-client-id="${c.id}">
           <td class="bk-td-name">
-            <div style="display:flex;align-items:flex-start;gap:4px;">
+            <div style="display:flex;align-items:center;gap:4px;">
               ${chevron}
-              <span class="bk-dot bk-dot-${st}" style="flex-shrink:0;margin-top:5px;"></span>
+              <span class="bk-dot bk-dot-${st}" style="flex-shrink:0;"></span>
               <div style="flex:1;min-width:0;">
                 <input type="text" class="bk-cell-input" style="font-weight:500;" value="${escHtml(c.name)}" onblur="bkSaveClient('${c.id}','name',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
                 <div style="display:flex;align-items:center;gap:3px;margin-top:1px;"><span style="font-size:9px;color:var(--text3);flex-shrink:0;">ID:</span><input type="text" class="bk-cell-input" style="font-size:9px;color:var(--text3);width:80px;" value="${escHtml(c.syncrifyId||'')}" onblur="bkSaveClient('${c.id}','syncrifyId',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></div>
@@ -3514,6 +3578,10 @@ async function saveBkSettings(){
   if(key&&key.length!==32){showToast('Encryption key must be exactly 32 characters','error');return;}
   appSettings.backupDataUrl=url||undefined;
   appSettings.backupEncryptionKey=key||undefined;
+  const bs=parseFloat(document.getElementById('setting-bk-block-size')?.value||'')||500;
+  const cb=parseFloat(document.getElementById('setting-bk-cost-per-block')?.value||'')||40;
+  const cd=parseFloat(document.getElementById('setting-bk-cost-per-device')?.value||'')||25;
+  appSettings.bkBlockSizeGB=bs;appSettings.bkCostPerBlock=cb;appSettings.bkCostPerDevice=cd;
   const r=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
   if(r.ok){showToast('Backup settings saved');_backupLiveData=null;_bkFetching=false;}
   else showToast('Save failed','error');
@@ -3688,7 +3756,27 @@ function renderSettingsView(){
               <div class="field-hint">AES-256 requires exactly 32 characters. Keep this secret — it never leaves your server.</div>
             </div>
           </div>
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+            <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px;">Cost Formula</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Cost = ⌈ Used GB ÷ Block Size ⌉ × $/Block + Devices × $/Device</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+              <div class="field-group" style="margin:0;">
+                <label style="font-size:10px;">Block Size (GB)</label>
+                <input id="setting-bk-block-size" type="number" min="1" step="1" value="${appSettings.bkBlockSizeGB||500}" style="width:80px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:12px;outline:none;font-family:var(--sans);">
+              </div>
+              <div class="field-group" style="margin:0;">
+                <label style="font-size:10px;">$ per Block</label>
+                <input id="setting-bk-cost-per-block" type="number" min="0" step="1" value="${appSettings.bkCostPerBlock||40}" style="width:70px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:12px;outline:none;font-family:var(--sans);">
+              </div>
+              <div class="field-group" style="margin:0;">
+                <label style="font-size:10px;">$ per Device</label>
+                <input id="setting-bk-cost-per-device" type="number" min="0" step="1" value="${appSettings.bkCostPerDevice||25}" style="width:70px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:12px;outline:none;font-family:var(--sans);">
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:12px;">
           <button class="btn-primary" onclick="saveBkSettings()">Save</button>
+          </div>
           <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border);">
             <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;">PowerShell — append to the end of your aggregation script</div>
             <div style="font-size:10px;color:var(--text3);margin-bottom:8px;">Requires a GitHub account + Personal Access Token (PAT) with <code style="background:var(--bg3);padding:1px 3px;border-radius:2px;">gist</code> scope. Create a Gist first, then paste its ID below.</div>
