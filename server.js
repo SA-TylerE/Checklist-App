@@ -176,7 +176,7 @@ function fetchUrl(url, hops = 6) {
       }
       let text = '';
       res.on('data', c => text += c);
-      res.on('end', () => resolve(text));
+      res.on('end', () => resolve({ status: res.statusCode, text }));
     }).on('error', reject);
   });
 }
@@ -190,16 +190,33 @@ app.get('/api/backup-data', async (req, res) => {
 
     let text;
     if (rawUrl) {
-      const content = await fetchUrl(rawUrl);
+      const { status, text: content } = await fetchUrl(rawUrl);
       const trimmed = content.trim();
+
+      if (status !== 200) {
+        return res.status(500).json({ error: `URL returned HTTP ${status}. Check the URL is correct and the file is publicly accessible.` });
+      }
+      if (trimmed.startsWith('<') || trimmed.startsWith('{') && trimmed.includes('"error"')) {
+        const preview = trimmed.slice(0, 200).replace(/\n/g, ' ');
+        return res.status(500).json({ error: `URL returned a web page instead of file content. Make sure the URL points directly to the raw file (not a web page). Preview: ${preview}` });
+      }
+
       if (encKey) {
         const buf = Buffer.from(trimmed, 'base64');
         if (buf.length < 17) {
           return res.status(500).json({
-            error: `Fetched content is too short to be encrypted data (${buf.length} bytes decoded from ${trimmed.length} chars). Raw preview: "${trimmed.slice(0, 120)}"`
+            error: `URL returned content that is too short to be encrypted data (${buf.length} decoded bytes). The file may be empty or the URL may be wrong. Content starts with: "${trimmed.slice(0, 100)}"`
           });
         }
-        text = decryptBkContent(trimmed, encKey);
+        try {
+          text = decryptBkContent(trimmed, encKey);
+        } catch (decErr) {
+          const msg = decErr.message || '';
+          if (msg.includes('initialization vector') || msg.includes('wrong final block') || msg.includes('bad decrypt')) {
+            return res.status(500).json({ error: 'Decryption failed. The encryption key in Settings does not match the key used in the PowerShell script, or the file content is corrupted. Verify both keys are identical (32 characters).' });
+          }
+          return res.status(500).json({ error: `Decryption error: ${msg}` });
+        }
       } else {
         text = trimmed;
       }
