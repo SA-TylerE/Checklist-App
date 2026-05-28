@@ -3212,6 +3212,16 @@ const DEFAULT_BACKUP_CLIENTS=[
   {id:'sap',name:'SAP',syncrifyId:'SAP',allottedGB:0,contractDevices:0,charged:0,syncrify:'Inactive',wasabi:'Inactive',frequency:'Daily',vpnHost:'',notes:''},
 ];
 
+const BK_ROLES=[
+  {id:'win-img-local',   label:'Win Image · Local',    bg:'#1e3a5f',fg:'#93c5fd'},
+  {id:'win-img-offsite', label:'Win Image · Off-site', bg:'#0f2240',fg:'#60a5fa'},
+  {id:'win-data-local',  label:'Win Data · Local',     bg:'#14291a',fg:'#86efac'},
+  {id:'win-data-offsite',label:'Win Data · Off-site',  bg:'#0c1a0c',fg:'#4ade80'},
+  {id:'prx-img-local',   label:'Prx Image · Local',    bg:'#2d1a00',fg:'#fbbf24'},
+  {id:'prx-img-offsite', label:'Prx Image · Off-site', bg:'#1f1200',fg:'#f59e0b'},
+  {id:'prx-data-local',  label:'Prx Data · Local',     bg:'#1a1a2e',fg:'#818cf8'},
+  {id:'prx-data-offsite',label:'Prx Data · Off-site',  bg:'#12122a',fg:'#6366f1'},
+];
 let _backupLiveData=null; // null=not fetched; obj keyed by syncrifyId → {usedBytes, profiles:[]}
 let _bkLastUpdated=null; // mtimeMs from server
 let _bkActiveClient='all';
@@ -3460,6 +3470,7 @@ function bkRenderDashboard(){
       </div>
       ${issueNote}
       ${(()=>{if(usedGB===null||!(c.allottedGB>0))return'';const pct=Math.min(100,usedGB/c.allottedGB*100);const barColor=pct>=90?'#ef4444':pct>=70?'#f59e0b':'#22c55e';return`<div style="display:flex;align-items:center;gap:5px;margin-top:6px;"><div class="bk-storage-bar" style="flex:1;"><div class="bk-storage-fill" style="width:${pct.toFixed(1)}%;background:${barColor};"></div></div><span style="font-size:9px;color:${barColor};font-weight:600;flex-shrink:0;">${pct.toFixed(0)}%</span></div>`;})()}
+      ${(()=>{const coveredRoles=new Set();if(c.profileSettings)Object.values(c.profileSettings).forEach(ps=>{if(Array.isArray(ps.roles))ps.roles.forEach(r=>coveredRoles.add(r));});if(!coveredRoles.size)return'';return`<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px;">${BK_ROLES.map(r=>coveredRoles.has(r.id)?`<span style="font-size:8px;padding:1px 5px;border-radius:8px;background:${r.bg};color:${r.fg};">${r.label}</span>`:'').filter(Boolean).join('')}</div>`;})()}
     </div>`;
   };
   const cardGrid=arr=>`<div class="bk-card-grid">${arr.map(clientCard).join('')}</div>`;
@@ -3503,17 +3514,22 @@ function bkSaveProfileFreq(clientId,profileName,freq){
   bkRenderMain();
   if(scrollTop)requestAnimationFrame(()=>{const s=document.querySelector('.bk-scroll');if(s)s.scrollTop=scrollTop;});
 }
-function bkSaveProfileTag(clientId,profileName,field,value){
+function bkToggleProfileRole(clientId,profileName,roleId){
   const clients=bkGetClients().slice();
   const c=clients.find(x=>x.id===clientId);
   if(!c)return;
   if(!c.profileSettings)c.profileSettings={};
   if(!c.profileSettings[profileName])c.profileSettings[profileName]={};
-  if(value==='')delete c.profileSettings[profileName][field];
-  else c.profileSettings[profileName][field]=value;
-  if(!Object.keys(c.profileSettings[profileName]).length)delete c.profileSettings[profileName];
+  const ps=c.profileSettings[profileName];
+  const roles=Array.isArray(ps.roles)?[...ps.roles]:[];
+  const idx=roles.indexOf(roleId);
+  if(idx>=0)roles.splice(idx,1);else roles.push(roleId);
+  if(roles.length)ps.roles=roles;else delete ps.roles;
+  if(!Object.keys(ps).length)delete c.profileSettings[profileName];
   appSettings.backupClients=clients;
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
+  const body=document.getElementById('bk-profiles-modal-body');
+  if(body)body.innerHTML=bkRenderProfiles();
 }
 function bkToggleNote(id){
   if(_bkNoteOpen.has(id))_bkNoteOpen.delete(id);else _bkNoteOpen.add(id);
@@ -3673,13 +3689,10 @@ function bkRenderOverview(){
                 const pAge=(Date.now()-p.lastAccess)/86400000;
                 const pOk=bkIsCompliant(p.lastAccess,pEffectiveFreq);
                 const ps=c.profileSettings&&c.profileSettings[p.profile]||{};
-                const tagChip=(v,colors)=>v?`<span style="font-size:9px;padding:1px 4px;border-radius:3px;font-weight:500;background:${colors[0]};color:${colors[1]};">${v}</span>`:'';
-                const platColor={Windows:['#1e3a5f','#93c5fd'],Proxmox:['#14291a','#86efac'],Other:['#2d2d2d','#a3a3a3']}[ps.platform]||[];
-                const locColor={Local:['#3b1f00','#fbbf24'],'Off-site':['#1e1b4b','#c4b5fd'],Both:['#0f2b2b','#5eead4']}[ps.location]||[];
-                const typColor={Image:['#1a1a2e','#818cf8'],Data:['#1a2e1a','#6ee7b7'],Both:['#2a1a2e','#c084fc']}[ps.backupType]||[];
-                const chips=[tagChip(ps.platform,platColor),tagChip(ps.location,locColor),tagChip(ps.backupType,typColor)].filter(Boolean).join(' ');
+                const pRoles=Array.isArray(ps.roles)?ps.roles:[];
+                const roleChips=pRoles.map(rid=>{const r=BK_ROLES.find(x=>x.id===rid);return r?`<span style="font-size:9px;padding:1px 5px;border-radius:10px;background:${r.bg};color:${r.fg};font-weight:500;">${r.label}</span>`:''}).join('');
                 return`<tr>
-                  <td style="text-align:left;"><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">${escHtml(p.profile)}${chips}</div></td>
+                  <td style="text-align:left;"><div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${escHtml(p.profile)}${roleChips}</div></td>
                   <td style="text-align:right;color:var(--text3);">${p.diskSize>0?bkFmt(p.diskSize/1e9):'<span class="bk-dim">—</span>'}</td>
                   <td style="text-align:right;" class="${pAge>pThresh?'bk-neg':'bk-pos'}">${bkFmtDate(p.lastAccess)}</td>
                   <td class="bk-exp-freq">
@@ -3733,14 +3746,10 @@ function bkRenderProfiles(){
   if(_bkActiveClient!=='all')clients=clients.filter(c=>c.id===_bkActiveClient);
   if(!_backupLiveData)return`<div style="color:var(--text3);font-size:12px;padding:20px 0;">${_backupLiveData===null?'Loading backup data…':'No backup data URL configured — add one in Settings.'}</div>`;
 
-  const tagSel=(cid,pname,field,val,opts)=>{
-    const esc=encodeURIComponent;
-    const optsHtml=opts.map(o=>`<option value="${o.v}"${val===o.v?' selected':''}>${o.l}</option>`).join('');
-    return`<select class="bk-cell-select" style="font-size:10px;min-width:76px;" data-cid="${cid}" data-pname="${escHtml(pname)}" onchange="bkSaveProfileTag(this.dataset.cid,this.dataset.pname,'${field}',this.value)">${optsHtml}</select>`;
-  };
-  const platOpts=[{v:'',l:'— Platform —'},{v:'Windows',l:'Windows'},{v:'Proxmox',l:'Proxmox'},{v:'Other',l:'Other'}];
-  const locOpts=[{v:'',l:'— Location —'},{v:'Local',l:'Local'},{v:'Off-site',l:'Off-site'},{v:'Both',l:'Both'}];
-  const typeOpts=[{v:'',l:'— Type —'},{v:'Image',l:'Image'},{v:'Data',l:'Data'},{v:'Both',l:'Both'}];
+  const roleChips=(cid,pname,roles)=>BK_ROLES.map(r=>{
+    const on=roles.includes(r.id);
+    return`<button onclick="bkToggleProfileRole('${cid}','${escHtml(pname)}','${r.id}')" style="font-size:9px;padding:2px 7px;border-radius:10px;cursor:pointer;border:1px solid ${r.bg};transition:all 0.1s;${on?`background:${r.bg};color:${r.fg};`:'background:transparent;color:var(--text3);'}">${r.label}</button>`;
+  }).join('');
 
   const rows=[];
   clients.forEach(c=>{
@@ -3748,34 +3757,32 @@ function bkRenderProfiles(){
     if(!live||!live.profiles.length)return;
     live.profiles.forEach((p,pi)=>{
       const pEffFreq=bkEffectiveFreq(c,p.profile);
-      const ageDays=(Date.now()-p.lastAccess)/86400000;
       const compliant=(c.syncrify!=='Inactive'||c.wasabi!=='Inactive')?bkIsCompliant(p.lastAccess,pEffFreq):null;
       const ps=c.profileSettings&&c.profileSettings[p.profile]||{};
+      const roles=Array.isArray(ps.roles)?ps.roles:[];
       rows.push(`<tr>
-        <td>${pi===0?`<span style="font-weight:600;">${escHtml(c.syncrifyId||c.name)}</span>`:''}</td>
+        <td rowspan="2" style="vertical-align:top;padding-top:8px;">${pi===0?`<span style="font-weight:600;">${escHtml(c.syncrifyId||c.name)}</span>`:''}</td>
         <td>${escHtml(p.profile)}</td>
-        <td>${p.diskSize>0?bkFmt(p.diskSize/1e9):'<span class="bk-dim">0 B</span>'}</td>
-        <td class="${compliant===false?'bk-neg':'bk-pos'}">${bkFmtDate(p.lastAccess)}</td>
+        <td style="text-align:right;">${p.diskSize>0?bkFmt(p.diskSize/1e9):'<span class="bk-dim">0 B</span>'}</td>
+        <td style="text-align:right;" class="${compliant===false?'bk-neg':'bk-pos'}">${bkFmtDate(p.lastAccess)}</td>
         <td style="text-align:center;">${compliant===null?'—':compliant?'<span class="bk-pos">✓</span>':'<span class="bk-neg">✗</span>'}</td>
-        <td>${tagSel(c.id,p.profile,'platform',ps.platform||'',platOpts)}</td>
-        <td>${tagSel(c.id,p.profile,'location',ps.location||'',locOpts)}</td>
-        <td>${tagSel(c.id,p.profile,'backupType',ps.backupType||'',typeOpts)}</td>
+      </tr><tr>
+        <td colspan="4" style="padding:3px 0 10px 0;border-top:none;">
+          <div style="display:flex;flex-wrap:wrap;gap:4px;">${roleChips(c.id,p.profile,roles)}</div>
+        </td>
       </tr>`);
     });
   });
 
   if(!rows.length)return`<div style="color:var(--text3);font-size:12px;padding:20px 0;">No profile data for this selection.</div>`;
 
-  return`<div class="bk-table-wrap"><table class="bk-table bk-profiles-table" style="min-width:680px;">
+  return`<div class="bk-table-wrap"><table class="bk-table bk-profiles-table" style="min-width:500px;">
     <thead><tr>
       <th style="min-width:130px;">Client</th>
       <th style="min-width:160px;">Profile</th>
       <th style="text-align:right;min-width:70px;">Size</th>
-      <th style="text-align:right;min-width:90px;">Last Access</th>
+      <th style="text-align:right;min-width:100px;">Last Access</th>
       <th style="text-align:center;min-width:30px;">✓</th>
-      <th style="min-width:90px;">Platform</th>
-      <th style="min-width:90px;">Location</th>
-      <th style="min-width:90px;">Type</th>
     </tr></thead>
     <tbody>${rows.join('')}</tbody>
   </table></div>`;
