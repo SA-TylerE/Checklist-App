@@ -613,7 +613,12 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .bk-expand-toggle:hover{opacity:1;}
 .bk-expand-toggle.open{transform:rotate(90deg);}
 .bk-expand-row td{border-top:none!important;}
-.bk-expand-inner{padding:4px 12px 10px 36px;border-bottom:1px solid var(--border);}
+.bk-note-row td{border-top:none!important;}
+.bk-expand-table{width:100%;border-collapse:collapse;font-size:11px;}
+.bk-expand-table th{color:var(--text3);font-size:10px;font-weight:600;padding:4px 28px 4px 0;border-bottom:1px solid var(--border);white-space:nowrap;}
+.bk-expand-table th:last-child,.bk-expand-table td:last-child{padding-right:0;}
+.bk-expand-table td{padding:6px 28px 6px 0;border-top:1px solid var(--border);color:var(--text2);white-space:nowrap;vertical-align:middle;}
+.bk-expand-table td.bk-exp-freq{padding-right:16px;}
 
 /* Styled confirm dialog */
 #confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:600;align-items:center;justify-content:center;}
@@ -3169,6 +3174,7 @@ let _bkActiveClient='all';
 let _bkTab='overview';
 let _bkFetching=false;
 let _bkExpanded=new Set();
+let _bkNoteOpen=new Set();
 
 function bkGetClients(){return appSettings.backupClients||DEFAULT_BACKUP_CLIENTS;}
 
@@ -3288,6 +3294,13 @@ function bkSaveProfileFreq(clientId,profileName,freq){
   bkRenderMain();
   if(scrollTop)requestAnimationFrame(()=>{const s=document.querySelector('.bk-scroll');if(s)s.scrollTop=scrollTop;});
 }
+function bkToggleNote(id){
+  if(_bkNoteOpen.has(id))_bkNoteOpen.delete(id);else _bkNoteOpen.add(id);
+  const scroll=document.querySelector('.bk-scroll');
+  const scrollTop=scroll?scroll.scrollTop:0;
+  bkRenderMain();
+  if(scrollTop)requestAnimationFrame(()=>{const s=document.querySelector('.bk-scroll');if(s)s.scrollTop=scrollTop;});
+}
 function bkToggleExpand(id){
   if(_bkExpanded.has(id))_bkExpanded.delete(id);else _bkExpanded.add(id);
   const scroll=document.querySelector('.bk-scroll');
@@ -3355,7 +3368,7 @@ function bkRenderOverview(){
         <th colspan="4" style="text-align:center;padding-bottom:3px;">Live</th>
         <th colspan="5" style="text-align:center;padding-bottom:3px;">Backup Status</th>
         <th rowspan="2">VPN</th>
-        <th rowspan="2" style="text-align:left;min-width:130px;">Notes</th>
+        <th rowspan="2" style="text-align:center;width:36px;">Notes</th>
       </tr><tr>
         <th>Allotted (GB)</th><th>Devices</th><th>Est. ($)</th><th>Charged ($)</th>
         <th>Used</th><th>Devices</th><th>Calc.</th><th>Diff.</th>
@@ -3386,40 +3399,44 @@ function bkRenderOverview(){
         const profilesCell=totalProfiles===null?'—'
           :compliantCount===null?`<span class="bk-dim">${totalProfiles}</span>`
           :`<span class="${compliantCount===totalProfiles?'bk-pos':compliantCount===0?'bk-neg':'bk-warn'}">${compliantCount}/${totalProfiles}</span>`;
+        const vpnSel=['Zywall','Unifi','Other'].includes(c.vpnHost)?c.vpnHost:(c.vpnHost?'Other':'');
+        const noteRow=_bkNoteOpen.has(c.id)?`<tr class="bk-note-row">
+          <td colspan="16" style="padding:4px 12px 8px 44px;background:rgba(245,158,11,0.04);border-bottom:1px solid var(--border);">
+            <textarea style="width:100%;max-width:600px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:6px 8px;color:var(--text);font-size:11px;font-family:var(--sans);resize:vertical;min-height:44px;outline:none;box-sizing:border-box;display:block;" placeholder="Add notes…" onblur="bkSaveClient('${c.id}','notes',this.value)" onkeydown="if(event.key==='Escape')bkToggleNote('${c.id}')">${escHtml(c.notes||'')}</textarea>
+          </td>
+        </tr>`:'';
         const expandRow=hasProfiles&&expanded?`<tr class="bk-expand-row">
-          <td colspan="16" style="padding:0;background:var(--bg2);">
-            <div class="bk-expand-inner">
-              <table style="border-collapse:collapse;font-size:11px;">
-                <thead><tr>
-                  <th style="text-align:left;padding:3px 20px 3px 0;color:var(--text3);font-size:10px;font-weight:600;white-space:nowrap;">Profile</th>
-                  <th style="text-align:right;padding:3px 20px 3px 0;color:var(--text3);font-size:10px;font-weight:600;">Used</th>
-                  <th style="text-align:right;padding:3px 20px 3px 0;color:var(--text3);font-size:10px;font-weight:600;">Last Backup</th>
-                  <th style="padding:3px 12px 3px 0;color:var(--text3);font-size:10px;font-weight:600;">Freq.</th>
-                  <th style="text-align:center;padding:3px 0;color:var(--text3);font-size:10px;font-weight:600;">✓</th>
-                </tr></thead>
-                <tbody>${live.profiles.map(p=>{
-                  const pFreqOverride=(c.profileSettings&&c.profileSettings[p.profile]?.frequency)||'';
-                  const pEffectiveFreq=pFreqOverride||c.frequency;
-                  const pThresh=pEffectiveFreq==='Monthly'?32:pEffectiveFreq==='Weekly'?8:2;
-                  const pAge=(Date.now()-p.lastAccess)/86400000;
-                  const pOk=bkIsCompliant(p.lastAccess,pEffectiveFreq);
-                  return`<tr>
-                    <td style="padding:2px 20px 2px 0;color:var(--text2);white-space:nowrap;">${escHtml(p.profile)}</td>
-                    <td style="padding:2px 20px 2px 0;text-align:right;color:var(--text3);">${p.diskSize>0?bkFmt(p.diskSize/1e9):'<span class="bk-dim">—</span>'}</td>
-                    <td style="padding:2px 20px 2px 0;text-align:right;" class="${pAge>pThresh?'bk-neg':'bk-pos'}">${bkFmtDate(p.lastAccess)}</td>
-                    <td style="padding:2px 12px 2px 0;">
-                      <select class="bk-cell-select" style="font-size:10px;" data-cid="${c.id}" data-pname="${escHtml(p.profile)}" onchange="bkSaveProfileFreq(this.dataset.cid,this.dataset.pname,this.value)">
-                        <option value=""${!pFreqOverride?' selected':''}>↑ ${c.frequency}</option>
-                        <option value="Daily"${pFreqOverride==='Daily'?' selected':''}>Daily</option>
-                        <option value="Weekly"${pFreqOverride==='Weekly'?' selected':''}>Weekly</option>
-                        <option value="Monthly"${pFreqOverride==='Monthly'?' selected':''}>Monthly</option>
-                      </select>
-                    </td>
-                    <td style="padding:2px 0;text-align:center;">${pOk===null?'—':pOk?'<span class="bk-pos">✓</span>':'<span class="bk-neg">✗</span>'}</td>
-                  </tr>`;
-                }).join('')}</tbody>
-              </table>
-            </div>
+          <td colspan="16" style="padding:4px 8px 8px 44px;border-bottom:1px solid var(--border);">
+            <table class="bk-expand-table">
+              <thead><tr>
+                <th style="text-align:left;">Profile</th>
+                <th style="text-align:right;">Used</th>
+                <th style="text-align:right;">Last Backup</th>
+                <th class="bk-exp-freq">Freq.</th>
+                <th style="text-align:center;padding-right:0;">✓</th>
+              </tr></thead>
+              <tbody>${live.profiles.map(p=>{
+                const pFreqOverride=(c.profileSettings&&c.profileSettings[p.profile]?.frequency)||'';
+                const pEffectiveFreq=pFreqOverride||c.frequency;
+                const pThresh=pEffectiveFreq==='Monthly'?32:pEffectiveFreq==='Weekly'?8:2;
+                const pAge=(Date.now()-p.lastAccess)/86400000;
+                const pOk=bkIsCompliant(p.lastAccess,pEffectiveFreq);
+                return`<tr>
+                  <td style="text-align:left;">${escHtml(p.profile)}</td>
+                  <td style="text-align:right;color:var(--text3);">${p.diskSize>0?bkFmt(p.diskSize/1e9):'<span class="bk-dim">—</span>'}</td>
+                  <td style="text-align:right;" class="${pAge>pThresh?'bk-neg':'bk-pos'}">${bkFmtDate(p.lastAccess)}</td>
+                  <td class="bk-exp-freq">
+                    <select class="bk-cell-select" style="font-size:10px;" data-cid="${c.id}" data-pname="${escHtml(p.profile)}" onchange="bkSaveProfileFreq(this.dataset.cid,this.dataset.pname,this.value)">
+                      <option value=""${!pFreqOverride?' selected':''}>↑ ${c.frequency}</option>
+                      <option value="Daily"${pFreqOverride==='Daily'?' selected':''}>Daily</option>
+                      <option value="Weekly"${pFreqOverride==='Weekly'?' selected':''}>Weekly</option>
+                      <option value="Monthly"${pFreqOverride==='Monthly'?' selected':''}>Monthly</option>
+                    </select>
+                  </td>
+                  <td style="text-align:center;padding-right:0;">${pOk===null?'—':pOk?'<span class="bk-pos">✓</span>':'<span class="bk-neg">✗</span>'}</td>
+                </tr>`;
+              }).join('')}</tbody>
+            </table>
           </td>
         </tr>`:'';
         return`<tr class="bk-row-${st}">
@@ -3446,9 +3463,9 @@ function bkRenderOverview(){
           <td>${sel(c.id,'frequency',['Daily','Weekly','Monthly'],c.frequency)}</td>
           <td class="${oldestAccess!==null?(st==='error'?'bk-neg':'bk-pos'):''}">${bkFmtDate(oldestAccess)}</td>
           <td>${profilesCell}</td>
-          <td>${inp('vpnHost',c.vpnHost||'','width:65px;')}</td>
-          <td class="bk-notes-col">${inp('notes',c.notes||'')}</td>
-        </tr>${expandRow}`;
+          <td><select class="bk-cell-select" onchange="bkSaveClient('${c.id}','vpnHost',this.value)"><option value=""${vpnSel===''?' selected':''}>—</option><option value="Zywall"${vpnSel==='Zywall'?' selected':''}>Zywall</option><option value="Unifi"${vpnSel==='Unifi'?' selected':''}>Unifi</option><option value="Other"${vpnSel==='Other'?' selected':''}>Other</option></select></td>
+          <td style="text-align:center;padding:4px 8px;"><button class="quote-note-btn${c.notes?' has-note':''}" onclick="bkToggleNote('${c.id}')" title="${c.notes?escHtml(c.notes):'Add note'}">&#9998;</button></td>
+        </tr>${noteRow}${expandRow}`;
       }).join('')}
     </tbody>
   </table></div>`;
@@ -3464,13 +3481,14 @@ function bkRenderProfiles(){
     const live=_backupLiveData[c.syncrifyId];
     if(!live||!live.profiles.length)return;
     live.profiles.forEach((p,pi)=>{
+      const pEffFreq=bkEffectiveFreq(c,p.profile);
       const ageDays=(Date.now()-p.lastAccess)/86400000;
-      const compliant=(c.syncrify!=='Inactive'||c.wasabi!=='Inactive')?ageDays<=(c.frequency==='Weekly'?8:2):null;
+      const compliant=(c.syncrify!=='Inactive'||c.wasabi!=='Inactive')?bkIsCompliant(p.lastAccess,pEffFreq):null;
       rows.push(`<tr>
-        <td>${pi===0?`<span style="font-weight:600;">${escHtml(c.name)}</span>`:''}</td>
+        <td>${pi===0?`<span style="font-weight:600;">${escHtml(c.syncrifyId||c.name)}</span>`:''}</td>
         <td>${escHtml(p.profile)}</td>
         <td>${p.diskSize>0?bkFmt(p.diskSize/1e9):'<span class="bk-dim">0 B</span>'}</td>
-        <td class="${ageDays>(c.frequency==='Weekly'?8:2)?'bk-neg':'bk-pos'}">${bkFmtDate(p.lastAccess)}</td>
+        <td class="${compliant===false?'bk-neg':'bk-pos'}">${bkFmtDate(p.lastAccess)}</td>
         <td style="text-align:center;">${compliant===null?'—':compliant?'<span class="bk-pos">✓</span>':'<span class="bk-neg">✗</span>'}</td>
       </tr>`);
     });
