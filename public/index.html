@@ -605,6 +605,15 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .bk-cell-input{background:transparent;border:1px solid transparent;border-radius:4px;font-size:11px;color:var(--text2);padding:1px 3px;outline:none;min-width:0;width:100%;box-sizing:border-box;font-family:var(--sans);}
 .bk-cell-input:hover,.bk-cell-input:focus{border-color:var(--border);background:var(--bg3);color:var(--text);}
 .bk-cell-num{width:55px;text-align:right!important;}
+.bk-client-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;padding:0 2px;line-height:1;opacity:0;transition:opacity 0.15s;flex-shrink:0;margin-left:auto;}
+.bk-client-item:hover .bk-client-del{opacity:0.5;}
+.bk-client-del:hover{opacity:1!important;color:var(--danger);}
+.bk-warn{color:#f59e0b!important;font-weight:600;}
+.bk-expand-toggle{background:none;border:none;color:var(--text3);cursor:pointer;font-size:10px;padding:1px 3px;line-height:1;flex-shrink:0;opacity:0.5;transition:opacity 0.15s,transform 0.18s;margin-top:3px;}
+.bk-expand-toggle:hover{opacity:1;}
+.bk-expand-toggle.open{transform:rotate(90deg);}
+.bk-expand-row td{border-top:none!important;}
+.bk-expand-inner{padding:4px 12px 10px 36px;border-bottom:1px solid var(--border);}
 
 /* Styled confirm dialog */
 #confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:600;align-items:center;justify-content:center;}
@@ -973,6 +982,9 @@ body.light{
         <!-- Backups section -->
         <div class="sidebar-section" id="ss-backups">
           <div id="bk-client-list" style="padding:6px 0;overflow-y:auto;flex:1;"></div>
+          <div class="sidebar-footer">
+            <button class="btn-new" onclick="bkAddClient()">+ New Client</button>
+          </div>
         </div>
       </div>
     </div>
@@ -3156,6 +3168,7 @@ let _bkLastUpdated=null; // mtimeMs from server
 let _bkActiveClient='all';
 let _bkTab='overview';
 let _bkFetching=false;
+let _bkExpanded=new Set();
 
 function bkGetClients(){return appSettings.backupClients||DEFAULT_BACKUP_CLIENTS;}
 
@@ -3170,13 +3183,19 @@ function bkEstCost(allottedGB,contractDevices){
 function bkIsCompliant(lastAccessMs,frequency){
   if(!lastAccessMs)return null;
   const ageDays=(Date.now()-lastAccessMs)/86400000;
+  if(frequency==='Monthly')return ageDays<=32;
   return frequency==='Weekly'?ageDays<=8:ageDays<=2;
+}
+function bkEffectiveFreq(c,profileName){
+  return(c.profileSettings&&c.profileSettings[profileName]?.frequency)||c.frequency;
 }
 function bkRowStatus(c,live){
   const inactive=c.syncrify==='Inactive'&&c.wasabi==='Inactive';
   if(inactive)return'inactive';
-  const lastAccess=live&&live.profiles.length?Math.max(...live.profiles.map(p=>p.lastAccess)):null;
-  if(bkIsCompliant(lastAccess,c.frequency)===false)return'error';
+  if(live&&live.profiles.length){
+    const anyNonCompliant=live.profiles.some(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))===false);
+    if(anyNonCompliant)return'error';
+  }
   const usedGB=live?live.usedBytes/1e9:0;
   const calc=bkCalcCost(usedGB,live?live.profiles.length:0);
   if(c.charged>0&&calc>c.charged+5)return'warn';
@@ -3218,7 +3237,7 @@ function renderBackupsSidebar(){
     +clients.map(c=>{
       const live=_backupLiveData?.[c.syncrifyId];
       const st=bkRowStatus(c,live);
-      return`<div class="bk-client-item${_bkActiveClient===c.id?' active':''}" data-bkid="${c.id}" onclick="bkSwitchClient('${c.id}')"><span class="bk-dot bk-dot-${st}"></span>${escHtml(c.name)}</div>`;
+      return`<div class="bk-client-item${_bkActiveClient===c.id?' active':''}" data-bkid="${c.id}" onclick="bkSwitchClient('${c.id}')"><span class="bk-dot bk-dot-${st}"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(c.name)}</span><button class="bk-client-del" onclick="event.stopPropagation();bkRemoveClient('${c.id}')" title="Remove client">×</button></div>`;
     }).join('');
 }
 
@@ -3254,6 +3273,28 @@ function bkFmt(usedGB){return usedGB>=1000?(usedGB/1000).toFixed(1)+' TB':usedGB
 function bkFmtDate(ms){if(!ms)return'—';return new Date(ms).toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'2-digit'});}
 function bkFmtCur(n){return'$'+(n||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});}
 
+function bkSaveProfileFreq(clientId,profileName,freq){
+  const clients=bkGetClients().slice();
+  const c=clients.find(x=>x.id===clientId);
+  if(!c)return;
+  if(!c.profileSettings)c.profileSettings={};
+  if(freq==='')delete c.profileSettings[profileName];
+  else c.profileSettings[profileName]={frequency:freq};
+  appSettings.backupClients=clients;
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
+  const scroll=document.querySelector('.bk-scroll');
+  const scrollTop=scroll?scroll.scrollTop:0;
+  renderBackupsSidebar();
+  bkRenderMain();
+  if(scrollTop)requestAnimationFrame(()=>{const s=document.querySelector('.bk-scroll');if(s)s.scrollTop=scrollTop;});
+}
+function bkToggleExpand(id){
+  if(_bkExpanded.has(id))_bkExpanded.delete(id);else _bkExpanded.add(id);
+  const scroll=document.querySelector('.bk-scroll');
+  const scrollTop=scroll?scroll.scrollTop:0;
+  bkRenderMain();
+  if(scrollTop)requestAnimationFrame(()=>{const s=document.querySelector('.bk-scroll');if(s)s.scrollTop=scrollTop;});
+}
 function bkSaveClient(id,field,val){
   const clients=bkGetClients().slice();
   const c=clients.find(x=>x.id===id);
@@ -3315,42 +3356,87 @@ function bkRenderOverview(){
         <th colspan="5" style="text-align:center;padding-bottom:3px;">Backup Status</th>
         <th rowspan="2">VPN</th>
         <th rowspan="2" style="text-align:left;min-width:130px;">Notes</th>
-        <th rowspan="2" style="width:28px;"></th>
       </tr><tr>
-        <th>Allotted</th><th>Devices</th><th>Est.</th><th>Charged</th>
+        <th>Allotted (GB)</th><th>Devices</th><th>Est. ($)</th><th>Charged ($)</th>
         <th>Used</th><th>Devices</th><th>Calc.</th><th>Diff.</th>
-        <th>Syncrify</th><th>Wasabi</th><th>Freq.</th><th>Last Backup</th><th>✓</th>
+        <th>Syncrify</th><th>Wasabi</th><th>Freq.</th><th>Oldest Backup</th><th>Profiles</th>
       </tr>
     </thead>
     <tbody>
       ${clients.map(c=>{
         const live=_backupLiveData?.[c.syncrifyId];
+        const hasProfiles=live&&live.profiles.length>0;
+        const expanded=_bkExpanded.has(c.id);
         const usedGB=live?live.usedBytes/1e9:null;
         const devCnt=live?live.profiles.filter(p=>p.diskSize>0).length:null;
         const totalProfiles=live?live.profiles.length:null;
         const calc=usedGB!==null?bkCalcCost(usedGB,totalProfiles):null;
         const diff=(calc!==null&&c.charged!==undefined)?c.charged-calc:null;
-        const lastAccess=live&&live.profiles.length?Math.max(...live.profiles.map(p=>p.lastAccess)):null;
-        const compliant=(c.syncrify==='Active'||c.wasabi==='Active')?bkIsCompliant(lastAccess,c.frequency):null;
-        const ageDays=lastAccess?(Date.now()-lastAccess)/86400000:null;
+        const oldestAccess=hasProfiles?Math.min(...live.profiles.map(p=>p.lastAccess)):null;
+        const active=c.syncrify==='Active'||c.wasabi==='Active';
+        const compliantCount=active&&live?live.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))).length:null;
+        const ageDays=oldestAccess?(Date.now()-oldestAccess)/86400000:null;
         const st=bkRowStatus(c,live);
         const estCost=c.allottedGB>0?bkEstCost(c.allottedGB,c.contractDevices):null;
         const inp=(field,val,style='')=>`<input type="text" class="bk-cell-input" value="${escHtml(String(val??''))}" onblur="bkSaveClient('${c.id}','${field}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"${style?` style="${style}"`:''}>`
         const num=(field,val,step=1)=>`<input type="number" class="bk-cell-input bk-cell-num" min="0" step="${step}" value="${val||0}" onblur="bkSaveClient('${c.id}','${field}',this.value)" onkeydown="if(event.key==='Enter')this.blur()">`;
+        const chevron=hasProfiles
+          ?`<button class="bk-expand-toggle${expanded?' open':''}" onclick="bkToggleExpand('${c.id}')" title="${expanded?'Collapse':'Expand'} profiles">▸</button>`
+          :`<span class="bk-expand-toggle" style="opacity:0;pointer-events:none;">▸</span>`;
+        const profilesCell=totalProfiles===null?'—'
+          :compliantCount===null?`<span class="bk-dim">${totalProfiles}</span>`
+          :`<span class="${compliantCount===totalProfiles?'bk-pos':compliantCount===0?'bk-neg':'bk-warn'}">${compliantCount}/${totalProfiles}</span>`;
+        const expandRow=hasProfiles&&expanded?`<tr class="bk-expand-row">
+          <td colspan="16" style="padding:0;background:var(--bg2);">
+            <div class="bk-expand-inner">
+              <table style="border-collapse:collapse;font-size:11px;">
+                <thead><tr>
+                  <th style="text-align:left;padding:3px 20px 3px 0;color:var(--text3);font-size:10px;font-weight:600;white-space:nowrap;">Profile</th>
+                  <th style="text-align:right;padding:3px 20px 3px 0;color:var(--text3);font-size:10px;font-weight:600;">Used</th>
+                  <th style="text-align:right;padding:3px 20px 3px 0;color:var(--text3);font-size:10px;font-weight:600;">Last Backup</th>
+                  <th style="padding:3px 12px 3px 0;color:var(--text3);font-size:10px;font-weight:600;">Freq.</th>
+                  <th style="text-align:center;padding:3px 0;color:var(--text3);font-size:10px;font-weight:600;">✓</th>
+                </tr></thead>
+                <tbody>${live.profiles.map(p=>{
+                  const pFreqOverride=(c.profileSettings&&c.profileSettings[p.profile]?.frequency)||'';
+                  const pEffectiveFreq=pFreqOverride||c.frequency;
+                  const pThresh=pEffectiveFreq==='Monthly'?32:pEffectiveFreq==='Weekly'?8:2;
+                  const pAge=(Date.now()-p.lastAccess)/86400000;
+                  const pOk=bkIsCompliant(p.lastAccess,pEffectiveFreq);
+                  return`<tr>
+                    <td style="padding:2px 20px 2px 0;color:var(--text2);white-space:nowrap;">${escHtml(p.profile)}</td>
+                    <td style="padding:2px 20px 2px 0;text-align:right;color:var(--text3);">${p.diskSize>0?bkFmt(p.diskSize/1e9):'<span class="bk-dim">—</span>'}</td>
+                    <td style="padding:2px 20px 2px 0;text-align:right;" class="${pAge>pThresh?'bk-neg':'bk-pos'}">${bkFmtDate(p.lastAccess)}</td>
+                    <td style="padding:2px 12px 2px 0;">
+                      <select class="bk-cell-select" style="font-size:10px;" data-cid="${c.id}" data-pname="${escHtml(p.profile)}" onchange="bkSaveProfileFreq(this.dataset.cid,this.dataset.pname,this.value)">
+                        <option value=""${!pFreqOverride?' selected':''}>↑ ${c.frequency}</option>
+                        <option value="Daily"${pFreqOverride==='Daily'?' selected':''}>Daily</option>
+                        <option value="Weekly"${pFreqOverride==='Weekly'?' selected':''}>Weekly</option>
+                        <option value="Monthly"${pFreqOverride==='Monthly'?' selected':''}>Monthly</option>
+                      </select>
+                    </td>
+                    <td style="padding:2px 0;text-align:center;">${pOk===null?'—':pOk?'<span class="bk-pos">✓</span>':'<span class="bk-neg">✗</span>'}</td>
+                  </tr>`;
+                }).join('')}</tbody>
+              </table>
+            </div>
+          </td>
+        </tr>`:'';
         return`<tr class="bk-row-${st}">
           <td class="bk-td-name">
-            <div style="display:flex;align-items:center;gap:5px;">
-              <span class="bk-dot bk-dot-${st}" style="flex-shrink:0;"></span>
+            <div style="display:flex;align-items:flex-start;gap:4px;">
+              ${chevron}
+              <span class="bk-dot bk-dot-${st}" style="flex-shrink:0;margin-top:5px;"></span>
               <div style="flex:1;min-width:0;">
                 <input type="text" class="bk-cell-input" style="font-weight:500;" value="${escHtml(c.name)}" onblur="bkSaveClient('${c.id}','name',this.value)" onkeydown="if(event.key==='Enter')this.blur()">
                 <div style="display:flex;align-items:center;gap:3px;margin-top:1px;"><span style="font-size:9px;color:var(--text3);flex-shrink:0;">ID:</span><input type="text" class="bk-cell-input" style="font-size:9px;color:var(--text3);width:80px;" value="${escHtml(c.syncrifyId||'')}" onblur="bkSaveClient('${c.id}','syncrifyId',this.value)" onkeydown="if(event.key==='Enter')this.blur()"></div>
               </div>
             </div>
           </td>
-          <td>${num('allottedGB',c.allottedGB,500)}</td>
+          <td><div style="display:flex;align-items:center;justify-content:flex-end;gap:3px;">${num('allottedGB',c.allottedGB,500)}<span style="font-size:9px;color:var(--text3);flex-shrink:0;">GB</span></div></td>
           <td>${num('contractDevices',c.contractDevices)}</td>
           <td style="color:var(--text3);">${estCost!==null?bkFmtCur(estCost):'—'}</td>
-          <td>${num('charged',c.charged,5)}</td>
+          <td><div style="display:flex;align-items:center;justify-content:flex-end;gap:1px;"><span style="font-size:9px;color:var(--text3);flex-shrink:0;">$</span>${num('charged',c.charged,5)}</div></td>
           <td>${usedGB!==null?bkFmt(usedGB):'<span class="bk-dim">—</span>'}</td>
           <td>${devCnt!==null?devCnt:'<span class="bk-dim">—</span>'}</td>
           <td>${calc!==null?bkFmtCur(calc):'<span class="bk-dim">—</span>'}</td>
@@ -3358,15 +3444,13 @@ function bkRenderOverview(){
           <td>${sel(c.id,'syncrify',['Active','Inactive'],c.syncrify)}</td>
           <td>${sel(c.id,'wasabi',['Active','Inactive'],c.wasabi)}</td>
           <td>${sel(c.id,'frequency',['Daily','Weekly','Monthly'],c.frequency)}</td>
-          <td class="${ageDays!==null?(ageDays>(c.frequency==='Weekly'?8:2)?'bk-neg':'bk-pos'):''}">${bkFmtDate(lastAccess)}</td>
-          <td>${compliant===null?'—':compliant?'<span class="bk-pos">✓</span>':'<span class="bk-neg">✗</span>'}</td>
+          <td class="${oldestAccess!==null?(st==='error'?'bk-neg':'bk-pos'):''}">${bkFmtDate(oldestAccess)}</td>
+          <td>${profilesCell}</td>
           <td>${inp('vpnHost',c.vpnHost||'','width:65px;')}</td>
           <td class="bk-notes-col">${inp('notes',c.notes||'')}</td>
-          <td style="text-align:center;padding:3px 4px;"><button class="btn-ghost" style="font-size:10px;padding:1px 5px;color:var(--danger);line-height:1;" onclick="bkRemoveClient('${c.id}')" title="Remove client">✕</button></td>
-        </tr>`;
+        </tr>${expandRow}`;
       }).join('')}
     </tbody>
-    <tfoot><tr><td colspan="17" style="padding:6px 8px;border-top:1px solid var(--border);"><button class="btn-ghost" style="font-size:11px;" onclick="bkAddClient()">+ Add Client</button></td></tr></tfoot>
   </table></div>`;
 }
 
