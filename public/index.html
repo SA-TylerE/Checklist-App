@@ -3180,13 +3180,16 @@ function bkRowStatus(c,live){
   return'good';
 }
 
+let _bkFetchError=null;
 async function bkFetchLive(){
   if(_bkFetching)return;
   _bkFetching=true;
+  _bkFetchError=null;
   try{
     const r=await fetch('/api/backup-data');
     const d=await r.json();
-    if(!Array.isArray(d.data)){_backupLiveData={};return;}
+    if(d.error){_bkFetchError=d.error;_backupLiveData={};return;}
+    if(!Array.isArray(d.data)){_bkFetchError='Unexpected response from server';_backupLiveData={};return;}
     _bkLastUpdated=d.lastUpdated||null;
     _backupLiveData={};
     for(const e of d.data){
@@ -3194,7 +3197,7 @@ async function bkFetchLive(){
       _backupLiveData[e.client].usedBytes+=e.diskSize;
       _backupLiveData[e.client].profiles.push(e);
     }
-  }catch(err){_backupLiveData={};}finally{_bkFetching=false;}
+  }catch(err){_bkFetchError=err.message;_backupLiveData={};}finally{_bkFetching=false;}
 }
 
 function bkSwitchClient(id){
@@ -3234,8 +3237,11 @@ function bkRenderMain(){
     <div class="bk-tabs-right">
       ${_backupLiveData===null
         ?(hasUrl?'<span style="font-size:11px;color:var(--text3);">Loading live data…</span>':'<button class="btn-ghost" style="font-size:11px;" onclick="openSettings()">Configure backup data URL in Settings ↗</button>')
-        :`<span style="font-size:10px;color:var(--text3);">${Object.values(_backupLiveData).reduce((s,v)=>s+v.profiles.length,0)} profiles${_bkLastUpdated?' · updated '+new Date(_bkLastUpdated).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}):''}</span>
-          <button class="btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="_backupLiveData=null;_bkFetching=false;renderBackupsView()">↻ Refresh</button>`}
+        :_bkFetchError
+          ?`<span style="font-size:11px;color:var(--danger);" title="${escHtml(_bkFetchError)}">⚠ Fetch error — ${escHtml(_bkFetchError.length>60?_bkFetchError.slice(0,60)+'…':_bkFetchError)}</span>
+            <button class="btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="_backupLiveData=null;_bkFetchError=null;_bkFetching=false;renderBackupsView()">↻ Retry</button>`
+          :`<span style="font-size:10px;color:var(--text3);">${Object.values(_backupLiveData).reduce((s,v)=>s+v.profiles.length,0)} profiles${_bkLastUpdated?' · updated '+new Date(_bkLastUpdated).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}):''}</span>
+            <button class="btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="_backupLiveData=null;_bkFetchError=null;_bkFetching=false;renderBackupsView()">↻ Refresh</button>`}
     </div>
   </div>
   <div class="bk-scroll">${_bkTab==='overview'?bkRenderOverview():bkRenderProfiles()}</div>`;
