@@ -576,10 +576,11 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .bk-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 .bk-dot-good{background:#22c55e;}.bk-dot-warn{background:#f59e0b;}.bk-dot-error{background:#ef4444;}.bk-dot-inactive{background:#4b5563;}
 #backups-content{display:flex;flex-direction:column;height:100%;overflow:hidden;}
-.bk-tabs{display:flex;align-items:center;gap:2px;padding:8px 14px 0;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg2);}
-.bk-tab{padding:5px 13px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--text3);border-bottom:2px solid transparent;margin-bottom:-1px;font-family:var(--sans);white-space:nowrap;transition:color 0.15s;}
-.bk-tab:hover{color:var(--text);}.bk-tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
-.bk-tabs-right{margin-left:auto;display:flex;align-items:center;gap:8px;padding-bottom:2px;}
+.bk-page-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 18px 10px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg2);}
+.bk-page-title{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px;}
+.bk-page-subtitle{font-size:11px;color:var(--text3);margin-top:3px;}
+.bk-back-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0;transition:color 0.15s;line-height:1;}
+.bk-back-btn:hover{color:var(--text);}
 .bk-scroll{flex:1;overflow:auto;padding:14px;}
 .bk-summary-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
 .bk-sum-card{background:var(--bg2);border:1px solid var(--border);border-radius:7px;padding:8px 14px;flex:1;min-width:90px;}
@@ -638,14 +639,16 @@ span.bk-expand-toggle{opacity:0;pointer-events:none;}
 .bk-issue-row{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px;}
 .bk-issue-row+.bk-issue-row{border-top:1px solid var(--border);}
 /* backup dashboard */
-.bk-dash{max-width:900px;width:100%;}
-.bk-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;}
+.bk-dash{width:100%;}
+.bk-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;}
 .bk-client-card{background:var(--bg2);border:1px solid var(--border);border-left:3px solid transparent;border-radius:8px;padding:11px 13px;cursor:pointer;transition:background 0.12s;}
 .bk-client-card:hover{background:var(--bg3);}
 .bk-card-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;}
 .bk-card-meta{font-size:10px;color:var(--text3);margin-top:5px;display:flex;flex-wrap:wrap;gap:6px;}
 .bk-card-meta span{white-space:nowrap;}
 .bk-card-issue{font-size:10px;margin-top:4px;font-style:italic;}
+.bk-storage-bar{height:3px;background:var(--bg4);border-radius:2px;margin-top:7px;overflow:hidden;}
+.bk-storage-fill{height:100%;border-radius:2px;transition:width 0.3s;}
 
 /* Styled confirm dialog */
 #confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:600;align-items:center;justify-content:center;}
@@ -1271,6 +1274,16 @@ body.light{
       <div class="guide-close" onclick="closeLogModal()">&#10005;</div>
     </div>
     <div style="flex:1;overflow-y:auto;padding:14px 18px;" id="log-modal-body"></div>
+  </div>
+</div>
+
+<div id="bk-profiles-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;align-items:center;justify-content:center;">
+  <div class="modal-card" style="width:min(760px,96vw);max-height:88vh;display:flex;flex-direction:column;gap:0;padding:0;overflow:hidden;">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <h3 style="font-size:14px;font-weight:600;flex:1;" id="bk-profiles-modal-title">Backup Profiles</h3>
+      <div class="guide-close" onclick="closeBkProfilesModal()">&#10005;</div>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:14px 18px;" id="bk-profiles-modal-body"></div>
   </div>
 </div>
 
@@ -3267,6 +3280,14 @@ async function bkShowLog(){
     renderLogTimeline(document.getElementById('log-modal-body'),logs);
   }catch(e){document.getElementById('log-modal-body').innerHTML=`<div style="color:#fca5a5;font-size:11px;">Failed to load logs: ${e.message}</div>`;}
 }
+function bkOpenProfiles(){
+  closeBkMenu();
+  const c=_bkActiveClient!=='all'?bkGetClients().find(x=>x.id===_bkActiveClient):null;
+  document.getElementById('bk-profiles-modal-title').textContent=(c?escHtml(c.name)+' — ':'')+'Backup Profiles';
+  document.getElementById('bk-profiles-modal-body').innerHTML=bkRenderProfiles();
+  document.getElementById('bk-profiles-modal').style.display='flex';
+}
+function closeBkProfilesModal(){document.getElementById('bk-profiles-modal').style.display='none';}
 function bkToggleMenu(){
   const m=document.getElementById('bk-main-menu');
   if(!m)return;
@@ -3359,37 +3380,44 @@ function bkRenderMain(){
   const isAll=_bkActiveClient==='all';
   const hasUrl=!!(appSettings.backupDataUrl||'').trim();
   const isStale=_bkLastUpdated&&(Date.now()-new Date(_bkLastUpdated).getTime())>86400000;
-  const statusHtml=_backupLiveData===null
-    ?(hasUrl?'<span style="font-size:11px;color:var(--text3);">Loading live data…</span>':'<button class="btn-secondary" style="font-size:11px;" onclick="openSettings()">Configure backup data URL ↗</button>')
-    :_bkFetchError
-      ?`<span style="font-size:11px;color:var(--danger);">⚠ Fetch error</span><button class="btn-secondary" style="font-size:11px;" onclick="_backupLiveData=null;_bkFetchError=null;_bkFetching=false;renderBackupsView()">↻ Retry</button>`
-      :`<span style="font-size:10px;color:var(--text3);">${Object.values(_backupLiveData).reduce((s,v)=>s+v.profiles.length,0)} profiles${_bkLastUpdated?' · updated '+new Date(_bkLastUpdated).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}):''}</span><button class="btn-secondary" style="font-size:11px;" onclick="_backupLiveData=null;_bkFetchError=null;_bkFetching=false;renderBackupsView()">↻ Refresh</button>`;
+  // Subtitle line
+  let subtitle='';
+  if(_backupLiveData===null){subtitle=hasUrl?'Loading live data…':'<a style="color:var(--accent);cursor:pointer;" onclick="openSettings()">Configure backup data URL in Settings ↗</a>';}
+  else if(_bkFetchError){subtitle=`<span style="color:var(--danger);">⚠ Fetch error — use ⋯ menu to retry</span>`;}
+  else{
+    const np=Object.values(_backupLiveData).reduce((s,v)=>s+v.profiles.length,0);
+    const upd=_bkLastUpdated?'updated '+new Date(_bkLastUpdated).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
+    subtitle=`${np} profiles${upd?' · '+upd:''}${isStale?` <span style="color:var(--warn);">⚠ stale</span>`:''}`;
+  }
+  // Title
+  let titleHtml='';
+  if(isAll){
+    titleHtml=`<span>Backup Monitoring</span>`;
+  } else {
+    const c=bkGetClients().find(x=>x.id===_bkActiveClient);
+    const st=c?bkRowStatus(c,_backupLiveData?.[c.syncrifyId]):'good';
+    titleHtml=`<button class="bk-back-btn" onclick="bkSwitchClient('all')">← All</button><span class="bk-dot bk-dot-${st}"></span><span>${c?escHtml(c.name):'Client'}</span>`;
+  }
+  // ... menu
   const menuHtml=`<div class="client-menu-wrap">
-    <button class="client-menu-btn" onclick="bkToggleMenu()" title="More options">&#8230;</button>
+    <button class="client-menu-btn" onclick="bkToggleMenu()">&#8230;</button>
     <div class="client-menu-dropdown" id="bk-main-menu">
       <button class="client-menu-item${_bkShowCosts?' checked':''}" onclick="_bkShowCosts=!_bkShowCosts;bkRenderMain()">Show Costs</button>
       <button class="client-menu-item${_bkHideInactive?' checked':''}" onclick="_bkHideInactive=!_bkHideInactive;bkRenderMain()">Hide Inactive</button>
       <div class="client-menu-sep"></div>
+      <button class="client-menu-item" onclick="bkOpenProfiles()">View Profiles</button>
       <button class="client-menu-item" onclick="bkExportCsv()">Export CSV</button>
       <button class="client-menu-item" onclick="bkShowLog()">View Log</button>
+      <div class="client-menu-sep"></div>
+      <button class="client-menu-item" onclick="closeBkMenu();_backupLiveData=null;_bkFetchError=null;_bkFetching=false;renderBackupsView()">↻ Refresh</button>
     </div>
   </div>`;
+  const pageHeader=`<div class="bk-page-header">
+    <div><div class="bk-page-title">${titleHtml}</div><div class="bk-page-subtitle">${subtitle}</div></div>
+    <div class="header-actions">${menuHtml}</div>
+  </div>`;
   const errBanner=_bkFetchError?`<div style="background:#3b0f0f;border:1px solid rgba(239,68,68,0.3);border-radius:7px;padding:12px 16px;margin-bottom:14px;"><div style="font-size:12px;font-weight:600;color:#f87171;margin-bottom:6px;">Backup Data Fetch Error</div><div style="font-size:12px;color:#fca5a5;line-height:1.5;word-break:break-word;">${escHtml(_bkFetchError)}</div></div>`:'';
-  if(isAll){
-    el.innerHTML=`<div class="bk-tabs">
-      ${isStale?`<span style="font-size:10px;color:var(--warn);padding:0 6px;align-self:center;">⚠ Data ${Math.floor((Date.now()-new Date(_bkLastUpdated).getTime())/86400000)}d old</span>`:''}
-      <div class="bk-tabs-right">${statusHtml}${menuHtml}</div>
-    </div>
-    <div class="bk-scroll" style="display:flex;justify-content:center;">${errBanner}${bkRenderDashboard()}</div>`;
-  } else {
-    el.innerHTML=`<div class="bk-tabs">
-      <button class="bk-tab${_bkTab==='overview'?' active':''}" onclick="bkSwitchTab('overview')">Overview</button>
-      <button class="bk-tab${_bkTab==='profiles'?' active':''}" onclick="bkSwitchTab('profiles')">Profiles</button>
-      ${isStale?`<span style="font-size:10px;color:var(--warn);padding:0 6px;align-self:center;">⚠ Data ${Math.floor((Date.now()-new Date(_bkLastUpdated).getTime())/86400000)}d old</span>`:''}
-      <div class="bk-tabs-right">${statusHtml}${menuHtml}</div>
-    </div>
-    <div class="bk-scroll">${errBanner}${_bkTab==='overview'?bkRenderOverview():bkRenderProfiles()}</div>`;
-  }
+  el.innerHTML=pageHeader+`<div class="bk-scroll">${errBanner}${isAll?bkRenderDashboard():bkRenderOverview()}</div>`;
 }
 
 function bkRenderDashboard(){
@@ -3431,6 +3459,7 @@ function bkRenderDashboard(){
         ${!live&&!c.syncrifyId?`<span style="color:var(--danger);">No Syncrify ID</span>`:''}
       </div>
       ${issueNote}
+      ${(()=>{if(usedGB===null||!(c.allottedGB>0))return'';const pct=Math.min(100,usedGB/c.allottedGB*100);const barColor=pct>=90?'#ef4444':pct>=70?'#f59e0b':'#22c55e';return`<div style="display:flex;align-items:center;gap:5px;margin-top:6px;"><div class="bk-storage-bar" style="flex:1;"><div class="bk-storage-fill" style="width:${pct.toFixed(1)}%;background:${barColor};"></div></div><span style="font-size:9px;color:${barColor};font-weight:600;flex-shrink:0;">${pct.toFixed(0)}%</span></div>`;})()}
     </div>`;
   };
   const cardGrid=arr=>`<div class="bk-card-grid">${arr.map(clientCard).join('')}</div>`;
@@ -3462,8 +3491,10 @@ function bkSaveProfileFreq(clientId,profileName,freq){
   const c=clients.find(x=>x.id===clientId);
   if(!c)return;
   if(!c.profileSettings)c.profileSettings={};
-  if(freq==='')delete c.profileSettings[profileName];
-  else c.profileSettings[profileName]={frequency:freq};
+  if(!c.profileSettings[profileName])c.profileSettings[profileName]={};
+  if(freq==='')delete c.profileSettings[profileName].frequency;
+  else c.profileSettings[profileName].frequency=freq;
+  if(!Object.keys(c.profileSettings[profileName]).length)delete c.profileSettings[profileName];
   appSettings.backupClients=clients;
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
   const scroll=document.querySelector('.bk-scroll');
@@ -3471,6 +3502,18 @@ function bkSaveProfileFreq(clientId,profileName,freq){
   renderBackupsSidebar();
   bkRenderMain();
   if(scrollTop)requestAnimationFrame(()=>{const s=document.querySelector('.bk-scroll');if(s)s.scrollTop=scrollTop;});
+}
+function bkSaveProfileTag(clientId,profileName,field,value){
+  const clients=bkGetClients().slice();
+  const c=clients.find(x=>x.id===clientId);
+  if(!c)return;
+  if(!c.profileSettings)c.profileSettings={};
+  if(!c.profileSettings[profileName])c.profileSettings[profileName]={};
+  if(value==='')delete c.profileSettings[profileName][field];
+  else c.profileSettings[profileName][field]=value;
+  if(!Object.keys(c.profileSettings[profileName]).length)delete c.profileSettings[profileName];
+  appSettings.backupClients=clients;
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
 }
 function bkToggleNote(id){
   if(_bkNoteOpen.has(id))_bkNoteOpen.delete(id);else _bkNoteOpen.add(id);
@@ -3629,8 +3672,14 @@ function bkRenderOverview(){
                 const pThresh=pEffectiveFreq==='Monthly'?32:pEffectiveFreq==='Weekly'?8:2;
                 const pAge=(Date.now()-p.lastAccess)/86400000;
                 const pOk=bkIsCompliant(p.lastAccess,pEffectiveFreq);
+                const ps=c.profileSettings&&c.profileSettings[p.profile]||{};
+                const tagChip=(v,colors)=>v?`<span style="font-size:9px;padding:1px 4px;border-radius:3px;font-weight:500;background:${colors[0]};color:${colors[1]};">${v}</span>`:'';
+                const platColor={Windows:['#1e3a5f','#93c5fd'],Proxmox:['#14291a','#86efac'],Other:['#2d2d2d','#a3a3a3']}[ps.platform]||[];
+                const locColor={Local:['#3b1f00','#fbbf24'],'Off-site':['#1e1b4b','#c4b5fd'],Both:['#0f2b2b','#5eead4']}[ps.location]||[];
+                const typColor={Image:['#1a1a2e','#818cf8'],Data:['#1a2e1a','#6ee7b7'],Both:['#2a1a2e','#c084fc']}[ps.backupType]||[];
+                const chips=[tagChip(ps.platform,platColor),tagChip(ps.location,locColor),tagChip(ps.backupType,typColor)].filter(Boolean).join(' ');
                 return`<tr>
-                  <td style="text-align:left;">${escHtml(p.profile)}</td>
+                  <td style="text-align:left;"><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">${escHtml(p.profile)}${chips}</div></td>
                   <td style="text-align:right;color:var(--text3);">${p.diskSize>0?bkFmt(p.diskSize/1e9):'<span class="bk-dim">—</span>'}</td>
                   <td style="text-align:right;" class="${pAge>pThresh?'bk-neg':'bk-pos'}">${bkFmtDate(p.lastAccess)}</td>
                   <td class="bk-exp-freq">
@@ -3684,6 +3733,15 @@ function bkRenderProfiles(){
   if(_bkActiveClient!=='all')clients=clients.filter(c=>c.id===_bkActiveClient);
   if(!_backupLiveData)return`<div style="color:var(--text3);font-size:12px;padding:20px 0;">${_backupLiveData===null?'Loading backup data…':'No backup data URL configured — add one in Settings.'}</div>`;
 
+  const tagSel=(cid,pname,field,val,opts)=>{
+    const esc=encodeURIComponent;
+    const optsHtml=opts.map(o=>`<option value="${o.v}"${val===o.v?' selected':''}>${o.l}</option>`).join('');
+    return`<select class="bk-cell-select" style="font-size:10px;min-width:76px;" data-cid="${cid}" data-pname="${escHtml(pname)}" onchange="bkSaveProfileTag(this.dataset.cid,this.dataset.pname,'${field}',this.value)">${optsHtml}</select>`;
+  };
+  const platOpts=[{v:'',l:'— Platform —'},{v:'Windows',l:'Windows'},{v:'Proxmox',l:'Proxmox'},{v:'Other',l:'Other'}];
+  const locOpts=[{v:'',l:'— Location —'},{v:'Local',l:'Local'},{v:'Off-site',l:'Off-site'},{v:'Both',l:'Both'}];
+  const typeOpts=[{v:'',l:'— Type —'},{v:'Image',l:'Image'},{v:'Data',l:'Data'},{v:'Both',l:'Both'}];
+
   const rows=[];
   clients.forEach(c=>{
     const live=_backupLiveData[c.syncrifyId];
@@ -3692,25 +3750,32 @@ function bkRenderProfiles(){
       const pEffFreq=bkEffectiveFreq(c,p.profile);
       const ageDays=(Date.now()-p.lastAccess)/86400000;
       const compliant=(c.syncrify!=='Inactive'||c.wasabi!=='Inactive')?bkIsCompliant(p.lastAccess,pEffFreq):null;
+      const ps=c.profileSettings&&c.profileSettings[p.profile]||{};
       rows.push(`<tr>
         <td>${pi===0?`<span style="font-weight:600;">${escHtml(c.syncrifyId||c.name)}</span>`:''}</td>
         <td>${escHtml(p.profile)}</td>
         <td>${p.diskSize>0?bkFmt(p.diskSize/1e9):'<span class="bk-dim">0 B</span>'}</td>
         <td class="${compliant===false?'bk-neg':'bk-pos'}">${bkFmtDate(p.lastAccess)}</td>
         <td style="text-align:center;">${compliant===null?'—':compliant?'<span class="bk-pos">✓</span>':'<span class="bk-neg">✗</span>'}</td>
+        <td>${tagSel(c.id,p.profile,'platform',ps.platform||'',platOpts)}</td>
+        <td>${tagSel(c.id,p.profile,'location',ps.location||'',locOpts)}</td>
+        <td>${tagSel(c.id,p.profile,'backupType',ps.backupType||'',typeOpts)}</td>
       </tr>`);
     });
   });
 
   if(!rows.length)return`<div style="color:var(--text3);font-size:12px;padding:20px 0;">No profile data for this selection.</div>`;
 
-  return`<div class="bk-table-wrap"><table class="bk-table bk-profiles-table" style="min-width:500px;">
+  return`<div class="bk-table-wrap"><table class="bk-table bk-profiles-table" style="min-width:680px;">
     <thead><tr>
-      <th style="min-width:150px;">Client</th>
-      <th style="min-width:200px;">Profile</th>
-      <th style="text-align:right;min-width:80px;">Size</th>
-      <th style="text-align:right;min-width:100px;">Last Access</th>
-      <th style="text-align:center;min-width:40px;">✓</th>
+      <th style="min-width:130px;">Client</th>
+      <th style="min-width:160px;">Profile</th>
+      <th style="text-align:right;min-width:70px;">Size</th>
+      <th style="text-align:right;min-width:90px;">Last Access</th>
+      <th style="text-align:center;min-width:30px;">✓</th>
+      <th style="min-width:90px;">Platform</th>
+      <th style="min-width:90px;">Location</th>
+      <th style="min-width:90px;">Type</th>
     </tr></thead>
     <tbody>${rows.join('')}</tbody>
   </table></div>`;
