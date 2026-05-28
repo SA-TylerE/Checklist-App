@@ -3185,6 +3185,7 @@ let _bkFetching=false;
 let _bkExpanded=new Set();
 let _bkNoteOpen=new Set();
 let _bkHideInactive=false;
+let _bkShowCosts=false;
 
 function bkGetClients(){return appSettings.backupClients||DEFAULT_BACKUP_CLIENTS;}
 
@@ -3313,7 +3314,7 @@ function bkRenderMain(){
     ${tabs.map(t=>`<button class="bk-tab${_bkTab===t.id?' active':''}" onclick="bkSwitchTab('${t.id}')">${t.lbl}</button>`).join('')}
     ${isStale?`<span style="font-size:10px;color:var(--warn);padding:0 6px;align-self:center;">⚠ Data ${Math.floor((Date.now()-new Date(_bkLastUpdated).getTime())/86400000)}d old</span>`:''}
     <div class="bk-tabs-right">
-      ${_bkTab==='overview'?`<button class="btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="_bkHideInactive=!_bkHideInactive;bkRenderMain()">${_bkHideInactive?'Show All':'Hide Inactive'}</button><button class="btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="bkExportCsv()" title="Export to CSV">↓ CSV</button>`:''}
+      ${_bkTab==='overview'?`<button class="btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="_bkShowCosts=!_bkShowCosts;bkRenderMain()">${_bkShowCosts?'Hide Costs':'Show Costs'}</button><button class="btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="_bkHideInactive=!_bkHideInactive;bkRenderMain()">${_bkHideInactive?'Show All':'Hide Inactive'}</button><button class="btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="bkExportCsv()" title="Export to CSV">↓ CSV</button>`:''}
       ${_backupLiveData===null
         ?(hasUrl?'<span style="font-size:11px;color:var(--text3);">Loading live data…</span>':'<button class="btn-ghost" style="font-size:11px;" onclick="openSettings()">Configure backup data URL in Settings ↗</button>')
         :_bkFetchError
@@ -3418,23 +3419,23 @@ function bkRenderOverview(){
   return unmatchedHtml+(_bkActiveClient==='all'?`<div class="bk-summary-bar">
     <div class="bk-sum-card"><div class="bk-sum-lbl">Total Used</div><div class="bk-sum-val">${bkFmt(sumUsed)}</div></div>
     <div class="bk-sum-card"><div class="bk-sum-lbl">Total Allotted</div><div class="bk-sum-val">${bkFmt(sumAllotted)}</div></div>
-    <div class="bk-sum-card"><div class="bk-sum-lbl">Total Charged</div><div class="bk-sum-val">${bkFmtCur(sumCharged)}</div></div>
+    ${_bkShowCosts?`<div class="bk-sum-card"><div class="bk-sum-lbl">Total Charged</div><div class="bk-sum-val">${bkFmtCur(sumCharged)}</div></div>
     <div class="bk-sum-card"><div class="bk-sum-lbl">Calculated</div><div class="bk-sum-val">${bkFmtCur(sumCalc)}</div></div>
-    <div class="bk-sum-card"><div class="bk-sum-lbl">Difference</div><div class="bk-sum-val ${sumCharged-sumCalc<0?'bk-neg':''}">${bkFmtCur(sumCharged-sumCalc)}</div></div>
+    <div class="bk-sum-card"><div class="bk-sum-lbl">Difference</div><div class="bk-sum-val ${sumCharged-sumCalc<0?'bk-neg':''}">${bkFmtCur(sumCharged-sumCalc)}</div></div>`:''}
     ${issueCount>0?`<div class="bk-sum-card" style="border-color:rgba(239,68,68,0.35);"><div class="bk-sum-lbl" style="color:var(--danger);">Issues</div><div class="bk-sum-val" style="color:var(--danger);">${issueCount}</div></div>`:''}
   </div>`:'')
   +`<div class="bk-table-wrap"><table class="bk-table">
     <thead>
       <tr>
         <th class="bk-th-name" rowspan="2">Client</th>
-        <th colspan="4" style="text-align:center;padding-bottom:3px;">Contract</th>
-        <th colspan="4" style="text-align:center;padding-bottom:3px;">Live</th>
+        <th colspan="${_bkShowCosts?4:2}" style="text-align:center;padding-bottom:3px;">Contract</th>
+        <th colspan="${_bkShowCosts?4:2}" style="text-align:center;padding-bottom:3px;">Live</th>
         <th colspan="5" style="text-align:center;padding-bottom:3px;">Backup Status</th>
         <th rowspan="2">VPN</th>
         <th rowspan="2" style="text-align:center;width:36px;">Notes</th>
       </tr><tr>
-        <th>Allotted (GB)</th><th>Devices</th><th>Est. ($)</th><th>Charged ($)</th>
-        <th>Used</th><th>Devices</th><th>Calc.</th><th>Diff.</th>
+        <th>Allotted (GB)</th><th>Devices</th>${_bkShowCosts?'<th>Est. ($)</th><th>Charged ($)</th>':''}
+        <th>Used</th><th>Devices</th>${_bkShowCosts?'<th>Calc.</th><th>Diff.</th>':''}
         <th>Syncrify</th><th>Wasabi</th><th>Freq.</th><th>Oldest Backup</th><th>Profiles</th>
       </tr>
     </thead>
@@ -3464,13 +3465,14 @@ function bkRenderOverview(){
           :compliantCount===null?`<span class="bk-dim">${totalProfiles}</span>`
           :`<span class="${compliantCount===totalProfiles?'bk-pos':compliantCount===0?'bk-neg':'bk-warn'}">${compliantCount}/${totalProfiles}</span>${hasOverride?'<span title="Has per-profile frequency overrides" style="color:var(--text3);font-size:9px;margin-left:2px;">*</span>':''}`;
         const vpnSel=['Zywall','Unifi','Other'].includes(c.vpnHost)?c.vpnHost:(c.vpnHost?'Other':'');
+        const ncols=_bkShowCosts?16:12;
         const noteRow=_bkNoteOpen.has(c.id)?`<tr class="bk-note-row">
-          <td colspan="16" style="padding:4px 12px 8px 44px;background:rgba(245,158,11,0.04);border-bottom:1px solid var(--border);">
+          <td colspan="${ncols}" style="padding:4px 12px 8px 44px;background:rgba(245,158,11,0.04);border-bottom:1px solid var(--border);">
             <textarea style="width:100%;max-width:600px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:6px 8px;color:var(--text);font-size:11px;font-family:var(--sans);resize:vertical;min-height:44px;outline:none;box-sizing:border-box;display:block;" placeholder="Add notes…" onblur="bkSaveClient('${c.id}','notes',this.value)" onkeydown="if(event.key==='Escape')bkToggleNote('${c.id}')">${escHtml(c.notes||'')}</textarea>
           </td>
         </tr>`:'';
         const expandRow=hasProfiles&&expanded?`<tr class="bk-expand-row">
-          <td colspan="16" style="padding:4px 8px 8px 44px;border-bottom:1px solid var(--border);">
+          <td colspan="${ncols}" style="padding:4px 8px 8px 44px;border-bottom:1px solid var(--border);">
             <table class="bk-expand-table">
               <thead><tr>
                 <th style="text-align:left;">Profile</th>
@@ -3516,12 +3518,12 @@ function bkRenderOverview(){
           </td>
           <td><div style="display:flex;align-items:center;justify-content:flex-end;gap:3px;">${num('allottedGB',c.allottedGB,500)}<span style="font-size:9px;color:var(--text3);flex-shrink:0;">GB</span></div></td>
           <td>${num('contractDevices',c.contractDevices)}</td>
-          <td style="color:var(--text3);">${estCost!==null?bkFmtCur(estCost):'—'}</td>
-          <td><div style="display:flex;align-items:center;justify-content:flex-end;gap:1px;"><span style="font-size:9px;color:var(--text3);flex-shrink:0;">$</span>${num('charged',c.charged,5)}</div></td>
+          ${_bkShowCosts?`<td style="color:var(--text3);">${estCost!==null?bkFmtCur(estCost):'—'}</td>
+          <td><div style="display:flex;align-items:center;justify-content:flex-end;gap:1px;"><span style="font-size:9px;color:var(--text3);flex-shrink:0;">$</span>${num('charged',c.charged,5)}</div></td>`:''}
           <td>${usedGB!==null?bkFmt(usedGB):'<span class="bk-dim">—</span>'}</td>
           <td>${devCnt!==null?devCnt:'<span class="bk-dim">—</span>'}</td>
-          <td>${calc!==null?bkFmtCur(calc):'<span class="bk-dim">—</span>'}</td>
-          <td class="${diff!==null?(diff>=0?'bk-pos':'bk-neg'):''}">${diff!==null?bkFmtCur(diff):'<span class="bk-dim">—</span>'}</td>
+          ${_bkShowCosts?`<td>${calc!==null?bkFmtCur(calc):'<span class="bk-dim">—</span>'}</td>
+          <td class="${diff!==null?(diff>=0?'bk-pos':'bk-neg'):''}">${diff!==null?bkFmtCur(diff):'<span class="bk-dim">—</span>'}</td>`:''}
           <td>${sel(c.id,'syncrify',['Active','Inactive'],c.syncrify)}</td>
           <td>${sel(c.id,'wasabi',['Active','Inactive'],c.wasabi)}</td>
           <td>${sel(c.id,'frequency',['Daily','Weekly','Monthly'],c.frequency)}</td>
