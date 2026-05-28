@@ -566,7 +566,42 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 }
 .toast.success{background:#166534;color:#86efac;border:1px solid rgba(34,197,94,0.3);}
 .toast.error{background:#7f1d1d;color:#fca5a5;border:1px solid rgba(239,68,68,0.3);}
+.toast.warn{background:#78350f;color:#fcd34d;border:1px solid rgba(251,191,36,0.3);}
 .toast.info{background:#1e3a5f;color:#93c5fd;border:1px solid rgba(59,130,246,0.3);}
+
+/* ─── Backup tracker ──────────────────────────────────────────────────────────── */
+.bk-client-item{display:flex;align-items:center;gap:7px;padding:5px 10px;margin:0 4px;cursor:pointer;font-size:12px;color:var(--text2);border-radius:5px;transition:all 0.12s;}
+.bk-client-item:hover{background:var(--bg3);color:var(--text);}
+.bk-client-item.active{background:var(--bg3);color:var(--text);font-weight:600;}
+.bk-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.bk-dot-good{background:#22c55e;}.bk-dot-warn{background:#f59e0b;}.bk-dot-error{background:#ef4444;}.bk-dot-inactive{background:#4b5563;}
+#backups-content{display:flex;flex-direction:column;height:100%;overflow:hidden;}
+.bk-tabs{display:flex;align-items:center;gap:2px;padding:8px 14px 0;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg2);}
+.bk-tab{padding:5px 13px;font-size:12px;border:none;background:none;cursor:pointer;color:var(--text3);border-bottom:2px solid transparent;margin-bottom:-1px;font-family:var(--sans);white-space:nowrap;transition:color 0.15s;}
+.bk-tab:hover{color:var(--text);}.bk-tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
+.bk-tabs-right{margin-left:auto;display:flex;align-items:center;gap:8px;padding-bottom:2px;}
+.bk-scroll{flex:1;overflow:auto;padding:14px;}
+.bk-summary-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.bk-sum-card{background:var(--bg2);border:1px solid var(--border);border-radius:7px;padding:8px 14px;flex:1;min-width:90px;}
+.bk-sum-lbl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;}
+.bk-sum-val{font-size:17px;font-weight:700;color:var(--text);}
+.bk-table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:7px;}
+.bk-table{border-collapse:collapse;width:100%;font-size:11px;white-space:nowrap;min-width:900px;}
+.bk-table th{background:var(--bg3);color:var(--text3);font-weight:600;padding:5px 8px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.03em;border-bottom:1px solid var(--border);}
+.bk-table th.bk-th-name{text-align:left;min-width:170px;}
+.bk-table td{padding:6px 8px;text-align:right;border-top:1px solid var(--border);color:var(--text2);}
+.bk-table td.bk-td-name{text-align:left;min-width:170px;}
+.bk-table tbody tr{background:var(--bg);cursor:pointer;transition:background 0.1s;}
+.bk-table tbody tr:hover td{background:var(--bg3);}
+.bk-row-good td:first-child{box-shadow:inset 3px 0 0 #22c55e;}
+.bk-row-warn td:first-child{box-shadow:inset 3px 0 0 #f59e0b;}
+.bk-row-error td:first-child{box-shadow:inset 3px 0 0 #ef4444;}
+.bk-row-inactive{opacity:0.6;}
+.bk-badge-active{background:rgba(34,197,94,0.1);color:#22c55e;border:1px solid rgba(34,197,94,0.2);border-radius:4px;padding:1px 6px;font-size:10px;font-weight:600;}
+.bk-badge-inactive{background:rgba(107,114,128,0.1);color:#6b7280;border:1px solid rgba(107,114,128,0.2);border-radius:4px;padding:1px 6px;font-size:10px;}
+.bk-pos{color:#22c55e!important;font-weight:600;}.bk-neg{color:#ef4444!important;font-weight:600;}.bk-dim{color:var(--text3)!important;}
+.bk-notes-col{text-align:left!important;white-space:normal;word-break:break-word;max-width:180px;min-width:120px;font-size:10px;color:var(--text3);}
+.bk-profiles-table th,.bk-profiles-table td{text-align:left!important;}
 
 /* Styled confirm dialog */
 #confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:600;align-items:center;justify-content:center;}
@@ -890,6 +925,7 @@ body.light{
       <button class="ah-nav-btn" id="ah-btn-onboarding" onclick="switchSection('onboarding')">Onboarding</button>
       <button class="ah-nav-btn" id="ah-btn-sales" onclick="switchSection('sales')">Sales</button>
       <button class="ah-nav-btn" id="ah-btn-reference" onclick="switchSection('reference')">Reference</button>
+      <button class="ah-nav-btn" id="ah-btn-backups" onclick="switchSection('backups')">Backups</button>
     </nav>
     <div class="ah-right">
       <button class="ah-name-btn" id="ah-name-display" onclick="openNameModal()" title="Edit your name" style="display:none;"></button>
@@ -929,6 +965,11 @@ body.light{
           <div class="sidebar-footer">
             <button class="btn-new" onclick="newQuoteFromSidebar()">+ New Quote</button>
           </div>
+        </div>
+
+        <!-- Backups section -->
+        <div class="sidebar-section" id="ss-backups">
+          <div id="bk-client-list" style="padding:6px 0;overflow-y:auto;flex:1;"></div>
         </div>
       </div>
     </div>
@@ -1015,6 +1056,11 @@ body.light{
         <!-- Sales helper — quote detail -->
         <div id="view-quote" class="view">
           <div id="quote-content"></div>
+        </div>
+
+        <!-- Backups view -->
+        <div id="view-backups" class="view">
+          <div id="backups-content"></div>
         </div>
 
         <!-- Settings view -->
@@ -1594,7 +1640,7 @@ function switchSection(name){
   activeSection=name;
   document.getElementById('sidebar').classList.remove('hidden','collapsed');
   document.getElementById('settings-btn')?.classList.remove('active');
-  ['onboarding','sales','reference'].forEach(s=>{
+  ['onboarding','sales','reference','backups'].forEach(s=>{
     document.getElementById('ah-btn-'+s)?.classList.toggle('active',s===name);
     document.getElementById('ss-'+s)?.classList.toggle('active',s===name);
   });
@@ -1614,6 +1660,11 @@ function switchSection(name){
     renderSalesSidebar();
     renderRefProductChips();
     renderReferenceView(null,null);
+  } else if(name==='backups'){
+    activeClientId=null;
+    activeSalesQuoteId=null;
+    showView('backups');
+    renderBackupsView();
   }
 }
 
@@ -1634,7 +1685,7 @@ function openSettings(){
   _preSettingsClientId=activeClientId;
   activeClientId=null;
   activeSalesQuoteId=null;
-  ['onboarding','sales','reference'].forEach(s=>document.getElementById('ah-btn-'+s)?.classList.remove('active'));
+  ['onboarding','sales','reference','backups'].forEach(s=>document.getElementById('ah-btn-'+s)?.classList.remove('active'));
   document.getElementById('settings-btn')?.classList.add('active');
   document.getElementById('sidebar').classList.add('hidden');
   showView('settings');
@@ -1648,7 +1699,7 @@ function goToDashboard(){
   activeSalesQuoteId=null;
   _preSettingsClientId=null;
   activeSection=null;
-  ['onboarding','sales','reference'].forEach(s=>{
+  ['onboarding','sales','reference','backups'].forEach(s=>{
     document.getElementById('ah-btn-'+s)?.classList.remove('active');
     document.getElementById('ss-'+s)?.classList.remove('active');
   });
@@ -1671,6 +1722,9 @@ function toggleSettings(){
       } else if(activeSection==='reference'){
         renderRefProductChips();
         renderReferenceView(null,null);
+      } else if(activeSection==='backups'){
+        showView('backups');
+        renderBackupsView();
       } else {
         showView('empty');
       }
@@ -3066,6 +3120,256 @@ function renderSalesView(){
   </div>`;
 }
 
+// ─── Backup tracker ───────────────────────────────────────────────────────────
+
+const DEFAULT_BACKUP_CLIENTS=[
+  {id:'nwuav',name:'Northwest UAV',syncrifyId:'NWUAV',allottedGB:13000,contractDevices:5,charged:1165,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'Zywall',notes:''},
+  {id:'toptier',name:'TopTier',syncrifyId:'TopTier',allottedGB:10000,contractDevices:4,charged:580,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'Zywall',notes:''},
+  {id:'dccpa',name:'Dougall Conradie',syncrifyId:'DCCPA',allottedGB:4000,contractDevices:3,charged:395,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'Zywall',notes:''},
+  {id:'petersonassoc',name:'Peterson & Associates',syncrifyId:'PetersonAssociates',allottedGB:1500,contractDevices:2,charged:170,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'Unifi',notes:''},
+  {id:'cug',name:'Composites Universal Group',syncrifyId:'CUG',allottedGB:2000,contractDevices:2,charged:210,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'Zywall',notes:''},
+  {id:'oai',name:'Oregon Aero',syncrifyId:'OAI',allottedGB:3000,contractDevices:4,charged:340,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'Zywall',notes:''},
+  {id:'nwrapid',name:'NW Rapid',syncrifyId:'NWrapid',allottedGB:2500,contractDevices:3,charged:275,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'Zywall',notes:'No backup on invoice'},
+  {id:'heller',name:'Heller',syncrifyId:'Heller',allottedGB:2000,contractDevices:2,charged:210,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'Zywall',notes:''},
+  {id:'kandf',name:"K&F Coffee Roasters",syncrifyId:'KandF',allottedGB:500,contractDevices:1,charged:65,syncrify:'Inactive',wasabi:'Inactive',frequency:'Weekly',vpnHost:'Zywall',notes:''},
+  {id:'cascadeconcrete',name:'Cascade Concrete',syncrifyId:'CascadeConcrete',allottedGB:500,contractDevices:1,charged:65,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'Unifi',notes:''},
+  {id:'scaptax',name:'Scappoose Business & Tax',syncrifyId:'ScapTax',allottedGB:500,contractDevices:2,charged:90,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'Zywall',notes:''},
+  {id:'petersenlaw',name:'Petersen Law',syncrifyId:'PetersenLaw',allottedGB:500,contractDevices:1,charged:65,syncrify:'Active',wasabi:'Active',frequency:'Weekly',vpnHost:'Zywall',notes:''},
+  {id:'lindalamp',name:'Linda Lamprecht',syncrifyId:'LindaLamp',allottedGB:500,contractDevices:1,charged:65,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'Zywall',notes:''},
+  {id:'gilbertson',name:'Gilbertson Transport',syncrifyId:'Gilbertson Transport',allottedGB:500,contractDevices:1,charged:65,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'Zywall',notes:''},
+  {id:'remax',name:'ReMax Power Pros',syncrifyId:'Remax',allottedGB:500,contractDevices:1,charged:65,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'Zywall',notes:''},
+  {id:'cascadetax',name:'Cascade Tax',syncrifyId:'CascadeTax',allottedGB:0,contractDevices:0,charged:0,syncrify:'Inactive',wasabi:'Inactive',frequency:'Daily',vpnHost:'???',notes:''},
+  {id:'nwtax',name:'NW Tax',syncrifyId:'NWTax',allottedGB:500,contractDevices:2,charged:90,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'Zywall',notes:''},
+  {id:'willametteglass',name:'Willamette Glass',syncrifyId:'WillametteGlass',allottedGB:2000,contractDevices:2,charged:210,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'Unifi',notes:''},
+  {id:'spl',name:'Scappoose Public Library',syncrifyId:'SPL',allottedGB:500,contractDevices:1,charged:65,syncrify:'Active',wasabi:'Inactive',frequency:'Daily',vpnHost:'Zywall',notes:''},
+  {id:'etburner',name:'Tom Stevens / ET Burner',syncrifyId:'ETBurner',allottedGB:500,contractDevices:1,charged:0,syncrify:'Active',wasabi:'Inactive',frequency:'Daily',vpnHost:'Zywall',notes:''},
+  {id:'rexmurray',name:'Rex Murray',syncrifyId:'RexMurray',allottedGB:0,contractDevices:0,charged:0,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'Zywall',notes:''},
+  {id:'ats',name:'ATS',syncrifyId:'ATS',allottedGB:0,contractDevices:0,charged:0,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'',notes:''},
+  {id:'sap',name:'SAP',syncrifyId:'SAP',allottedGB:0,contractDevices:0,charged:0,syncrify:'Inactive',wasabi:'Inactive',frequency:'Daily',vpnHost:'',notes:''},
+];
+
+let _backupLiveData=null; // null=not fetched; obj keyed by syncrifyId → {usedBytes, profiles:[]}
+let _bkLastUpdated=null; // mtimeMs from server
+let _bkActiveClient='all';
+let _bkTab='overview';
+let _bkFetching=false;
+
+function bkGetClients(){return appSettings.backupClients||DEFAULT_BACKUP_CLIENTS;}
+
+function bkCalcCost(usedGB,devices){
+  if(!usedGB&&!devices)return 0;
+  return Math.ceil(usedGB/500)*40+devices*25;
+}
+function bkEstCost(allottedGB,contractDevices){
+  if(allottedGB<=0)return 0;
+  return Math.ceil(allottedGB/500)*40+contractDevices*25;
+}
+function bkIsCompliant(lastAccessMs,frequency){
+  if(!lastAccessMs)return null;
+  const ageDays=(Date.now()-lastAccessMs)/86400000;
+  return frequency==='Weekly'?ageDays<=8:ageDays<=2;
+}
+function bkRowStatus(c,live){
+  const inactive=c.syncrify==='Inactive'&&c.wasabi==='Inactive';
+  if(inactive)return'inactive';
+  const lastAccess=live&&live.profiles.length?Math.max(...live.profiles.map(p=>p.lastAccess)):null;
+  if(bkIsCompliant(lastAccess,c.frequency)===false)return'error';
+  const usedGB=live?live.usedBytes/1e9:0;
+  const calc=bkCalcCost(usedGB,live?live.profiles.length:0);
+  if(c.charged>0&&calc>c.charged+5)return'warn';
+  return'good';
+}
+
+async function bkFetchLive(){
+  if(_bkFetching)return;
+  _bkFetching=true;
+  try{
+    const r=await fetch('/api/backup-data');
+    const d=await r.json();
+    if(!Array.isArray(d.data)){_backupLiveData={};return;}
+    _bkLastUpdated=d.lastUpdated||null;
+    _backupLiveData={};
+    for(const e of d.data){
+      if(!_backupLiveData[e.client])_backupLiveData[e.client]={usedBytes:0,profiles:[]};
+      _backupLiveData[e.client].usedBytes+=e.diskSize;
+      _backupLiveData[e.client].profiles.push(e);
+    }
+  }catch(err){_backupLiveData={};}finally{_bkFetching=false;}
+}
+
+function bkSwitchClient(id){
+  _bkActiveClient=id;
+  document.querySelectorAll('.bk-client-item').forEach(el=>el.classList.toggle('active',el.dataset.bkid===id));
+  bkRenderMain();
+}
+function bkSwitchTab(tab){_bkTab=tab;bkRenderMain();}
+
+function renderBackupsSidebar(){
+  const el=document.getElementById('bk-client-list');
+  if(!el)return;
+  const clients=bkGetClients();
+  el.innerHTML=`<div class="bk-client-item${_bkActiveClient==='all'?' active':''}" data-bkid="all" onclick="bkSwitchClient('all')" style="font-weight:600;border-bottom:1px solid var(--border);margin-bottom:4px;padding-bottom:8px;">All Clients</div>`
+    +clients.map(c=>{
+      const live=_backupLiveData?.[c.syncrifyId];
+      const st=bkRowStatus(c,live);
+      return`<div class="bk-client-item${_bkActiveClient===c.id?' active':''}" data-bkid="${c.id}" onclick="bkSwitchClient('${c.id}')"><span class="bk-dot bk-dot-${st}"></span>${escHtml(c.name)}</div>`;
+    }).join('');
+}
+
+async function renderBackupsView(){
+  if(_backupLiveData===null&&!_bkFetching){
+    bkFetchLive().then(()=>{renderBackupsSidebar();bkRenderMain();});
+  }
+  renderBackupsSidebar();
+  bkRenderMain();
+}
+
+function bkRenderMain(){
+  const el=document.getElementById('backups-content');
+  if(!el)return;
+  const tabs=[{id:'overview',lbl:'Overview'},{id:'profiles',lbl:'Profiles'}];
+  const hasUrl=!!(appSettings.backupDataUrl||'').trim();
+  el.innerHTML=`<div class="bk-tabs">
+    ${tabs.map(t=>`<button class="bk-tab${_bkTab===t.id?' active':''}" onclick="bkSwitchTab('${t.id}')">${t.lbl}</button>`).join('')}
+    <div class="bk-tabs-right">
+      ${_backupLiveData===null
+        ?(hasUrl?'<span style="font-size:11px;color:var(--text3);">Loading live data…</span>':'<button class="btn-ghost" style="font-size:11px;" onclick="openSettings()">Configure backup data URL in Settings ↗</button>')
+        :`<span style="font-size:10px;color:var(--text3);">${Object.values(_backupLiveData).reduce((s,v)=>s+v.profiles.length,0)} profiles${_bkLastUpdated?' · updated '+new Date(_bkLastUpdated).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}):''}</span>
+          <button class="btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="_backupLiveData=null;_bkFetching=false;renderBackupsView()">↻ Refresh</button>`}
+    </div>
+  </div>
+  <div class="bk-scroll">${_bkTab==='overview'?bkRenderOverview():bkRenderProfiles()}</div>`;
+}
+
+function bkFmt(usedGB){return usedGB>=1000?(usedGB/1000).toFixed(1)+' TB':usedGB.toFixed(0)+' GB';}
+function bkFmtDate(ms){if(!ms)return'—';return new Date(ms).toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'2-digit'});}
+function bkFmtCur(n){return'$'+(n||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});}
+
+function bkRenderOverview(){
+  let clients=bkGetClients();
+  if(_bkActiveClient!=='all')clients=clients.filter(c=>c.id===_bkActiveClient);
+
+  let sumAllotted=0,sumCharged=0,sumUsed=0,sumCalc=0;
+  clients.forEach(c=>{
+    if(c.allottedGB>0)sumAllotted+=c.allottedGB;
+    sumCharged+=c.charged||0;
+    const live=_backupLiveData?.[c.syncrifyId];
+    if(live){const g=live.usedBytes/1e9;sumUsed+=g;sumCalc+=bkCalcCost(g,live.profiles.length);}
+  });
+
+  const badge=s=>s==='Active'?`<span class="bk-badge-active">Active</span>`:`<span class="bk-badge-inactive">Inactive</span>`;
+
+  return(_bkActiveClient==='all'?`<div class="bk-summary-bar">
+    <div class="bk-sum-card"><div class="bk-sum-lbl">Total Used</div><div class="bk-sum-val">${bkFmt(sumUsed)}</div></div>
+    <div class="bk-sum-card"><div class="bk-sum-lbl">Total Allotted</div><div class="bk-sum-val">${bkFmt(sumAllotted)}</div></div>
+    <div class="bk-sum-card"><div class="bk-sum-lbl">Total Charged</div><div class="bk-sum-val">${bkFmtCur(sumCharged)}</div></div>
+    <div class="bk-sum-card"><div class="bk-sum-lbl">Calculated</div><div class="bk-sum-val">${bkFmtCur(sumCalc)}</div></div>
+    <div class="bk-sum-card"><div class="bk-sum-lbl">Difference</div><div class="bk-sum-val ${sumCharged-sumCalc<0?'bk-neg':''}">${bkFmtCur(sumCharged-sumCalc)}</div></div>
+  </div>`:'')
+  +`<div class="bk-table-wrap"><table class="bk-table">
+    <thead>
+      <tr>
+        <th class="bk-th-name" rowspan="2">Client</th>
+        <th colspan="4" style="text-align:center;padding-bottom:3px;">Contract</th>
+        <th colspan="4" style="text-align:center;padding-bottom:3px;">Live</th>
+        <th colspan="5" style="text-align:center;padding-bottom:3px;">Backup Status</th>
+        <th rowspan="2">VPN</th>
+        <th rowspan="2" style="text-align:left;min-width:130px;">Notes</th>
+      </tr><tr>
+        <th>Allotted</th><th>Devices</th><th>Est.</th><th>Charged</th>
+        <th>Used</th><th>Devices</th><th>Calc.</th><th>Diff.</th>
+        <th>Syncrify</th><th>Wasabi</th><th>Freq.</th><th>Last Backup</th><th>✓</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${clients.map(c=>{
+        const live=_backupLiveData?.[c.syncrifyId];
+        const usedGB=live?live.usedBytes/1e9:null;
+        const devCnt=live?live.profiles.filter(p=>p.diskSize>0).length:null;
+        const totalProfiles=live?live.profiles.length:null;
+        const calc=usedGB!==null?bkCalcCost(usedGB,totalProfiles):null;
+        const diff=(calc!==null&&c.charged!==undefined)?c.charged-calc:null;
+        const lastAccess=live&&live.profiles.length?Math.max(...live.profiles.map(p=>p.lastAccess)):null;
+        const compliant=(c.syncrify==='Active'||c.wasabi==='Active')?bkIsCompliant(lastAccess,c.frequency):null;
+        const ageDays=lastAccess?(Date.now()-lastAccess)/86400000:null;
+        const st=bkRowStatus(c,live);
+        const estCost=c.allottedGB>0?bkEstCost(c.allottedGB,c.contractDevices):null;
+        return`<tr class="bk-row-${st}" onclick="bkSwitchClient('${c.id}')">
+          <td class="bk-td-name"><div style="display:flex;align-items:center;gap:6px;"><span class="bk-dot bk-dot-${st}"></span>${escHtml(c.name)}</div></td>
+          <td>${c.allottedGB>0?c.allottedGB.toLocaleString()+' GB':'—'}</td>
+          <td>${c.contractDevices>0?c.contractDevices:'—'}</td>
+          <td>${estCost!==null?bkFmtCur(estCost):'—'}</td>
+          <td>${c.charged?bkFmtCur(c.charged):'—'}</td>
+          <td>${usedGB!==null?bkFmt(usedGB):'<span class="bk-dim">—</span>'}</td>
+          <td>${devCnt!==null?devCnt:'<span class="bk-dim">—</span>'}</td>
+          <td>${calc!==null?bkFmtCur(calc):'<span class="bk-dim">—</span>'}</td>
+          <td class="${diff!==null?(diff>=0?'bk-pos':'bk-neg'):''}">${diff!==null?bkFmtCur(diff):'<span class="bk-dim">—</span>'}</td>
+          <td>${badge(c.syncrify)}</td>
+          <td>${badge(c.wasabi)}</td>
+          <td>${c.frequency}</td>
+          <td class="${ageDays!==null?(ageDays>(c.frequency==='Weekly'?8:2)?'bk-neg':'bk-pos'):''}">${bkFmtDate(lastAccess)}</td>
+          <td>${compliant===null?'—':compliant?'<span class="bk-pos">✓</span>':'<span class="bk-neg">✗</span>'}</td>
+          <td style="font-size:10px;">${escHtml(c.vpnHost||'—')}</td>
+          <td class="bk-notes-col">${escHtml(c.notes||'')}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table></div>`;
+}
+
+function bkRenderProfiles(){
+  let clients=bkGetClients();
+  if(_bkActiveClient!=='all')clients=clients.filter(c=>c.id===_bkActiveClient);
+  if(!_backupLiveData)return`<div style="color:var(--text3);font-size:12px;padding:20px 0;">${_backupLiveData===null?'Loading backup data…':'No backup data URL configured — add one in Settings.'}</div>`;
+
+  const rows=[];
+  clients.forEach(c=>{
+    const live=_backupLiveData[c.syncrifyId];
+    if(!live||!live.profiles.length)return;
+    live.profiles.forEach((p,pi)=>{
+      const ageDays=(Date.now()-p.lastAccess)/86400000;
+      const compliant=(c.syncrify!=='Inactive'||c.wasabi!=='Inactive')?ageDays<=(c.frequency==='Weekly'?8:2):null;
+      rows.push(`<tr>
+        <td>${pi===0?`<span style="font-weight:600;">${escHtml(c.name)}</span>`:''}</td>
+        <td>${escHtml(p.profile)}</td>
+        <td>${p.diskSize>0?bkFmt(p.diskSize/1e9):'<span class="bk-dim">0 B</span>'}</td>
+        <td class="${ageDays>(c.frequency==='Weekly'?8:2)?'bk-neg':'bk-pos'}">${bkFmtDate(p.lastAccess)}</td>
+        <td style="text-align:center;">${compliant===null?'—':compliant?'<span class="bk-pos">✓</span>':'<span class="bk-neg">✗</span>'}</td>
+      </tr>`);
+    });
+  });
+
+  if(!rows.length)return`<div style="color:var(--text3);font-size:12px;padding:20px 0;">No profile data for this selection.</div>`;
+
+  return`<div class="bk-table-wrap"><table class="bk-table bk-profiles-table" style="min-width:500px;">
+    <thead><tr>
+      <th style="min-width:150px;">Client</th>
+      <th style="min-width:200px;">Profile</th>
+      <th style="text-align:right;min-width:80px;">Size</th>
+      <th style="text-align:right;min-width:100px;">Last Access</th>
+      <th style="text-align:center;min-width:40px;">✓</th>
+    </tr></thead>
+    <tbody>${rows.join('')}</tbody>
+  </table></div>`;
+}
+
+async function saveBkSettings(){
+  const url=(document.getElementById('setting-backup-url')?.value||'').trim();
+  const key=(document.getElementById('setting-backup-key')?.value||'').trim();
+  if(key&&key.length!==32){showToast('Encryption key must be exactly 32 characters','error');return;}
+  appSettings.backupDataUrl=url||undefined;
+  appSettings.backupEncryptionKey=key||undefined;
+  const r=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
+  if(r.ok){showToast('Backup settings saved');_backupLiveData=null;_bkFetching=false;}
+  else showToast('Save failed','error');
+}
+function bkGenKey(){
+  const chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+  const key=Array.from({length:32},()=>chars[Math.floor(Math.random()*chars.length)]).join('');
+  const el=document.getElementById('setting-backup-key');
+  if(el){el.value=key;el.type='text';}
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 function renderHomeView(){
   const el=document.getElementById('view-home');
@@ -3208,6 +3512,57 @@ function renderSettingsView(){
             <div style="font-size:11px;color:var(--text3);margin-top:4px;">Sets the recommended client price in the product manager. Formula: Client Cost = SA Cost ÷ (1 − Margin%)</div>
           </div>
           <button class="btn-secondary" onclick="openProductsModal()">Manage Products</button>
+        </div>
+      </div>
+      <div class="settings-block">
+        <div class="settings-block-header">Backups</div>
+        <div class="settings-block-body">
+          <p style="font-size:12px;color:var(--text2);margin-bottom:14px;">The Syncrify script AES-encrypts <code style="font-size:11px;background:var(--bg3);padding:1px 4px;border-radius:3px;">backup_data.txt</code> and uploads it to a public URL (e.g. a GitHub Gist). This app fetches and decrypts it server-side — the encrypted blob is safe to host publicly.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+            <div class="field-group" style="margin:0;grid-column:1/-1;">
+              <label>Public Data URL</label>
+              <input id="setting-backup-url" value="${escHtml(appSettings.backupDataUrl||'')}" placeholder="https://gist.githubusercontent.com/…/raw/backup_data.enc" style="font-size:11px;">
+              <div class="field-hint">Raw URL to the encrypted file. For GitHub Gist: <code style="font-size:10px;background:var(--bg3);padding:1px 3px;border-radius:2px;">https://gist.githubusercontent.com/{user}/{id}/raw/backup_data.enc</code></div>
+            </div>
+            <div class="field-group" style="margin:0;grid-column:1/-1;">
+              <label>Encryption Key <span style="font-weight:400;color:var(--text3);">(must match script)</span></label>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input id="setting-backup-key" type="password" value="${escHtml(appSettings.backupEncryptionKey||'')}" placeholder="32-character secret key" style="font-size:11px;flex:1;font-family:var(--mono);">
+                <button class="btn-secondary" style="flex-shrink:0;white-space:nowrap;" onclick="bkGenKey()">Generate Key</button>
+              </div>
+              <div class="field-hint">AES-256 requires exactly 32 characters. Keep this secret — it never leaves your server.</div>
+            </div>
+          </div>
+          <button class="btn-primary" onclick="saveBkSettings()">Save</button>
+          <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border);">
+            <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;">PowerShell — append to the end of your aggregation script</div>
+            <div style="font-size:10px;color:var(--text3);margin-bottom:8px;">Requires a GitHub account + Personal Access Token (PAT) with <code style="background:var(--bg3);padding:1px 3px;border-radius:2px;">gist</code> scope. Create a Gist first, then paste its ID below.</div>
+            <pre style="background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:10px;font-size:10px;overflow-x:auto;color:var(--text2);margin:0;line-height:1.6;"># ── Encrypt and upload to GitHub Gist ─────────────────────────────────
+$enc_key   = 'YOUR_32_CHAR_KEY_HERE___________'  # must match Settings
+$gist_id   = 'YOUR_GIST_ID'                       # from gist.github.com URL
+$gh_token  = 'github_pat_...'                     # PAT with gist scope
+
+$key_bytes = [System.Text.Encoding]::UTF8.GetBytes($enc_key.PadRight(32).Substring(0,32))
+$plaintext = [System.IO.File]::ReadAllBytes($backup_file)
+
+$aes          = [System.Security.Cryptography.Aes]::Create()
+$aes.Mode     = [System.Security.Cryptography.CipherMode]::CBC
+$aes.Padding  = [System.Security.Cryptography.PaddingMode]::PKCS7
+$aes.Key      = $key_bytes
+$aes.GenerateIV()
+
+$enc      = $aes.CreateEncryptor().TransformFinalBlock($plaintext, 0, $plaintext.Length)
+$combined = $aes.IV + $enc
+$b64      = [Convert]::ToBase64String($combined)
+
+$body = ConvertTo-Json @{ files = @{ 'backup_data.enc' = @{ content = $b64 } } }
+Invoke-WebRequest -Uri "https://api.github.com/gists/$gist_id" \`
+  -Method PATCH \`
+  -Headers @{ Authorization = "token $gh_token"; 'User-Agent' = 'SA-Backup' } \`
+  -ContentType 'application/json' \`
+  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))</pre>
+            <div style="font-size:10px;color:var(--text3);margin-top:6px;">Set the Data URL above to <code style="background:var(--bg3);padding:1px 3px;border-radius:2px;">https://gist.githubusercontent.com/{your-username}/{gist_id}/raw/backup_data.enc</code></div>
+          </div>
         </div>
       </div>
       <div class="settings-block">
@@ -5653,7 +6008,7 @@ function showView(name){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   const map={home:'view-home',config:'view-config','new-client':'view-new-client',empty:'view-empty',
              checklist:'view-checklist',reference:'view-reference',settings:'view-settings',
-             sales:'view-sales','new-quote':'view-new-quote',quote:'view-quote'};
+             sales:'view-sales','new-quote':'view-new-quote',quote:'view-quote',backups:'view-backups'};
   document.getElementById(map[name]||'view-home')?.classList.add('active');
   if(name==='home') renderHomeView();
   if(name==='new-client'){

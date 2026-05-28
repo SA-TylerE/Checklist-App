@@ -3,6 +3,8 @@ const fs       = require('fs');
 const path     = require('path');
 const os       = require('os');
 const https    = require('https');
+const http     = require('http');
+const crypto   = require('crypto');
 const { exec } = require('child_process');
 
 const app        = express();
@@ -15,6 +17,7 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const MAX_LOGS   = 5000;
 
 app.use(express.json({ limit: '5mb' }));
+app.use('/api/backup-data', express.text({ limit: '10mb' }));
 app.get(['/', '/index.html'], (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
@@ -131,6 +134,74 @@ app.get('/api/syncro/search', (req, res) => {
         catch(_) { res.status(500).json({ error: 'Invalid response from Syncro' }); }
       });
     }).on('error', e => res.status(500).json({ error: e.message }));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Backup data — fetch from URL (with redirect following), optionally AES-256-CBC decrypt
+const BACKUP_DATA_FILE = path.join(__dirname, 'data', 'backup-data.txt');
+
+function parseBkTxt(text) {
+  const data = [];
+  for (const line of text.split('\n')) {
+    const parts = line.trim().split(',');
+    if (parts.length < 4) continue;
+    const dsMatch = parts[2]?.match(/diskSize=(\d+)/);
+    const laMatch = parts[3]?.match(/lastAccess=(\d+)/);
+    if (!dsMatch || !laMatch) continue;
+    data.push({ client: parts[0], profile: parts[1], diskSize: parseInt(dsMatch[1]), lastAccess: parseInt(laMatch[1]) });
+  }
+  return data;
+}
+
+function decryptBkContent(b64, keyStr) {
+  const buf       = Buffer.from(b64.trim(), 'base64');
+  const iv        = buf.slice(0, 16);
+  const encrypted = buf.slice(16);
+  const key       = Buffer.alloc(32);
+  Buffer.from(keyStr, 'utf8').copy(key);       // pad/truncate to 32 bytes
+  const decipher  = crypto.createDecipheriv('aes-256-cbc', key, iv);
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+}
+
+function fetchUrl(url, hops = 6) {
+  return new Promise((resolve, reject) => {
+    const mod    = url.startsWith('https') ? https : http;
+    const parsed = new URL(url);
+    const opts   = { hostname: parsed.hostname, port: parsed.port || undefined, path: parsed.pathname + parsed.search, headers: { 'User-Agent': 'Mozilla/5.0' } };
+    mod.get(opts, res => {
+      if ([301,302,303,307,308].includes(res.statusCode) && res.headers.location && hops > 0) {
+        const next = res.headers.location.startsWith('http') ? res.headers.location : `${parsed.protocol}//${parsed.host}${res.headers.location}`;
+        res.resume();
+        return resolve(fetchUrl(next, hops - 1));
+      }
+      let text = '';
+      res.on('data', c => text += c);
+      res.on('end', () => resolve(text));
+    }).on('error', reject);
+  });
+}
+
+app.get('/api/backup-data', async (req, res) => {
+  try {
+    const settings   = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+    const rawUrl     = (settings.backupDataUrl     || '').trim();
+    const encKey     = (settings.backupEncryptionKey || '').trim();
+    const fetchedAt  = Date.now();
+
+    let text;
+    if (rawUrl) {
+      let content = await fetchUrl(rawUrl);
+      text = encKey ? decryptBkContent(content, encKey) : content;
+      // Cache to disk so Refresh works even if remote is temporarily unavailable
+      atomicWrite(BACKUP_DATA_FILE, text);
+    } else if (fs.existsSync(BACKUP_DATA_FILE)) {
+      text = fs.readFileSync(BACKUP_DATA_FILE, 'utf8');
+    } else {
+      return res.json({ data: [], lastUpdated: null });
+    }
+
+    const lastUpdated = rawUrl ? fetchedAt : fs.statSync(BACKUP_DATA_FILE).mtimeMs;
+    res.json({ data: parseBkTxt(text), lastUpdated });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
