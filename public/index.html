@@ -628,6 +628,23 @@ span.bk-expand-toggle{opacity:0;pointer-events:none;}
 .bk-client-jump{background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:0 2px;line-height:1;opacity:0;transition:opacity 0.15s;flex-shrink:0;}
 .bk-client-item:hover .bk-client-jump{opacity:0.5;}
 .bk-client-jump:hover{opacity:1!important;color:var(--accent);}
+/* nav badge vertical center */
+#ah-btn-backups{display:inline-flex;align-items:center;gap:4px;}
+#bk-nav-badge{margin-left:0!important;vertical-align:unset!important;}
+/* issues card */
+.bk-sum-card.bk-issues-card{cursor:pointer;flex:2;min-width:160px;}
+.bk-issues-detail{display:none;margin-top:8px;border-top:1px solid var(--border);padding-top:6px;}
+.bk-issues-detail.open{display:block;}
+.bk-issue-row{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px;}
+.bk-issue-row+.bk-issue-row{border-top:1px solid var(--border);}
+/* backup ... menu */
+#bk-menu-wrap{position:relative;}
+#bk-main-menu{display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--bg2);border:1px solid var(--border2);border-radius:7px;min-width:150px;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,0.3);overflow:hidden;}
+#bk-main-menu.open{display:block;}
+.bk-menu-item{display:flex;align-items:center;gap:6px;width:100%;padding:8px 14px;font-size:12px;color:var(--text);background:none;border:none;text-align:left;cursor:pointer;transition:background 0.1s;white-space:nowrap;}
+.bk-menu-item:hover{background:var(--bg3);}
+.bk-menu-sep{height:1px;background:var(--border);margin:3px 0;}
+.bk-menu-check{font-size:11px;color:var(--accent);width:12px;flex-shrink:0;}
 
 /* Styled confirm dialog */
 #confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:600;align-items:center;justify-content:center;}
@@ -950,8 +967,8 @@ body.light{
     <nav class="ah-nav" role="navigation" aria-label="App sections">
       <button class="ah-nav-btn" id="ah-btn-onboarding" onclick="switchSection('onboarding')">Onboarding</button>
       <button class="ah-nav-btn" id="ah-btn-sales" onclick="switchSection('sales')">Sales</button>
+      <button class="ah-nav-btn" id="ah-btn-backups" onclick="switchSection('backups')">Backups<span id="bk-nav-badge" style="display:none;background:#ef4444;color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 5px;line-height:1.4;"></span></button>
       <button class="ah-nav-btn" id="ah-btn-reference" onclick="switchSection('reference')">Reference</button>
-      <button class="ah-nav-btn" id="ah-btn-backups" onclick="switchSection('backups')">Backups<span id="bk-nav-badge" style="display:none;background:#ef4444;color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 5px;margin-left:4px;vertical-align:middle;line-height:1.5;"></span></button>
     </nav>
     <div class="ah-right">
       <button class="ah-name-btn" id="ah-name-display" onclick="openNameModal()" title="Edit your name" style="display:none;"></button>
@@ -1477,6 +1494,8 @@ function actionLabel(action){
     quote_created:'Created quote',quote_edited:'Edited quote',quote_deleted:'Deleted quote',
     line_enabled:'Enabled line item',line_disabled:'Disabled line item',
     custom_item_added:'Added custom item',custom_item_removed:'Removed custom item',
+    bk_client_added:'Added backup client',bk_client_removed:'Removed backup client',
+    bk_client_updated:'Updated backup client',bk_fetch_error:'Backup fetch error',
   };
   return map[action]||action;
 }
@@ -1489,7 +1508,7 @@ function relTime(ts){
 }
 function logDotColor(action){
   if(['checklist_created','device_added','customer_linked','quote_created','line_enabled','custom_item_added'].includes(action)) return 'var(--success)';
-  if(['checklist_deleted','device_removed','customer_unlinked','quote_deleted','custom_item_removed'].includes(action)) return 'var(--danger)';
+  if(['checklist_deleted','device_removed','customer_unlinked','quote_deleted','custom_item_removed','bk_client_removed','bk_fetch_error'].includes(action)) return 'var(--danger)';
   if(['checklist_edited','notes_updated','step_note','quote_edited','line_disabled'].includes(action)) return 'var(--warn)';
   if(['procedures_saved','guides_saved','config_saved','products_saved'].includes(action)) return 'var(--text2)';
   return 'var(--accent)';
@@ -3229,6 +3248,33 @@ function bkExportCsv(){
   a.download='backup-clients-'+new Date().toISOString().slice(0,10)+'.csv';
   a.click();
 }
+function bkLogAction(action,details={}){
+  const myName=localStorage.getItem('myName')||'';
+  fetch('/api/logs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ts:new Date().toISOString(),tech:myName,action,clientId:'_backups',clientName:'Backups',...details})}).catch(_=>{});
+}
+async function bkShowLog(){
+  closeBkMenu();
+  const modal=document.getElementById('log-modal');
+  document.getElementById('log-modal-title').textContent='Backups — Activity Log';
+  document.getElementById('log-modal-body').innerHTML='<div style="color:var(--text3);font-size:11px;">Loading…</div>';
+  modal.style.display='flex';
+  try{
+    const r=await fetch('/api/logs?clientId=_backups&limit=200');
+    const logs=await r.json();
+    renderLogTimeline(document.getElementById('log-modal-body'),logs);
+  }catch(e){document.getElementById('log-modal-body').innerHTML=`<div style="color:#fca5a5;font-size:11px;">Failed to load logs: ${e.message}</div>`;}
+}
+function bkToggleMenu(){
+  const m=document.getElementById('bk-main-menu');
+  if(!m)return;
+  const isOpen=m.classList.contains('open');
+  document.querySelectorAll('.client-menu-dropdown.open').forEach(x=>x.classList.remove('open'));
+  if(isOpen){m.classList.remove('open');}else{m.classList.add('open');}
+}
+function closeBkMenu(){document.getElementById('bk-main-menu')?.classList.remove('open');}
+function bkToggleIssues(){
+  document.getElementById('bk-issues-detail')?.classList.toggle('open');
+}
 function bkIsCompliant(lastAccessMs,frequency){
   if(!lastAccessMs)return null;
   const ageDays=(Date.now()-lastAccessMs)/86400000;
@@ -3268,7 +3314,7 @@ async function bkFetchLive(){
       _backupLiveData[e.client].usedBytes+=e.diskSize;
       _backupLiveData[e.client].profiles.push(e);
     }
-  }catch(err){_bkFetchError=err.message;_backupLiveData={};}finally{_bkFetching=false;bkUpdateNavBadge();}
+  }catch(err){_bkFetchError=err.message;_backupLiveData={};bkLogAction('bk_fetch_error',{note:err.message});}finally{_bkFetching=false;bkUpdateNavBadge();}
 }
 
 function bkSwitchClient(id){
@@ -3314,14 +3360,23 @@ function bkRenderMain(){
     ${tabs.map(t=>`<button class="bk-tab${_bkTab===t.id?' active':''}" onclick="bkSwitchTab('${t.id}')">${t.lbl}</button>`).join('')}
     ${isStale?`<span style="font-size:10px;color:var(--warn);padding:0 6px;align-self:center;">⚠ Data ${Math.floor((Date.now()-new Date(_bkLastUpdated).getTime())/86400000)}d old</span>`:''}
     <div class="bk-tabs-right">
-      ${_bkTab==='overview'?`<button class="btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="_bkShowCosts=!_bkShowCosts;bkRenderMain()">${_bkShowCosts?'Hide Costs':'Show Costs'}</button><button class="btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="_bkHideInactive=!_bkHideInactive;bkRenderMain()">${_bkHideInactive?'Show All':'Hide Inactive'}</button><button class="btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="bkExportCsv()" title="Export to CSV">↓ CSV</button>`:''}
       ${_backupLiveData===null
-        ?(hasUrl?'<span style="font-size:11px;color:var(--text3);">Loading live data…</span>':'<button class="btn-ghost" style="font-size:11px;" onclick="openSettings()">Configure backup data URL in Settings ↗</button>')
+        ?(hasUrl?'<span style="font-size:11px;color:var(--text3);">Loading live data…</span>':'<button class="btn-secondary" style="font-size:11px;" onclick="openSettings()">Configure backup data URL ↗</button>')
         :_bkFetchError
           ?`<span style="font-size:11px;color:var(--danger);">⚠ Fetch error</span>
-            <button class="btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="_backupLiveData=null;_bkFetchError=null;_bkFetching=false;renderBackupsView()">↻ Retry</button>`
+            <button class="btn-secondary" style="font-size:11px;" onclick="_backupLiveData=null;_bkFetchError=null;_bkFetching=false;renderBackupsView()">↻ Retry</button>`
           :`<span style="font-size:10px;color:var(--text3);">${Object.values(_backupLiveData).reduce((s,v)=>s+v.profiles.length,0)} profiles${_bkLastUpdated?' · updated '+new Date(_bkLastUpdated).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}):''}</span>
-            <button class="btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="_backupLiveData=null;_bkFetchError=null;_bkFetching=false;renderBackupsView()">↻ Refresh</button>`}
+            <button class="btn-secondary" style="font-size:11px;" onclick="_backupLiveData=null;_bkFetchError=null;_bkFetching=false;renderBackupsView()">↻ Refresh</button>`}
+      <div id="bk-menu-wrap">
+        <button class="client-menu-btn" onclick="bkToggleMenu()" title="More options">&#8230;</button>
+        <div id="bk-main-menu">
+          <button class="bk-menu-item" onclick="_bkShowCosts=!_bkShowCosts;bkRenderMain()"><span class="bk-menu-check">${_bkShowCosts?'✓':''}</span>Show Costs</button>
+          <button class="bk-menu-item" onclick="_bkHideInactive=!_bkHideInactive;bkRenderMain()"><span class="bk-menu-check">${_bkHideInactive?'✓':''}</span>Hide Inactive</button>
+          <div class="bk-menu-sep"></div>
+          <button class="bk-menu-item" onclick="bkExportCsv()"><span class="bk-menu-check"></span>Export CSV</button>
+          <button class="bk-menu-item" onclick="bkShowLog()"><span class="bk-menu-check"></span>View Log</button>
+        </div>
+      </div>
     </div>
   </div>
   <div class="bk-scroll">${_bkFetchError?`<div style="background:#3b0f0f;border:1px solid rgba(239,68,68,0.3);border-radius:7px;padding:12px 16px;margin-bottom:14px;"><div style="font-size:12px;font-weight:600;color:#f87171;margin-bottom:6px;">Backup Data Fetch Error</div><div style="font-size:12px;color:#fca5a5;line-height:1.5;word-break:break-word;">${escHtml(_bkFetchError)}</div></div>`:''}${_bkTab==='overview'?bkRenderOverview():bkRenderProfiles()}</div>`;
@@ -3368,6 +3423,7 @@ function bkSaveClient(id,field,val){
   c[field]=val;
   appSettings.backupClients=clients;
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
+  if(['syncrify','wasabi','frequency','charged','notes'].includes(field))bkLogAction('bk_client_updated',{note:`${c.name}: ${field}=${val}`});
   const scroll=document.querySelector('.bk-scroll');
   const scrollTop=scroll?scroll.scrollTop:0;
   renderBackupsSidebar();
@@ -3380,14 +3436,17 @@ function bkAddClient(){
   clients.push({id:'bk'+Date.now(),name:'New Client',syncrifyId:'',allottedGB:0,contractDevices:0,charged:0,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'',notes:''});
   appSettings.backupClients=clients;
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
+  bkLogAction('bk_client_added');
   renderBackupsSidebar();
   bkRenderMain();
 }
 function bkRemoveClient(id){
   if(!confirm('Remove this client? This cannot be undone.'))return;
+  const c=bkGetClients().find(x=>x.id===id);
   appSettings.backupClients=bkGetClients().filter(c=>c.id!==id);
   if(_bkActiveClient===id)_bkActiveClient='all';
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
+  bkLogAction('bk_client_removed',{note:c?.name||id});
   renderBackupsSidebar();
   bkRenderMain();
 }
@@ -3398,13 +3457,14 @@ function bkRenderOverview(){
   if(_bkHideInactive)clients=clients.filter(c=>c.syncrify==='Active'||c.wasabi==='Active');
 
   let sumAllotted=0,sumCharged=0,sumUsed=0,sumCalc=0,issueCount=0;
+  const issueClients=[];
   clients.forEach(c=>{
     if(c.allottedGB>0)sumAllotted+=c.allottedGB;
     sumCharged+=c.charged||0;
     const live=_backupLiveData?.[c.syncrifyId];
     if(live){const g=live.usedBytes/1e9;sumUsed+=g;sumCalc+=bkCalcCost(g,live.profiles.length);}
     const st=bkRowStatus(c,live);
-    if(st==='error'||st==='warn')issueCount++;
+    if(st==='error'||st==='warn'){issueCount++;issueClients.push({c,live,st});}
   });
 
   let unmatchedHtml='';
@@ -3422,7 +3482,18 @@ function bkRenderOverview(){
     ${_bkShowCosts?`<div class="bk-sum-card"><div class="bk-sum-lbl">Total Charged</div><div class="bk-sum-val">${bkFmtCur(sumCharged)}</div></div>
     <div class="bk-sum-card"><div class="bk-sum-lbl">Calculated</div><div class="bk-sum-val">${bkFmtCur(sumCalc)}</div></div>
     <div class="bk-sum-card"><div class="bk-sum-lbl">Difference</div><div class="bk-sum-val ${sumCharged-sumCalc<0?'bk-neg':''}">${bkFmtCur(sumCharged-sumCalc)}</div></div>`:''}
-    ${issueCount>0?`<div class="bk-sum-card" style="border-color:rgba(239,68,68,0.35);"><div class="bk-sum-lbl" style="color:var(--danger);">Issues</div><div class="bk-sum-val" style="color:var(--danger);">${issueCount}</div></div>`:''}
+    ${issueCount>0?`<div class="bk-sum-card bk-issues-card" style="border-color:rgba(239,68,68,0.35);" onclick="bkToggleIssues()">
+      <div style="display:flex;align-items:center;justify-content:space-between;"><div class="bk-sum-lbl" style="color:var(--danger);">Issues</div><span style="font-size:9px;color:var(--text3);">▾ tap to expand</span></div>
+      <div class="bk-sum-val" style="color:var(--danger);">${issueCount}</div>
+      <div class="bk-issues-detail" id="bk-issues-detail">
+        ${issueClients.map(({c,live,st})=>{
+          let reason='';
+          if(st==='error'){const nc=live?.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))===false)||[];reason=nc.length+' profile'+(nc.length!==1?'s':'')+' non-compliant';}
+          else{const usedGB=live?live.usedBytes/1e9:0;const calc=bkCalcCost(usedGB,live?.profiles.length||0);reason=`cost +${bkFmtCur(calc-(c.charged||0))} over`;}
+          return`<div class="bk-issue-row"><span class="bk-dot bk-dot-${st}"></span><span style="flex:1;">${escHtml(c.name)}</span><span style="color:var(--text3);font-size:10px;">${reason}</span><button style="background:none;border:none;color:var(--accent);font-size:10px;cursor:pointer;padding:2px 4px;" onclick="event.stopPropagation();bkSwitchClient('${c.id}')">→</button></div>`;
+        }).join('')}
+      </div>
+    </div>`:''}
   </div>`:'')
   +`<div class="bk-table-wrap"><table class="bk-table">
     <thead>
@@ -3620,6 +3691,14 @@ function renderHomeView(){
         <div style="flex:1;">
           <div style="font-size:14px;font-weight:600;">Sales Quotes</div>
           <div style="font-size:11px;color:var(--text3);margin-top:2px;">Build and export pricing proposals</div>
+        </div>
+        <span style="color:var(--text3);font-size:14px;">›</span>
+      </div>
+      <div class="dash-row" style="padding:16px 20px;cursor:pointer;gap:16px;" onclick="switchSection('backups')">
+        <span style="font-size:22px;width:28px;text-align:center;flex-shrink:0;">🗄️</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:600;">Backups</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">Monitor client backup compliance</div>
         </div>
         <span style="color:var(--text3);font-size:14px;">›</span>
       </div>
