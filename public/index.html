@@ -616,7 +616,7 @@ span.bk-expand-toggle{opacity:0;pointer-events:none;}
 .bk-expand-table{width:100%;border-collapse:collapse;font-size:11px;}
 .bk-expand-table th{color:var(--text3);font-size:10px;font-weight:600;padding:4px 28px 4px 0;border-bottom:1px solid var(--border);white-space:nowrap;}
 .bk-expand-table th:last-child,.bk-expand-table td:last-child{padding-right:0;}
-.bk-expand-table td{padding:6px 28px 6px 0;border-top:1px solid var(--border);color:var(--text2);white-space:nowrap;vertical-align:middle;}
+.bk-expand-table td{padding:6px 28px 6px 0;border-top:1px solid var(--border2);color:var(--text2);white-space:nowrap;vertical-align:middle;}
 .bk-expand-table td.bk-exp-freq{padding-right:16px;}
 /* sticky client column */
 .bk-table th.bk-th-name{position:sticky;left:0;z-index:2;background:var(--bg3);box-shadow:2px 0 5px rgba(0,0,0,0.18);}
@@ -3332,14 +3332,16 @@ function bkBuildMonitorCards(){
     const st=bkRowStatus(c,live);
     const active=c.syncrify==='Active'||c.wasabi==='Active';
     const borderColor=live||st==='inactive'?stColor[st]||'#6b7280':'#6b7280';
-    const totalP=live?live.profiles.length:null;
-    const compP=live&&active?live.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))).length:null;
+    const monP=live?live.profiles.filter(p=>bkEffectiveFreq(c,p.profile)!=='Disabled'):[];
+    const totalP=live?monP.length:null;
+    const compP=live&&active?monP.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))).length:null;
     const compColor=compP===null?'var(--text3)':compP===totalP?'#22c55e':compP===0?'#ef4444':'#f59e0b';
     let segBar='';
-    if(live&&live.profiles.length){
-      const gap=live.profiles.length>15?1:2;
-      const segs=live.profiles.map(p=>{
-        const col=!active?'#4b5563':bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))?'#22c55e':'#ef4444';
+    if(monP.length){
+      const gap=monP.length>15?1:2;
+      const segs=monP.map(p=>{
+        const freq=bkEffectiveFreq(c,p.profile);
+        const col=!active?'#4b5563':bkIsCompliant(p.lastAccess,freq)?'#22c55e':'#ef4444';
         const freq=bkEffectiveFreq(c,p.profile);
         const tip=p.lastAccess?`${p.profile} · ${freq} · ${bkFmtDate(p.lastAccess)}`:p.profile;
         return`<div title="${escHtml(tip)}" style="flex:1;background:${col};border-radius:2px;min-width:3px;"></div>`;
@@ -3347,8 +3349,8 @@ function bkBuildMonitorCards(){
       segBar=`<div style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span class="bk-monitor-lbl">Profiles</span><span style="font-size:11px;color:${compColor};font-weight:700;">${compP!==null?`${compP}/${totalP}`:totalP??'—'}</span></div><div style="display:flex;gap:${gap}px;height:10px;">${segs}</div></div>`;
     }
     let oldestHtml='';
-    if(live&&live.profiles.length){
-      const op=live.profiles.reduce((a,b)=>a.lastAccess<b.lastAccess?a:b);
+    if(monP.length){
+      const op=monP.reduce((a,b)=>a.lastAccess<b.lastAccess?a:b);
       const freq=bkEffectiveFreq(c,op.profile);
       const thresh=freq==='Monthly'?32:freq==='Weekly'?8:2;
       const age=bkFmtAge(op.lastAccess,thresh);
@@ -3442,6 +3444,7 @@ function bkToggleIssues(){
   document.getElementById('bk-issues-detail')?.classList.toggle('open');
 }
 function bkIsCompliant(lastAccessMs,frequency){
+  if(frequency==='Disabled')return null;
   if(!lastAccessMs)return null;
   const ageDays=(Date.now()-lastAccessMs)/86400000;
   if(frequency==='Monthly')return ageDays<=32;
@@ -3506,8 +3509,9 @@ function renderBackupsSidebar(){
       const live=_backupLiveData?.[c.syncrifyId];
       const st=bkRowStatus(c,live);
       const active=c.syncrify==='Active'||c.wasabi==='Active';
-      const totalP=live?live.profiles.length:null;
-      const compP=active&&live?live.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))).length:null;
+      const monP=live?live.profiles.filter(p=>bkEffectiveFreq(c,p.profile)!=='Disabled'):[];
+      const totalP=live?monP.length:null;
+      const compP=active&&live?monP.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))).length:null;
       const badgeColor=compP===null?'var(--text3)':compP===totalP?'#22c55e':compP===0?'#ef4444':'#f59e0b';
       const badgeText=compP!==null?`${compP}/${totalP}`:st==='inactive'?'inactive':'—';
       const badge=totalP!==null?`<span style="font-size:9px;color:${badgeColor};font-weight:600;flex-shrink:0;margin-right:2px;">${badgeText}</span>`:'';
@@ -3595,9 +3599,10 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
   const stColor={error:'#ef4444',warn:'#f59e0b',good:'#22c55e',inactive:'#4b5563'};
   const clientCard=({c,live,st})=>{
     const usedGB=live?live.usedBytes/1e9:null;
-    const totalP=live?live.profiles.length:null;
-    const compP=live&&(c.syncrify==='Active'||c.wasabi==='Active')?live.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))).length:null;
-    const oldest=live&&live.profiles.length?Math.min(...live.profiles.map(p=>p.lastAccess)):null;
+    const monP=live?live.profiles.filter(p=>bkEffectiveFreq(c,p.profile)!=='Disabled'):[];
+    const totalP=live?monP.length:null;
+    const compP=live&&(c.syncrify==='Active'||c.wasabi==='Active')?monP.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))).length:null;
+    const oldest=live&&monP.length?Math.min(...monP.map(p=>p.lastAccess)):null;
     const compColor=compP===null?'var(--text3)':compP===totalP?'#22c55e':compP===0?'#ef4444':'#f59e0b';
     let issueNote='';
     if(st==='error'&&live){const nc=live.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))===false);issueNote=`<div class="bk-card-issue" style="color:#f87171;">${nc.length} profile${nc.length!==1?'s':''} non-compliant</div>`;}
@@ -3613,7 +3618,7 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
         ${!live&&!c.syncrifyId?`<span style="color:var(--danger);">No Syncrify ID</span>`:''}
       </div>
       ${st==='warn'?issueNote:''}
-      ${(()=>{if(!live||!live.profiles.length)return'';const active=c.syncrify==='Active'||c.wasabi==='Active';const gap=live.profiles.length>15?1:2;const segHtml=live.profiles.map(p=>{const col=!active?'#4b5563':bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))?'#22c55e':'#ef4444';const tip=p.lastAccess?`${escHtml(p.profile)} · ${bkEffectiveFreq(c,p.profile)} · ${bkFmtDate(p.lastAccess)}`:escHtml(p.profile);return`<div title="${tip}" style="flex:1;background:${col};border-radius:2px;min-width:3px;"></div>`;}).join('');const rightLabel=active?`${compP}/${totalP}`:`${totalP}`;const rightColor=active?compColor:'var(--text3)';return`<div style="margin-top:7px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;">Profiles</span><span style="font-size:9px;color:${rightColor};font-weight:600;">${rightLabel}</span></div><div style="display:flex;gap:${gap}px;height:7px;">${segHtml}</div></div>`;})()}
+      ${(()=>{if(!live||!monP.length)return'';const active=c.syncrify==='Active'||c.wasabi==='Active';const gap=monP.length>15?1:2;const segHtml=monP.map(p=>{const freq=bkEffectiveFreq(c,p.profile);const col=!active?'#4b5563':bkIsCompliant(p.lastAccess,freq)?'#22c55e':'#ef4444';const tip=p.lastAccess?`${escHtml(p.profile)} · ${freq} · ${bkFmtDate(p.lastAccess)}`:escHtml(p.profile);return`<div title="${tip}" style="flex:1;background:${col};border-radius:2px;min-width:3px;"></div>`;}).join('');const rightLabel=active?`${compP}/${totalP}`:`${totalP}`;const rightColor=active?compColor:'var(--text3)';return`<div style="margin-top:7px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;">Profiles</span><span style="font-size:9px;color:${rightColor};font-weight:600;">${rightLabel}</span></div><div style="display:flex;gap:${gap}px;height:7px;">${segHtml}</div></div>`;})()}
       ${(()=>{if(usedGB===null||!(c.allottedGB>0))return'';const pct=Math.min(100,usedGB/c.allottedGB*100);const barColor=pct>=90?'#ef4444':pct>=70?'#f59e0b':'#22c55e';return`<div style="margin-top:7px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;">Storage</span><span style="font-size:9px;color:${barColor};font-weight:600;">${bkFmt(usedGB)} / ${bkFmt(c.allottedGB)}</span></div><div class="bk-storage-bar"><div class="bk-storage-fill" style="width:${pct.toFixed(1)}%;background:${barColor};"></div></div></div>`;})()}
       ${(()=>{const coveredRoles=new Set();if(c.profileSettings)Object.values(c.profileSettings).forEach(ps=>{if(Array.isArray(ps.roles))ps.roles.forEach(r=>coveredRoles.add(r));});if(!coveredRoles.size)return'';return`<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px;">${BK_ROLES.map(r=>coveredRoles.has(r.id)?`<span style="font-size:8px;padding:1px 5px;border-radius:8px;background:${r.fg}25;color:${r.fg};border:1px solid ${r.fg}55;font-weight:600;">${r.label}</span>`:'').filter(Boolean).join('')}</div>`;})()}
     </div>`;
@@ -3912,12 +3917,13 @@ function bkRenderOverview(){
         const expanded=true;
         const usedGB=live?live.usedBytes/1e9:null;
         const devCnt=live?live.profiles.filter(p=>p.diskSize>0).length:null;
-        const totalProfiles=live?live.profiles.length:null;
-        const calc=usedGB!==null?bkCalcCost(usedGB,totalProfiles):null;
+        const monProfiles=live?live.profiles.filter(p=>bkEffectiveFreq(c,p.profile)!=='Disabled'):[];
+        const totalProfiles=live?monProfiles.length:null;
+        const calc=usedGB!==null?bkCalcCost(usedGB,live?live.profiles.length:0):null;
         const diff=(calc!==null&&c.charged!==undefined)?c.charged-calc:null;
-        const oldestAccess=hasProfiles?Math.min(...live.profiles.map(p=>p.lastAccess)):null;
+        const oldestAccess=monProfiles.length?Math.min(...monProfiles.map(p=>p.lastAccess)):null;
         const active=c.syncrify==='Active'||c.wasabi==='Active';
-        const compliantCount=active&&live?live.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))).length:null;
+        const compliantCount=active&&live?monProfiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))).length:null;
         const ageDays=oldestAccess?(Date.now()-oldestAccess)/86400000:null;
         const st=bkRowStatus(c,live);
         const estCost=c.allottedGB>0?bkEstCost(c.allottedGB,c.contractDevices):null;
@@ -3960,7 +3966,8 @@ function bkRenderOverview(){
                   return`<button data-cid="${c.id}" data-pname="${escHtml(p.profile)}" data-rid="${r.id}" onclick="bkToggleProfileRole(this.dataset.cid,this.dataset.pname,this.dataset.rid)" style="font-size:8px;padding:1px 5px;border-radius:8px;cursor:pointer;transition:all 0.1s;${on?`background:${r.fg}25;color:${r.fg};border:1px solid ${r.fg}66;font-weight:600;`:'background:transparent;color:var(--text3);border:1px solid var(--border2);'}">${r.label}</button>`;
                 }).join('');
                 const pAgeInfo=bkFmtAge(p.lastAccess,pThresh);
-                const profileRow=`<tr>
+                const isDisabled=pEffectiveFreq==='Disabled';
+                const profileRow=`<tr${isDisabled?' style="opacity:0.45;"':''}>
                   <td style="text-align:left;min-width:220px;">
                     <div style="font-size:11px;font-weight:500;margin-bottom:4px;">${escHtml(p.profile)}</div>
                     <div style="display:flex;flex-wrap:wrap;gap:3px;">${roleToggleChips}</div>
@@ -3972,6 +3979,7 @@ function bkRenderOverview(){
                       <option value="Daily"${pEffectiveFreq==='Daily'?' selected':''}>Daily</option>
                       <option value="Weekly"${pEffectiveFreq==='Weekly'?' selected':''}>Weekly</option>
                       <option value="Monthly"${pEffectiveFreq==='Monthly'?' selected':''}>Monthly</option>
+                      <option value="Disabled"${pEffectiveFreq==='Disabled'?' selected':''}>Disabled</option>
                     </select>
                   </td>
                   <td style="text-align:center;vertical-align:top;padding-top:6px;">
