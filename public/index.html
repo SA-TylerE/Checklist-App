@@ -616,7 +616,8 @@ span.bk-expand-toggle{opacity:0;pointer-events:none;}
 .bk-expand-table{width:100%;border-collapse:collapse;font-size:11px;}
 .bk-expand-table th{color:var(--text3);font-size:10px;font-weight:600;padding:4px 28px 4px 0;border-bottom:1px solid var(--border);white-space:nowrap;}
 .bk-expand-table th:last-child,.bk-expand-table td:last-child{padding-right:0;}
-.bk-expand-table td{padding:6px 28px 6px 0;border-top:1px solid var(--border2);color:var(--text2);white-space:nowrap;vertical-align:middle;}
+.bk-expand-table td{padding:6px 28px 6px 0;color:var(--text2);white-space:nowrap;vertical-align:middle;}
+.bk-expand-sep td{height:1px;padding:0;background:var(--border2);border:none!important;}
 .bk-expand-table td.bk-exp-freq{padding-right:16px;}
 /* sticky client column */
 .bk-table th.bk-th-name{position:sticky;left:0;z-index:2;background:var(--bg3);box-shadow:2px 0 5px rgba(0,0,0,0.18);}
@@ -3658,7 +3659,7 @@ function bkSaveProfileFreq(clientId,profileName,freq){
   if(!c.profileSettings[profileName])c.profileSettings[profileName]={};
   c.profileSettings[profileName].frequency=freq;
   appSettings.backupClients=clients;
-  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
+  fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
   const scroll=document.querySelector('.bk-scroll');
   const scrollTop=scroll?scroll.scrollTop:0;
   renderBackupsSidebar();
@@ -3675,7 +3676,7 @@ function bkSaveProfileNote(clientId,profileName,note){
   if(note.trim())ps.note=note.trim();else delete ps.note;
   if(!Object.keys(ps).length)delete c.profileSettings[profileName];
   appSettings.backupClients=clients;
-  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
+  fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
 }
 function bkSortBy(col){
   if(_bkSort.col===col)_bkSort.dir*=-1;else{_bkSort.col=col;_bkSort.dir=1;}
@@ -3717,7 +3718,7 @@ function bkAutoTagProfiles(clientId){
   });
   if(!changed){showToast('No new tags detected from profile names');return;}
   appSettings.backupClients=clients;
-  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
+  fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
   showToast(`Auto-tagged ${changed} profile${changed!==1?'s':''}`);
   const scroll=document.querySelector('.bk-scroll');const scrollTop=scroll?scroll.scrollTop:0;
   bkRenderMain();if(scrollTop)requestAnimationFrame(()=>{const s=document.querySelector('.bk-scroll');if(s)s.scrollTop=scrollTop;});
@@ -3743,7 +3744,7 @@ function bkToggleProfileRole(clientId,profileName,roleId){
   if(roles.length)ps.roles=roles;else delete ps.roles;
   if(!Object.keys(ps).length)delete c.profileSettings[profileName];
   appSettings.backupClients=clients;
-  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
+  fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
   const modal=document.getElementById('bk-profiles-modal');
   if(modal&&modal.style.display!=='none'){
     const body=document.getElementById('bk-profiles-modal-body');
@@ -3776,7 +3777,7 @@ function bkSaveClient(id,field,val){
   if(['allottedGB','contractDevices','charged'].includes(field))val=parseFloat(val)||0;
   c[field]=val;
   appSettings.backupClients=clients;
-  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
+  fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
   if(['syncrify','wasabi','frequency','charged','notes'].includes(field))bkLogAction('bk_client_updated',{note:`${c.name}: ${field}=${val}`});
   const scroll=document.querySelector('.bk-scroll');
   const scrollTop=scroll?scroll.scrollTop:0;
@@ -3789,7 +3790,7 @@ function bkAddClient(){
   const clients=bkGetClients().slice();
   clients.push({id:'bk'+Date.now(),name:'New Client',syncrifyId:'',allottedGB:0,contractDevices:0,charged:0,syncrify:'Active',wasabi:'Active',frequency:'Daily',vpnHost:'',notes:''});
   appSettings.backupClients=clients;
-  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
+  fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
   bkLogAction('bk_client_added');
   renderBackupsSidebar();
   bkRenderMain();
@@ -3799,7 +3800,7 @@ function bkRemoveClient(id){
   const c=bkGetClients().find(x=>x.id===id);
   appSettings.backupClients=bkGetClients().filter(c=>c.id!==id);
   if(_bkActiveClient===id)_bkActiveClient='all';
-  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
+  fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
   bkLogAction('bk_client_removed',{note:c?.name||id});
   renderBackupsSidebar();
   bkRenderMain();
@@ -3950,7 +3951,7 @@ function bkRenderOverview(){
                 <th style="text-align:center;">&#9998;</th>
                 <th style="text-align:center;padding-right:0;">✓</th>
               </tr></thead>
-              <tbody>${live.profiles.map(p=>{
+              <tbody>${live.profiles.map((p,pi)=>{
                 const pEffectiveFreq=bkEffectiveFreq(c,p.profile);
                 const pThresh=pEffectiveFreq==='Monthly'?32:pEffectiveFreq==='Weekly'?8:2;
                 const pAge=(Date.now()-p.lastAccess)/86400000;
@@ -3991,7 +3992,8 @@ function bkRenderOverview(){
                     <textarea style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text);font-size:11px;font-family:var(--sans);resize:vertical;min-height:36px;outline:none;box-sizing:border-box;display:block;" placeholder="Profile note…" onblur="bkSaveProfileNote('${c.id}','${escHtml(p.profile)}',this.value)" onkeydown="if(event.key==='Escape')bkToggleProfileNote('${c.id}','${escHtml(p.profile)}')">${escHtml(ps.note||'')}</textarea>
                   </td>
                 </tr>`:'';
-                return profileRow+noteRow;
+                const sep=pi>0?'<tr class="bk-expand-sep"><td colspan="6"></td></tr>':'';
+                return sep+profileRow+noteRow;
               }).join('')}</tbody>
             </table>
           </td>
