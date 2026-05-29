@@ -606,9 +606,6 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .bk-cell-input{background:transparent;border:1px solid transparent;border-radius:4px;font-size:11px;color:var(--text2);padding:1px 3px;outline:none;min-width:0;width:100%;box-sizing:border-box;font-family:var(--sans);}
 .bk-cell-input:hover,.bk-cell-input:focus{border-color:var(--border);background:var(--bg3);color:var(--text);}
 .bk-cell-num{width:55px;text-align:right!important;}
-.bk-client-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;padding:0 2px;line-height:1;opacity:0;transition:opacity 0.15s;flex-shrink:0;margin-left:auto;}
-.bk-client-item:hover .bk-client-del{opacity:0.5;}
-.bk-client-del:hover{opacity:1!important;color:var(--danger);}
 .bk-warn{color:#f59e0b!important;font-weight:600;}
 .bk-expand-toggle{background:none;border:none;color:var(--text2);cursor:pointer;font-size:14px;padding:2px 5px;line-height:1;flex-shrink:0;opacity:0.7;transition:opacity 0.15s,transform 0.18s;}
 .bk-expand-toggle:hover{opacity:1;color:var(--accent);}
@@ -625,10 +622,6 @@ span.bk-expand-toggle{opacity:0;pointer-events:none;}
 .bk-table th.bk-th-name{position:sticky;left:0;z-index:2;background:var(--bg3);box-shadow:2px 0 5px rgba(0,0,0,0.18);}
 .bk-table td.bk-td-name{position:sticky;left:0;z-index:1;background:var(--bg);box-shadow:2px 0 5px rgba(0,0,0,0.12);}
 .bk-table tbody tr:hover td.bk-td-name{background:var(--bg3);}
-/* sidebar jump button */
-.bk-client-jump{background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:0 2px;line-height:1;opacity:0;transition:opacity 0.15s;flex-shrink:0;}
-.bk-client-item:hover .bk-client-jump{opacity:0.5;}
-.bk-client-jump:hover{opacity:1!important;color:var(--accent);}
 /* nav badge vertical center */
 #ah-btn-backups{display:inline-flex;align-items:center;gap:4px;}
 #bk-nav-badge{margin-left:0!important;vertical-align:unset!important;}
@@ -3380,7 +3373,7 @@ function renderBackupsSidebar(){
       const compP=active&&live?live.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))).length:null;
       const badgeColor=compP===null?'var(--text3)':compP===totalP?'#22c55e':compP===0?'#ef4444':'#f59e0b';
       const badge=totalP!==null?`<span style="font-size:9px;color:${badgeColor};font-weight:600;flex-shrink:0;margin-right:2px;">${compP}/${totalP}</span>`:'';
-      return`<div class="bk-client-item${_bkActiveClient===c.id?' active':''}" data-bkid="${c.id}" onclick="bkSwitchClient('${c.id}')"><span class="bk-dot bk-dot-${st}"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(c.name)}</span>${badge}<button class="bk-client-jump" onclick="event.stopPropagation();bkSwitchClient('${c.id}');setTimeout(()=>bkScrollToClient('${c.id}'),60);" title="Scroll to row">⇢</button><button class="bk-client-del" onclick="event.stopPropagation();bkRemoveClient('${c.id}')" title="Remove client">×</button></div>`;
+      return`<div class="bk-client-item${_bkActiveClient===c.id?' active':''}" data-bkid="${c.id}" onclick="bkSwitchClient('${c.id}')"><span class="bk-dot bk-dot-${st}"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(c.name)}</span>${badge}</div>`;
     }).join('');
 }
 
@@ -3404,7 +3397,7 @@ function bkRenderMain(){
   else if(_bkFetchError){subtitle=`<span style="color:var(--danger);">⚠ Fetch error — use ⋯ menu to retry</span>`;}
   else{
     const np=Object.values(_backupLiveData).reduce((s,v)=>s+v.profiles.length,0);
-    const upd=_bkLastUpdated?'updated '+new Date(_bkLastUpdated).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
+    const upd=_bkLastUpdated?'data from '+new Date(_bkLastUpdated).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
     subtitle=`${np} profiles${upd?' · '+upd:''}${isStale?` <span style="color:var(--warn);">⚠ stale</span>`:''}`;
   }
   // Title
@@ -3420,14 +3413,15 @@ function bkRenderMain(){
   const menuHtml=`<div class="client-menu-wrap">
     <button class="client-menu-btn" onclick="bkToggleMenu()">&#8230;</button>
     <div class="client-menu-dropdown" id="bk-main-menu">
+      <button class="client-menu-item" onclick="closeBkMenu();_backupLiveData=null;_bkFetchError=null;_bkFetching=false;renderBackupsView()">↻ Refresh</button>
+      <div class="client-menu-sep"></div>
       <button class="client-menu-item${_bkShowCosts?' checked':''}" onclick="_bkShowCosts=!_bkShowCosts;bkRenderMain()">Show Costs</button>
       <button class="client-menu-item${_bkHideInactive?' checked':''}" onclick="_bkHideInactive=!_bkHideInactive;bkRenderMain()">Hide Inactive</button>
       <div class="client-menu-sep"></div>
       <button class="client-menu-item" onclick="bkOpenProfiles()">View Profiles</button>
       <button class="client-menu-item" onclick="bkExportCsv()">Export CSV</button>
       <button class="client-menu-item" onclick="bkShowLog()">View Log</button>
-      <div class="client-menu-sep"></div>
-      <button class="client-menu-item" onclick="closeBkMenu();_backupLiveData=null;_bkFetchError=null;_bkFetching=false;renderBackupsView()">↻ Refresh</button>
+      ${!isAll?`<div class="client-menu-sep"></div><button class="client-menu-item" style="color:var(--danger);" onclick="closeBkMenu();bkRemoveClient('${_bkActiveClient}')">Remove Client…</button>`:''}
     </div>
   </div>`;
   const errBanner=_bkFetchError?`<div style="background:#3b0f0f;border:1px solid rgba(239,68,68,0.3);border-radius:7px;padding:12px 16px;margin-bottom:14px;"><div style="font-size:12px;font-weight:600;color:#f87171;margin-bottom:6px;">Backup Data Fetch Error</div><div style="font-size:12px;color:#fca5a5;line-height:1.5;word-break:break-word;">${escHtml(_bkFetchError)}</div></div>`:'';
@@ -3483,8 +3477,8 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
         ${!live&&!c.syncrifyId?`<span style="color:var(--danger);">No Syncrify ID</span>`:''}
       </div>
       ${issueNote}
-      ${(()=>{if(usedGB===null||!(c.allottedGB>0))return'';const pct=Math.min(100,usedGB/c.allottedGB*100);const barColor=pct>=90?'#ef4444':pct>=70?'#f59e0b':'#22c55e';return`<div style="display:flex;align-items:center;gap:5px;margin-top:6px;"><div class="bk-storage-bar" style="flex:1;"><div class="bk-storage-fill" style="width:${pct.toFixed(1)}%;background:${barColor};"></div></div><span style="font-size:9px;color:${barColor};font-weight:600;flex-shrink:0;">${pct.toFixed(0)}%</span></div>`;})()}
-      ${(()=>{const coveredRoles=new Set();if(c.profileSettings)Object.values(c.profileSettings).forEach(ps=>{if(Array.isArray(ps.roles))ps.roles.forEach(r=>coveredRoles.add(r));});if(!coveredRoles.size)return'';return`<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px;">${BK_ROLES.map(r=>coveredRoles.has(r.id)?`<span style="font-size:8px;padding:1px 5px;border-radius:8px;background:${r.bg};color:${r.fg};">${r.label}</span>`:'').filter(Boolean).join('')}</div>`;})()}
+      ${(()=>{if(usedGB===null||!(c.allottedGB>0))return'';const pct=Math.min(100,usedGB/c.allottedGB*100);const barColor=pct>=90?'#ef4444':pct>=70?'#f59e0b':'#22c55e';return`<div style="margin-top:7px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;">Storage</span><span style="font-size:9px;color:${barColor};font-weight:600;">${bkFmt(usedGB)} / ${bkFmt(c.allottedGB)}</span></div><div class="bk-storage-bar"><div class="bk-storage-fill" style="width:${pct.toFixed(1)}%;background:${barColor};"></div></div></div>`;})()}
+      ${(()=>{const coveredRoles=new Set();if(c.profileSettings)Object.values(c.profileSettings).forEach(ps=>{if(Array.isArray(ps.roles))ps.roles.forEach(r=>coveredRoles.add(r));});if(!coveredRoles.size)return'';return`<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px;">${BK_ROLES.map(r=>coveredRoles.has(r.id)?`<span style="font-size:8px;padding:1px 5px;border-radius:8px;background:${r.fg}25;color:${r.fg};border:1px solid ${r.fg}55;font-weight:600;">${r.label}</span>`:'').filter(Boolean).join('')}</div>`;})()}
     </div>`;
   };
   const cardGrid=arr=>`<div class="bk-card-grid">${arr.map(clientCard).join('')}</div>`;
@@ -3512,7 +3506,7 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
 }
 function bkFmt(usedGB){return usedGB>=1000?(usedGB/1000).toFixed(1)+' TB':usedGB.toFixed(0)+' GB';}
 function bkFmtDate(ms){if(!ms)return'—';return new Date(ms).toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'2-digit'});}
-function bkFmtAge(ms,threshDays){if(!ms)return{text:'—',color:'var(--text3)'};const d=Math.floor((Date.now()-ms)/86400000);const text=d===0?'today':d===1?'1d ago':`${d}d ago`;const color=d>threshDays?'#ef4444':d>threshDays*0.75?'#f59e0b':'#22c55e';return{text,color};}
+function bkFmtAge(ms,threshDays){if(!ms)return{text:'—',color:'var(--text3)',date:''};const d=Math.floor((Date.now()-ms)/86400000);let text;if(d===0)text='today';else if(d===1)text='1d ago';else if(d<30)text=`${d}d ago`;else if(d<365)text=`${Math.floor(d/30)}mo ago`;else text=`${(d/365).toFixed(1)}yr ago`;const color=d>threshDays?'#ef4444':d>threshDays*0.75?'#f59e0b':'#22c55e';return{text,color,date:bkFmtDate(ms)};}
 function bkFmtCur(n){return'$'+(n||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});}
 
 function bkSaveProfileFreq(clientId,profileName,freq){
@@ -3731,9 +3725,9 @@ function bkRenderOverview(){
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;">
         ${BK_ROLES.map(r=>{
           const on=coveredRoles.has(r.id);
-          return`<div style="display:flex;align-items:center;gap:5px;padding:5px 8px;border-radius:5px;border:1px solid ${on?r.bg:'var(--border)'};background:${on?r.bg+'18':'transparent'};">
+          return`<div style="display:flex;align-items:center;gap:5px;padding:5px 8px;border-radius:5px;border:1px solid ${on?r.fg+'55':'var(--border)'};background:${on?r.fg+'18':'transparent'};">
             <span style="font-size:11px;${on?`color:${r.fg};`:'color:var(--text3);'}font-weight:600;">${on?'✓':'○'}</span>
-            <span style="font-size:10px;${on?`color:${r.fg};`:'color:var(--text3);'}">${r.label}</span>
+            <span style="font-size:10px;${on?`color:${r.fg};font-weight:500;`:'color:var(--text3);'}">${r.label}</span>
           </div>`;
         }).join('')}
       </div>
@@ -3828,7 +3822,7 @@ function bkRenderOverview(){
                 const hasNote=!!(ps.note);
                 const roleToggleChips=BK_ROLES.map(r=>{
                   const on=pRoles.includes(r.id);
-                  return`<button data-cid="${c.id}" data-pname="${escHtml(p.profile)}" data-rid="${r.id}" onclick="bkToggleProfileRole(this.dataset.cid,this.dataset.pname,this.dataset.rid)" style="font-size:8px;padding:1px 5px;border-radius:8px;cursor:pointer;border:1px solid ${r.bg};transition:all 0.1s;${on?`background:${r.bg};color:${r.fg};`:'background:transparent;color:var(--text3);'}">${r.label}</button>`;
+                  return`<button data-cid="${c.id}" data-pname="${escHtml(p.profile)}" data-rid="${r.id}" onclick="bkToggleProfileRole(this.dataset.cid,this.dataset.pname,this.dataset.rid)" style="font-size:8px;padding:1px 5px;border-radius:8px;cursor:pointer;transition:all 0.1s;${on?`background:${r.fg}25;color:${r.fg};border:1px solid ${r.fg}66;font-weight:600;`:'background:transparent;color:var(--text3);border:1px solid var(--border2);'}">${r.label}</button>`;
                 }).join('');
                 const pAgeInfo=bkFmtAge(p.lastAccess,pThresh);
                 const profileRow=`<tr>
@@ -3837,7 +3831,7 @@ function bkRenderOverview(){
                     <div style="display:flex;flex-wrap:wrap;gap:3px;">${roleToggleChips}</div>
                   </td>
                   <td style="text-align:right;color:var(--text3);vertical-align:top;padding-top:8px;">${p.diskSize>0?bkFmt(p.diskSize/1e9):'<span class="bk-dim">—</span>'}</td>
-                  <td style="text-align:right;vertical-align:top;padding-top:8px;" title="${bkFmtDate(p.lastAccess)}"><span style="color:${pAgeInfo.color};font-weight:500;">${pAgeInfo.text}</span></td>
+                  <td style="text-align:right;vertical-align:top;padding-top:8px;" title="${pAgeInfo.date}"><span style="color:${pAgeInfo.color};font-weight:500;">${pAgeInfo.text}</span></td>
                   <td class="bk-exp-freq" style="vertical-align:top;padding-top:6px;">
                     <select class="bk-cell-select" style="font-size:10px;" data-cid="${c.id}" data-pname="${escHtml(p.profile)}" onchange="bkSaveProfileFreq(this.dataset.cid,this.dataset.pname,this.value)">
                       <option value="Daily"${pEffectiveFreq==='Daily'?' selected':''}>Daily</option>
@@ -3913,7 +3907,7 @@ function bkRenderProfiles(){
 
   const roleChips=(cid,pname,roles)=>BK_ROLES.map(r=>{
     const on=roles.includes(r.id);
-    return`<button onclick="bkToggleProfileRole('${cid}','${escHtml(pname)}','${r.id}')" style="font-size:9px;padding:2px 7px;border-radius:10px;cursor:pointer;border:1px solid ${r.bg};transition:all 0.1s;${on?`background:${r.bg};color:${r.fg};`:'background:transparent;color:var(--text3);'}">${r.label}</button>`;
+    return`<button onclick="bkToggleProfileRole('${cid}','${escHtml(pname)}','${r.id}')" style="font-size:9px;padding:2px 7px;border-radius:10px;cursor:pointer;transition:all 0.1s;${on?`background:${r.fg}25;color:${r.fg};border:1px solid ${r.fg}66;font-weight:600;`:'background:transparent;color:var(--text3);border:1px solid var(--border2);'}">${r.label}</button>`;
   }).join('');
 
   const rows=[];
@@ -4166,35 +4160,6 @@ function renderSettingsView(){
           </div>
           <div style="margin-top:12px;">
           <button class="btn-primary" onclick="saveBkSettings()">Save</button>
-          </div>
-          <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border);">
-            <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;">PowerShell — append to the end of your aggregation script</div>
-            <div style="font-size:10px;color:var(--text3);margin-bottom:8px;">Requires a GitHub account + Personal Access Token (PAT) with <code style="background:var(--bg3);padding:1px 3px;border-radius:2px;">gist</code> scope. Create a Gist first, then paste its ID below.</div>
-            <pre style="background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:10px;font-size:10px;overflow-x:auto;color:var(--text2);margin:0;line-height:1.6;"># ── Encrypt and upload to GitHub Gist ─────────────────────────────────
-$enc_key   = 'YOUR_32_CHAR_KEY_HERE___________'  # must match Settings
-$gist_id   = 'YOUR_GIST_ID'                       # from gist.github.com URL
-$gh_token  = 'github_pat_...'                     # PAT with gist scope
-
-$key_bytes = [System.Text.Encoding]::UTF8.GetBytes($enc_key.PadRight(32).Substring(0,32))
-$plaintext = [System.IO.File]::ReadAllBytes($backup_file)
-
-$aes          = [System.Security.Cryptography.Aes]::Create()
-$aes.Mode     = [System.Security.Cryptography.CipherMode]::CBC
-$aes.Padding  = [System.Security.Cryptography.PaddingMode]::PKCS7
-$aes.Key      = $key_bytes
-$aes.GenerateIV()
-
-$enc      = $aes.CreateEncryptor().TransformFinalBlock($plaintext, 0, $plaintext.Length)
-$combined = $aes.IV + $enc
-$b64      = [Convert]::ToBase64String($combined)
-
-$body = ConvertTo-Json @{ files = @{ 'backup_data.enc' = @{ content = $b64 } } }
-Invoke-WebRequest -Uri "https://api.github.com/gists/$gist_id" \`
-  -Method PATCH \`
-  -Headers @{ Authorization = "token $gh_token"; 'User-Agent' = 'SA-Backup' } \`
-  -ContentType 'application/json' \`
-  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))</pre>
-            <div style="font-size:10px;color:var(--text3);margin-top:6px;">Set the Data URL above to <code style="background:var(--bg3);padding:1px 3px;border-radius:2px;">https://gist.githubusercontent.com/{your-username}/{gist_id}/raw/backup_data.enc</code></div>
           </div>
         </div>
       </div>

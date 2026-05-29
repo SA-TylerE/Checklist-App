@@ -220,14 +220,15 @@ app.get('/api/backup-data', async (req, res) => {
       } else {
         text = trimmed;
       }
-      atomicWrite(BACKUP_DATA_FILE, text);
+      const existing = fs.existsSync(BACKUP_DATA_FILE) ? fs.readFileSync(BACKUP_DATA_FILE, 'utf8') : null;
+      if (existing !== text) atomicWrite(BACKUP_DATA_FILE, text);
     } else if (fs.existsSync(BACKUP_DATA_FILE)) {
       text = fs.readFileSync(BACKUP_DATA_FILE, 'utf8');
     } else {
       return res.json({ data: [], lastUpdated: null });
     }
 
-    const lastUpdated = rawUrl ? fetchedAt : fs.statSync(BACKUP_DATA_FILE).mtimeMs;
+    const lastUpdated = fs.existsSync(BACKUP_DATA_FILE) ? fs.statSync(BACKUP_DATA_FILE).mtimeMs : null;
     res.json({ data: parseBkTxt(text), lastUpdated });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
