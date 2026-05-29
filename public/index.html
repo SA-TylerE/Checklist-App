@@ -3231,6 +3231,8 @@ let _bkExpanded=new Set();
 let _bkNoteOpen=new Set();
 let _bkHideInactive=false;
 let _bkShowCosts=false;
+let _bkProfileNoteOpen=new Set(); // keys: "clientId:profileName"
+let _bkSort={col:null,dir:1}; // col: 'name'|'used'|'oldest'|'compliant'|'allotted'
 
 function bkGetClients(){return appSettings.backupClients||DEFAULT_BACKUP_CLIENTS;}
 
@@ -3316,7 +3318,7 @@ function bkIsCompliant(lastAccessMs,frequency){
   return frequency==='Weekly'?ageDays<=8:ageDays<=2;
 }
 function bkEffectiveFreq(c,profileName){
-  return(c.profileSettings&&c.profileSettings[profileName]?.frequency)||c.frequency;
+  return(c.profileSettings&&c.profileSettings[profileName]?.frequency)||'Daily';
 }
 function bkRowStatus(c,live){
   const inactive=c.syncrify==='Inactive'&&c.wasabi==='Inactive';
@@ -3326,6 +3328,7 @@ function bkRowStatus(c,live){
     if(anyNonCompliant)return'error';
   }
   const usedGB=live?live.usedBytes/1e9:0;
+  if(c.allottedGB>0&&usedGB>c.allottedGB)return'warn';
   const calc=bkCalcCost(usedGB,live?live.profiles.length:0);
   if(c.charged>0&&calc>c.charged+5)return'warn';
   return'good';
@@ -3372,7 +3375,12 @@ function renderBackupsSidebar(){
     +clients.map(c=>{
       const live=_backupLiveData?.[c.syncrifyId];
       const st=bkRowStatus(c,live);
-      return`<div class="bk-client-item${_bkActiveClient===c.id?' active':''}" data-bkid="${c.id}" onclick="bkSwitchClient('${c.id}')"><span class="bk-dot bk-dot-${st}"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(c.name)}</span><button class="bk-client-jump" onclick="event.stopPropagation();bkSwitchClient('${c.id}');setTimeout(()=>bkScrollToClient('${c.id}'),60);" title="Scroll to row">⇢</button><button class="bk-client-del" onclick="event.stopPropagation();bkRemoveClient('${c.id}')" title="Remove client">×</button></div>`;
+      const active=c.syncrify==='Active'||c.wasabi==='Active';
+      const totalP=live?live.profiles.length:null;
+      const compP=active&&live?live.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))).length:null;
+      const badgeColor=compP===null?'var(--text3)':compP===totalP?'#22c55e':compP===0?'#ef4444':'#f59e0b';
+      const badge=totalP!==null?`<span style="font-size:9px;color:${badgeColor};font-weight:600;flex-shrink:0;margin-right:2px;">${compP}/${totalP}</span>`:'';
+      return`<div class="bk-client-item${_bkActiveClient===c.id?' active':''}" data-bkid="${c.id}" onclick="bkSwitchClient('${c.id}')"><span class="bk-dot bk-dot-${st}"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(c.name)}</span>${badge}<button class="bk-client-jump" onclick="event.stopPropagation();bkSwitchClient('${c.id}');setTimeout(()=>bkScrollToClient('${c.id}'),60);" title="Scroll to row">⇢</button><button class="bk-client-del" onclick="event.stopPropagation();bkRemoveClient('${c.id}')" title="Remove client">×</button></div>`;
     }).join('');
 }
 
@@ -3460,7 +3468,7 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
     const compColor=compP===null?'var(--text3)':compP===totalP?'#22c55e':compP===0?'#ef4444':'#f59e0b';
     let issueNote='';
     if(st==='error'&&live){const nc=live.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))===false);issueNote=`<div class="bk-card-issue" style="color:#f87171;">${nc.length} profile${nc.length!==1?'s':''} non-compliant</div>`;}
-    else if(st==='warn'&&live){const ug=live.usedBytes/1e9;const calc=bkCalcCost(ug,live.profiles.length);issueNote=`<div class="bk-card-issue" style="color:#fbbf24;">Cost overrun: +${bkFmtCur(calc-(c.charged||0))}</div>`;}
+    else if(st==='warn'&&live){const ug=live.usedBytes/1e9;const storageOver=c.allottedGB>0&&ug>c.allottedGB;const calc=bkCalcCost(ug,live.profiles.length);const costOver=c.charged>0&&calc>c.charged;issueNote=`<div class="bk-card-issue" style="color:#fbbf24;">${storageOver?`Storage: ${bkFmt(ug)} / ${bkFmt(c.allottedGB)}`:costOver?`Cost overrun: +${bkFmtCur(calc-(c.charged||0))}`:''}</div>`;}
     else if(!live&&c.syncrifyId){issueNote=`<div class="bk-card-issue" style="color:var(--text3);">ID: ${escHtml(c.syncrifyId)}</div>`;}
     else if(st==='inactive'){issueNote=`<div class="bk-card-issue" style="color:var(--text3);">Both services inactive</div>`;}
     return`<div class="bk-client-card" style="border-left-color:${live||st==='inactive'?stColor[st]||'#4b5563':'#6b7280'};" onclick="bkSwitchClient('${c.id}')">
@@ -3504,6 +3512,7 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
 }
 function bkFmt(usedGB){return usedGB>=1000?(usedGB/1000).toFixed(1)+' TB':usedGB.toFixed(0)+' GB';}
 function bkFmtDate(ms){if(!ms)return'—';return new Date(ms).toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'2-digit'});}
+function bkFmtAge(ms,threshDays){if(!ms)return{text:'—',color:'var(--text3)'};const d=Math.floor((Date.now()-ms)/86400000);const text=d===0?'today':d===1?'1d ago':`${d}d ago`;const color=d>threshDays?'#ef4444':d>threshDays*0.75?'#f59e0b':'#22c55e';return{text,color};}
 function bkFmtCur(n){return'$'+(n||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});}
 
 function bkSaveProfileFreq(clientId,profileName,freq){
@@ -3512,14 +3521,77 @@ function bkSaveProfileFreq(clientId,profileName,freq){
   if(!c)return;
   if(!c.profileSettings)c.profileSettings={};
   if(!c.profileSettings[profileName])c.profileSettings[profileName]={};
-  if(freq==='')delete c.profileSettings[profileName].frequency;
-  else c.profileSettings[profileName].frequency=freq;
-  if(!Object.keys(c.profileSettings[profileName]).length)delete c.profileSettings[profileName];
+  c.profileSettings[profileName].frequency=freq;
   appSettings.backupClients=clients;
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
   const scroll=document.querySelector('.bk-scroll');
   const scrollTop=scroll?scroll.scrollTop:0;
   renderBackupsSidebar();
+  bkRenderMain();
+  if(scrollTop)requestAnimationFrame(()=>{const s=document.querySelector('.bk-scroll');if(s)s.scrollTop=scrollTop;});
+}
+function bkSaveProfileNote(clientId,profileName,note){
+  const clients=bkGetClients().slice();
+  const c=clients.find(x=>x.id===clientId);
+  if(!c)return;
+  if(!c.profileSettings)c.profileSettings={};
+  if(!c.profileSettings[profileName])c.profileSettings[profileName]={};
+  const ps=c.profileSettings[profileName];
+  if(note.trim())ps.note=note.trim();else delete ps.note;
+  if(!Object.keys(ps).length)delete c.profileSettings[profileName];
+  appSettings.backupClients=clients;
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
+}
+function bkSortBy(col){
+  if(_bkSort.col===col)_bkSort.dir*=-1;else{_bkSort.col=col;_bkSort.dir=1;}
+  const scroll=document.querySelector('.bk-scroll');const scrollTop=scroll?scroll.scrollTop:0;
+  bkRenderMain();if(scrollTop)requestAnimationFrame(()=>{const s=document.querySelector('.bk-scroll');if(s)s.scrollTop=scrollTop;});
+}
+function bkAutoTagProfiles(clientId){
+  const clients=bkGetClients().slice();
+  const c=clients.find(x=>x.id===clientId);
+  if(!c)return;
+  const live=_backupLiveData?.[c.syncrifyId];
+  if(!live||!live.profiles.length){showToast('No live profile data available','error');return;}
+  if(!c.profileSettings)c.profileSettings={};
+  let changed=0;
+  live.profiles.forEach(p=>{
+    const n=p.profile.toLowerCase();
+    const isWin=/win(dows)?/.test(n);
+    const isPrx=/prox(mox)?|pve/.test(n);
+    const isImg=/image|img|snapshot|snap/.test(n);
+    const isDat=/data|files?/.test(n)&&!isImg;
+    const isLoc=/local|nas\b/.test(n);
+    const isOff=/off.?site|offsite|remote|cloud/.test(n);
+    const suggestions=[];
+    if(isWin&&isImg&&isLoc)suggestions.push('win-img-local');
+    if(isWin&&isImg&&isOff)suggestions.push('win-img-offsite');
+    if(isWin&&isDat&&isLoc)suggestions.push('win-data-local');
+    if(isWin&&isDat&&isOff)suggestions.push('win-data-offsite');
+    if(isPrx&&isImg&&isLoc)suggestions.push('prx-img-local');
+    if(isPrx&&isImg&&isOff)suggestions.push('prx-img-offsite');
+    if(isPrx&&isDat&&isLoc)suggestions.push('prx-data-local');
+    if(isPrx&&isDat&&isOff)suggestions.push('prx-data-offsite');
+    if(!suggestions.length)return;
+    if(!c.profileSettings[p.profile])c.profileSettings[p.profile]={};
+    const ps=c.profileSettings[p.profile];
+    const roles=new Set(Array.isArray(ps.roles)?ps.roles:[]);
+    const before=roles.size;
+    suggestions.forEach(r=>roles.add(r));
+    if(roles.size>before){ps.roles=[...roles];changed++;}
+  });
+  if(!changed){showToast('No new tags detected from profile names');return;}
+  appSettings.backupClients=clients;
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
+  showToast(`Auto-tagged ${changed} profile${changed!==1?'s':''}`);
+  const scroll=document.querySelector('.bk-scroll');const scrollTop=scroll?scroll.scrollTop:0;
+  bkRenderMain();if(scrollTop)requestAnimationFrame(()=>{const s=document.querySelector('.bk-scroll');if(s)s.scrollTop=scrollTop;});
+}
+function bkToggleProfileNote(clientId,profileName){
+  const key=clientId+':'+profileName;
+  if(_bkProfileNoteOpen.has(key))_bkProfileNoteOpen.delete(key);else _bkProfileNoteOpen.add(key);
+  const scroll=document.querySelector('.bk-scroll');
+  const scrollTop=scroll?scroll.scrollTop:0;
   bkRenderMain();
   if(scrollTop)requestAnimationFrame(()=>{const s=document.querySelector('.bk-scroll');if(s)s.scrollTop=scrollTop;});
 }
@@ -3537,8 +3609,16 @@ function bkToggleProfileRole(clientId,profileName,roleId){
   if(!Object.keys(ps).length)delete c.profileSettings[profileName];
   appSettings.backupClients=clients;
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
-  const body=document.getElementById('bk-profiles-modal-body');
-  if(body)body.innerHTML=bkRenderProfiles();
+  const modal=document.getElementById('bk-profiles-modal');
+  if(modal&&modal.style.display!=='none'){
+    const body=document.getElementById('bk-profiles-modal-body');
+    if(body)body.innerHTML=bkRenderProfiles();
+  } else {
+    const scroll=document.querySelector('.bk-scroll');
+    const scrollTop=scroll?scroll.scrollTop:0;
+    bkRenderMain();
+    if(scrollTop)requestAnimationFrame(()=>{const s=document.querySelector('.bk-scroll');if(s)s.scrollTop=scrollTop;});
+  }
 }
 function bkToggleNote(id){
   if(_bkNoteOpen.has(id))_bkNoteOpen.delete(id);else _bkNoteOpen.add(id);
@@ -3595,6 +3675,26 @@ function bkRenderOverview(){
   if(_bkActiveClient!=='all')clients=clients.filter(c=>c.id===_bkActiveClient);
   if(_bkHideInactive)clients=clients.filter(c=>c.syncrify==='Active'||c.wasabi==='Active');
 
+  // Apply column sort
+  if(_bkSort.col){
+    clients=[...clients].sort((a,b)=>{
+      const la=_backupLiveData?.[a.syncrifyId],lb=_backupLiveData?.[b.syncrifyId];
+      let av,bv;
+      if(_bkSort.col==='name'){av=a.name.toLowerCase();bv=b.name.toLowerCase();return av<bv?-_bkSort.dir:av>bv?_bkSort.dir:0;}
+      if(_bkSort.col==='used'){av=la?la.usedBytes:0;bv=lb?lb.usedBytes:0;}
+      if(_bkSort.col==='allotted'){av=a.allottedGB||0;bv=b.allottedGB||0;}
+      if(_bkSort.col==='oldest'){av=la&&la.profiles.length?Math.min(...la.profiles.map(p=>p.lastAccess)):0;bv=lb&&lb.profiles.length?Math.min(...lb.profiles.map(p=>p.lastAccess)):0;}
+      if(_bkSort.col==='compliant'){
+        const ap=la?la.profiles.length:0,bp=lb?lb.profiles.length:0;
+        const ac=la?la.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(a,p.profile))).length:0;
+        const bc=lb?lb.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(b,p.profile))).length:0;
+        av=ap>0?ac/ap:-1;bv=bp>0?bc/bp:-1;
+      }
+      if(_bkSort.col==='status'){const o={error:0,warn:1,good:2,inactive:3};av=o[bkRowStatus(a,la)]??2;bv=o[bkRowStatus(b,lb)]??2;}
+      return(av-bv)*_bkSort.dir;
+    });
+  }
+
   let sumAllotted=0,sumCharged=0,sumUsed=0,sumCalc=0,issueCount=0;
   const issueClients=[];
   clients.forEach(c=>{
@@ -3615,7 +3715,32 @@ function bkRenderOverview(){
 
   const sel=(id,field,opts,val)=>`<select class="bk-cell-select" onchange="bkSaveClient('${id}','${field}',this.value)">${opts.map(o=>`<option value="${o}"${val===o?' selected':''}>${o}</option>`).join('')}</select>`;
 
-  return unmatchedHtml+(_bkActiveClient==='all'?`<div class="bk-summary-bar">
+  // Coverage checklist — only shown when a single client is selected
+  let coverageHtml='';
+  if(_bkActiveClient!=='all'&&clients.length===1){
+    const c=clients[0];
+    const coveredRoles=new Set();
+    if(c.profileSettings)Object.values(c.profileSettings).forEach(ps=>{if(Array.isArray(ps.roles))ps.roles.forEach(r=>coveredRoles.add(r));});
+    const hasCoverage=coveredRoles.size>0||Object.values(c.profileSettings||{}).some(ps=>ps.roles?.length);
+    const autoBtn=`<button class="btn-secondary" style="font-size:10px;padding:3px 8px;" onclick="bkAutoTagProfiles('${c.id}')">Auto-tag</button>`;
+    coverageHtml=`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;">Coverage</span>
+        ${autoBtn}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;">
+        ${BK_ROLES.map(r=>{
+          const on=coveredRoles.has(r.id);
+          return`<div style="display:flex;align-items:center;gap:5px;padding:5px 8px;border-radius:5px;border:1px solid ${on?r.bg:'var(--border)'};background:${on?r.bg+'18':'transparent'};">
+            <span style="font-size:11px;${on?`color:${r.fg};`:'color:var(--text3);'}font-weight:600;">${on?'✓':'○'}</span>
+            <span style="font-size:10px;${on?`color:${r.fg};`:'color:var(--text3);'}">${r.label}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+
+  return unmatchedHtml+coverageHtml+(_bkActiveClient==='all'?`<div class="bk-summary-bar">
     <div class="bk-sum-card"><div class="bk-sum-lbl">Total Used</div><div class="bk-sum-val">${bkFmt(sumUsed)}</div></div>
     <div class="bk-sum-card"><div class="bk-sum-lbl">Total Allotted</div><div class="bk-sum-val">${bkFmt(sumAllotted)}</div></div>
     ${_bkShowCosts?`<div class="bk-sum-card"><div class="bk-sum-lbl">Total Charged</div><div class="bk-sum-val">${bkFmtCur(sumCharged)}</div></div>
@@ -3637,16 +3762,16 @@ function bkRenderOverview(){
   +`<div class="bk-table-wrap"><table class="bk-table">
     <thead>
       <tr>
-        <th class="bk-th-name" rowspan="2">Client</th>
-        <th colspan="${_bkShowCosts?4:2}" style="text-align:center;padding-bottom:3px;">Contract</th>
-        <th colspan="${_bkShowCosts?4:2}" style="text-align:center;padding-bottom:3px;">Live</th>
-        <th colspan="5" style="text-align:center;padding-bottom:3px;">Backup Status</th>
+        <th class="bk-th-name" rowspan="2" onclick="bkSortBy('name')" style="cursor:pointer;" title="Sort by name">Client${_bkSort.col==='name'?(_bkSort.dir>0?' ↑':' ↓'):''}</th>
+        <th colspan="${_bkShowCosts?4:2}" style="text-align:center;padding-bottom:3px;color:#60a5fa;border-bottom:2px solid rgba(96,165,250,0.25);">Contract</th>
+        <th colspan="${_bkShowCosts?4:2}" style="text-align:center;padding-bottom:3px;color:#34d399;border-bottom:2px solid rgba(52,211,153,0.25);">Live</th>
+        <th colspan="4" style="text-align:center;padding-bottom:3px;color:#fbbf24;border-bottom:2px solid rgba(251,191,36,0.25);">Backup Status</th>
         <th rowspan="2">VPN</th>
         <th rowspan="2" style="text-align:center;width:36px;">Notes</th>
       </tr><tr>
-        <th>Allotted (GB)</th><th>Devices</th>${_bkShowCosts?'<th>Est. ($)</th><th>Charged ($)</th>':''}
-        <th>Used</th><th>Devices</th>${_bkShowCosts?'<th>Calc.</th><th>Diff.</th>':''}
-        <th>Syncrify</th><th>Wasabi</th><th>Freq.</th><th>Oldest Backup</th><th>Profiles</th>
+        <th onclick="bkSortBy('allotted')" style="cursor:pointer;color:#60a5fa99;" title="Sort by allotted">Allotted (GB)${_bkSort.col==='allotted'?(_bkSort.dir>0?' ↑':' ↓'):''}</th><th style="color:#60a5fa99;">Devices</th>${_bkShowCosts?'<th style="color:#60a5fa99;">Est. ($)</th><th style="color:#60a5fa99;">Charged ($)</th>':''}
+        <th onclick="bkSortBy('used')" style="cursor:pointer;color:#34d39999;" title="Sort by usage">Used${_bkSort.col==='used'?(_bkSort.dir>0?' ↑':' ↓'):''}</th><th style="color:#34d39999;">Devices</th>${_bkShowCosts?'<th style="color:#34d39999;">Calc.</th><th style="color:#34d39999;">Diff.</th>':''}
+        <th onclick="bkSortBy('status')" style="cursor:pointer;color:#fbbf2499;" title="Sort by status">Syncrify${_bkSort.col==='status'?(_bkSort.dir>0?' ↑':' ↓'):''}</th><th style="color:#fbbf2499;">Wasabi</th><th onclick="bkSortBy('oldest')" style="cursor:pointer;color:#fbbf2499;" title="Sort by oldest backup">Oldest Backup${_bkSort.col==='oldest'?(_bkSort.dir>0?' ↑':' ↓'):''}</th><th onclick="bkSortBy('compliant')" style="cursor:pointer;color:#fbbf2499;" title="Sort by compliance">Profiles${_bkSort.col==='compliant'?(_bkSort.dir>0?' ↑':' ↓'):''}</th>
       </tr>
     </thead>
     <tbody>
@@ -3670,12 +3795,11 @@ function bkRenderOverview(){
         const chevron=hasProfiles
           ?`<button class="bk-expand-toggle${expanded?' open':''}" onclick="bkToggleExpand('${c.id}')" title="${expanded?'Collapse':'Expand'} profiles">▸</button>`
           :`<span class="bk-expand-toggle">▸</span>`;
-        const hasOverride=live&&c.profileSettings&&live.profiles.some(p=>c.profileSettings[p.profile]?.frequency);
         const profilesCell=totalProfiles===null?'—'
           :compliantCount===null?`<span class="bk-dim">${totalProfiles}</span>`
-          :`<span class="${compliantCount===totalProfiles?'bk-pos':compliantCount===0?'bk-neg':'bk-warn'}">${compliantCount}/${totalProfiles}</span>${hasOverride?'<span title="Has per-profile frequency overrides" style="color:var(--text3);font-size:9px;margin-left:2px;">*</span>':''}`;
+          :`<span class="${compliantCount===totalProfiles?'bk-pos':compliantCount===0?'bk-neg':'bk-warn'}">${compliantCount}/${totalProfiles}</span>`;
         const vpnSel=['Zywall','Unifi','Other'].includes(c.vpnHost)?c.vpnHost:(c.vpnHost?'Other':'');
-        const ncols=_bkShowCosts?16:12;
+        const ncols=_bkShowCosts?15:11;
         const noteRow=_bkNoteOpen.has(c.id)?`<tr class="bk-note-row">
           <td colspan="${ncols}" style="padding:4px 12px 8px 44px;background:rgba(245,158,11,0.04);border-bottom:1px solid var(--border);">
             <textarea style="width:100%;max-width:600px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:6px 8px;color:var(--text);font-size:11px;font-family:var(--sans);resize:vertical;min-height:44px;outline:none;box-sizing:border-box;display:block;" placeholder="Add notes…" onblur="bkSaveClient('${c.id}','notes',this.value)" onkeydown="if(event.key==='Escape')bkToggleNote('${c.id}')">${escHtml(c.notes||'')}</textarea>
@@ -3685,35 +3809,53 @@ function bkRenderOverview(){
           <td colspan="${ncols}" style="padding:4px 8px 8px 44px;border-bottom:1px solid var(--border);">
             <table class="bk-expand-table">
               <thead><tr>
-                <th style="text-align:left;">Profile</th>
+                <th style="text-align:left;">Profile · Roles</th>
                 <th style="text-align:right;">Used</th>
                 <th style="text-align:right;">Last Backup</th>
                 <th class="bk-exp-freq">Freq.</th>
+                <th style="text-align:center;">&#9998;</th>
                 <th style="text-align:center;padding-right:0;">✓</th>
               </tr></thead>
               <tbody>${live.profiles.map(p=>{
-                const pFreqOverride=(c.profileSettings&&c.profileSettings[p.profile]?.frequency)||'';
-                const pEffectiveFreq=pFreqOverride||c.frequency;
+                const pEffectiveFreq=bkEffectiveFreq(c,p.profile);
                 const pThresh=pEffectiveFreq==='Monthly'?32:pEffectiveFreq==='Weekly'?8:2;
                 const pAge=(Date.now()-p.lastAccess)/86400000;
                 const pOk=bkIsCompliant(p.lastAccess,pEffectiveFreq);
                 const ps=c.profileSettings&&c.profileSettings[p.profile]||{};
                 const pRoles=Array.isArray(ps.roles)?ps.roles:[];
-                const roleChips=pRoles.map(rid=>{const r=BK_ROLES.find(x=>x.id===rid);return r?`<span style="font-size:9px;padding:1px 5px;border-radius:10px;background:${r.bg};color:${r.fg};font-weight:500;">${r.label}</span>`:''}).join('');
-                return`<tr>
-                  <td style="text-align:left;"><div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${escHtml(p.profile)}${roleChips}</div></td>
-                  <td style="text-align:right;color:var(--text3);">${p.diskSize>0?bkFmt(p.diskSize/1e9):'<span class="bk-dim">—</span>'}</td>
-                  <td style="text-align:right;" class="${pAge>pThresh?'bk-neg':'bk-pos'}">${bkFmtDate(p.lastAccess)}</td>
-                  <td class="bk-exp-freq">
+                const noteKey=c.id+':'+p.profile;
+                const noteOpen=_bkProfileNoteOpen.has(noteKey);
+                const hasNote=!!(ps.note);
+                const roleToggleChips=BK_ROLES.map(r=>{
+                  const on=pRoles.includes(r.id);
+                  return`<button data-cid="${c.id}" data-pname="${escHtml(p.profile)}" data-rid="${r.id}" onclick="bkToggleProfileRole(this.dataset.cid,this.dataset.pname,this.dataset.rid)" style="font-size:8px;padding:1px 5px;border-radius:8px;cursor:pointer;border:1px solid ${r.bg};transition:all 0.1s;${on?`background:${r.bg};color:${r.fg};`:'background:transparent;color:var(--text3);'}">${r.label}</button>`;
+                }).join('');
+                const pAgeInfo=bkFmtAge(p.lastAccess,pThresh);
+                const profileRow=`<tr>
+                  <td style="text-align:left;min-width:220px;">
+                    <div style="font-size:11px;font-weight:500;margin-bottom:4px;">${escHtml(p.profile)}</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:3px;">${roleToggleChips}</div>
+                  </td>
+                  <td style="text-align:right;color:var(--text3);vertical-align:top;padding-top:8px;">${p.diskSize>0?bkFmt(p.diskSize/1e9):'<span class="bk-dim">—</span>'}</td>
+                  <td style="text-align:right;vertical-align:top;padding-top:8px;" title="${bkFmtDate(p.lastAccess)}"><span style="color:${pAgeInfo.color};font-weight:500;">${pAgeInfo.text}</span></td>
+                  <td class="bk-exp-freq" style="vertical-align:top;padding-top:6px;">
                     <select class="bk-cell-select" style="font-size:10px;" data-cid="${c.id}" data-pname="${escHtml(p.profile)}" onchange="bkSaveProfileFreq(this.dataset.cid,this.dataset.pname,this.value)">
-                      <option value=""${!pFreqOverride?' selected':''}>↑ ${c.frequency}</option>
-                      <option value="Daily"${pFreqOverride==='Daily'?' selected':''}>Daily</option>
-                      <option value="Weekly"${pFreqOverride==='Weekly'?' selected':''}>Weekly</option>
-                      <option value="Monthly"${pFreqOverride==='Monthly'?' selected':''}>Monthly</option>
+                      <option value="Daily"${pEffectiveFreq==='Daily'?' selected':''}>Daily</option>
+                      <option value="Weekly"${pEffectiveFreq==='Weekly'?' selected':''}>Weekly</option>
+                      <option value="Monthly"${pEffectiveFreq==='Monthly'?' selected':''}>Monthly</option>
                     </select>
                   </td>
-                  <td style="text-align:center;padding-right:0;">${pOk===null?'—':pOk?'<span class="bk-pos">✓</span>':'<span class="bk-neg">✗</span>'}</td>
+                  <td style="text-align:center;vertical-align:top;padding-top:6px;">
+                    <button class="quote-note-btn${hasNote?' has-note':''}" onclick="bkToggleProfileNote('${c.id}','${escHtml(p.profile)}')" title="${hasNote?escHtml(ps.note||''):'Add note'}">&#9998;</button>
+                  </td>
+                  <td style="text-align:center;padding-right:0;vertical-align:top;padding-top:8px;">${pOk===null?'—':pOk?'<span class="bk-pos">✓</span>':'<span class="bk-neg">✗</span>'}</td>
                 </tr>`;
+                const noteRow=noteOpen?`<tr>
+                  <td colspan="6" style="padding:2px 0 8px 0;border-top:none;">
+                    <textarea style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text);font-size:11px;font-family:var(--sans);resize:vertical;min-height:36px;outline:none;box-sizing:border-box;display:block;" placeholder="Profile note…" onblur="bkSaveProfileNote('${c.id}','${escHtml(p.profile)}',this.value)" onkeydown="if(event.key==='Escape')bkToggleProfileNote('${c.id}','${escHtml(p.profile)}')">${escHtml(ps.note||'')}</textarea>
+                  </td>
+                </tr>`:'';
+                return profileRow+noteRow;
               }).join('')}</tbody>
             </table>
           </td>
@@ -3733,13 +3875,12 @@ function bkRenderOverview(){
           <td>${num('contractDevices',c.contractDevices)}</td>
           ${_bkShowCosts?`<td style="color:var(--text3);">${estCost!==null?bkFmtCur(estCost):'—'}</td>
           <td><div style="display:flex;align-items:center;justify-content:flex-end;gap:1px;"><span style="font-size:9px;color:var(--text3);flex-shrink:0;">$</span>${num('charged',c.charged,5)}</div></td>`:''}
-          <td>${usedGB!==null?bkFmt(usedGB):'<span class="bk-dim">—</span>'}</td>
+          <td>${usedGB!==null?(()=>{const over=c.allottedGB>0&&usedGB>c.allottedGB;return`<span style="${over?'color:#ef4444;font-weight:600;':''}" title="${over?'⚠ Exceeds allotted storage':''}">${bkFmt(usedGB)}${over?' ⚠':''}</span>`;})():'<span class="bk-dim">—</span>'}</td>
           <td>${devCnt!==null?devCnt:'<span class="bk-dim">—</span>'}</td>
           ${_bkShowCosts?`<td>${calc!==null?bkFmtCur(calc):'<span class="bk-dim">—</span>'}</td>
           <td class="${diff!==null?(diff>=0?'bk-pos':'bk-neg'):''}">${diff!==null?bkFmtCur(diff):'<span class="bk-dim">—</span>'}</td>`:''}
           <td>${sel(c.id,'syncrify',['Active','Inactive'],c.syncrify)}</td>
           <td>${sel(c.id,'wasabi',['Active','Inactive'],c.wasabi)}</td>
-          <td>${sel(c.id,'frequency',['Daily','Weekly','Monthly'],c.frequency)}</td>
           <td class="${oldestAccess!==null?(st==='error'?'bk-neg':'bk-pos'):''}">${bkFmtDate(oldestAccess)}</td>
           <td>${profilesCell}</td>
           <td><select class="bk-cell-select" onchange="bkSaveClient('${c.id}','vpnHost',this.value)"><option value=""${vpnSel===''?' selected':''}>—</option><option value="Zywall"${vpnSel==='Zywall'?' selected':''}>Zywall</option><option value="Unifi"${vpnSel==='Unifi'?' selected':''}>Unifi</option><option value="Other"${vpnSel==='Other'?' selected':''}>Other</option></select></td>
@@ -3747,6 +3888,21 @@ function bkRenderOverview(){
         </tr>${noteRow}${expandRow}`;
       }).join('')}
     </tbody>
+    <tfoot>
+      <tr style="background:var(--bg3);font-size:10px;color:var(--text3);font-weight:600;">
+        <td class="bk-td-name" style="padding:5px 8px;font-size:10px;text-transform:uppercase;letter-spacing:0.04em;">Totals</td>
+        <td style="text-align:right;padding:5px 8px;">${sumAllotted>0?bkFmt(sumAllotted):'—'}</td>
+        <td style="padding:5px 8px;"></td>
+        ${_bkShowCosts?`<td style="padding:5px 8px;"></td><td style="text-align:right;padding:5px 8px;">${bkFmtCur(sumCharged)}</td>`:''}
+        <td style="text-align:right;padding:5px 8px;">${sumUsed>0?bkFmt(sumUsed):'—'}</td>
+        <td style="padding:5px 8px;"></td>
+        ${_bkShowCosts?`<td style="text-align:right;padding:5px 8px;">${bkFmtCur(sumCalc)}</td><td style="text-align:right;padding:5px 8px;${sumCharged-sumCalc<0?'color:#ef4444;':''}">${bkFmtCur(sumCharged-sumCalc)}</td>`:''}
+        <td style="padding:5px 8px;"></td><td style="padding:5px 8px;"></td>
+        <td style="padding:5px 8px;"></td>
+        <td style="padding:5px 8px;"></td>
+        <td style="padding:5px 8px;"></td><td style="padding:5px 8px;"></td>
+      </tr>
+    </tfoot>
   </table></div>`;
 }
 
@@ -3777,7 +3933,8 @@ function bkRenderProfiles(){
         <td style="text-align:center;">${compliant===null?'—':compliant?'<span class="bk-pos">✓</span>':'<span class="bk-neg">✗</span>'}</td>
       </tr><tr>
         <td colspan="4" style="padding:3px 0 10px 0;border-top:none;">
-          <div style="display:flex;flex-wrap:wrap;gap:4px;">${roleChips(c.id,p.profile,roles)}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">${roleChips(c.id,p.profile,roles)}</div>
+          <textarea rows="1" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:10px;font-family:var(--sans);resize:vertical;outline:none;box-sizing:border-box;display:block;" placeholder="Profile note…" onblur="bkSaveProfileNote('${c.id}','${escHtml(p.profile)}',this.value)">${escHtml(ps.note||'')}</textarea>
         </td>
       </tr>`);
     });
