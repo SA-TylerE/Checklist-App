@@ -3372,7 +3372,8 @@ function renderBackupsSidebar(){
       const totalP=live?live.profiles.length:null;
       const compP=active&&live?live.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))).length:null;
       const badgeColor=compP===null?'var(--text3)':compP===totalP?'#22c55e':compP===0?'#ef4444':'#f59e0b';
-      const badge=totalP!==null?`<span style="font-size:9px;color:${badgeColor};font-weight:600;flex-shrink:0;margin-right:2px;">${compP}/${totalP}</span>`:'';
+      const badgeText=compP!==null?`${compP}/${totalP}`:st==='inactive'?'inactive':'—';
+      const badge=totalP!==null?`<span style="font-size:9px;color:${badgeColor};font-weight:600;flex-shrink:0;margin-right:2px;">${badgeText}</span>`:'';
       return`<div class="bk-client-item${_bkActiveClient===c.id?' active':''}" data-bkid="${c.id}" onclick="bkSwitchClient('${c.id}')"><span class="bk-dot bk-dot-${st}"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(c.name)}</span>${badge}</div>`;
     }).join('');
 }
@@ -3472,7 +3473,6 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
       </div>
       <div class="bk-card-meta">
         ${compP!==null?`<span style="color:${compColor};font-weight:600;">${compP}/${totalP} compliant</span>`:'<span>No profile data</span>'}
-        ${usedGB!==null?`<span>${bkFmt(usedGB)}${c.allottedGB>0?' / '+bkFmt(c.allottedGB):''}</span>`:''}
         ${oldest?`<span>oldest ${bkFmtDate(oldest)}</span>`:''}
         ${!live&&!c.syncrifyId?`<span style="color:var(--danger);">No Syncrify ID</span>`:''}
       </div>
@@ -3506,7 +3506,7 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
 }
 function bkFmt(usedGB){return usedGB>=1000?(usedGB/1000).toFixed(1)+' TB':usedGB.toFixed(0)+' GB';}
 function bkFmtDate(ms){if(!ms)return'—';return new Date(ms).toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'2-digit'});}
-function bkFmtAge(ms,threshDays){if(!ms)return{text:'—',color:'var(--text3)',date:''};const d=Math.floor((Date.now()-ms)/86400000);let text;if(d===0)text='today';else if(d===1)text='1d ago';else if(d<30)text=`${d}d ago`;else if(d<365)text=`${Math.floor(d/30)}mo ago`;else text=`${(d/365).toFixed(1)}yr ago`;const color=d>threshDays?'#ef4444':d>threshDays*0.75?'#f59e0b':'#22c55e';return{text,color,date:bkFmtDate(ms)};}
+function bkFmtAge(ms,threshDays){if(!ms)return{text:'—',color:'var(--text3)',date:''};const d=Math.floor((Date.now()-ms)/86400000);let text;if(d===0)text='today';else if(d===1)text='1d ago';else if(d<30)text=`${d}d ago`;else if(d<365)text=`${Math.floor(d/30)}mo ago`;else{const yrs=Math.floor(d/365);const mos=Math.floor((d%365)/30);text=mos>0?`${yrs}yr, ${mos}mo ago`:`${yrs}yr ago`;}const color=d>threshDays?'#ef4444':d>threshDays*0.75?'#f59e0b':'#22c55e';return{text,color,date:bkFmtDate(ms)};}
 function bkFmtCur(n){return'$'+(n||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});}
 
 function bkSaveProfileFreq(clientId,profileName,freq){
