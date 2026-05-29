@@ -3342,7 +3342,6 @@ function bkBuildMonitorCards(){
       const segs=monP.map(p=>{
         const freq=bkEffectiveFreq(c,p.profile);
         const col=!active?'#4b5563':bkIsCompliant(p.lastAccess,freq)?'#22c55e':'#ef4444';
-        const freq=bkEffectiveFreq(c,p.profile);
         const tip=p.lastAccess?`${p.profile} · ${freq} · ${bkFmtDate(p.lastAccess)}`:p.profile;
         return`<div title="${escHtml(tip)}" style="flex:1;background:${col};border-radius:2px;min-width:3px;"></div>`;
       }).join('');
