@@ -366,19 +366,14 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 
 /* Phase */
 .phase-block{margin-bottom:5px;border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;}
-.phase-block.collapsed .phase-body{display:none;}
 .phase-block.completed{opacity:0.6;}
-.phase-header{display:flex;align-items:center;gap:8px;padding:9px 13px;background:var(--bg2);cursor:pointer;user-select:none;transition:background 0.1s;position:sticky;top:0;z-index:5;border-radius:10px 10px 0 0;}
-.phase-header:hover{background:var(--bg3);}
-.phase-block.collapsed .phase-header{border-radius:10px;}
+.phase-header{display:flex;align-items:center;gap:8px;padding:9px 13px;background:var(--bg2);user-select:none;position:sticky;top:0;z-index:5;border-radius:10px 10px 0 0;}
 .phase-num{width:19px;height:19px;border-radius:50%;background:var(--accent);color:white;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .phase-block.completed .phase-num{background:var(--success);}
 .phase-header h3{font-size:12px;font-weight:600;}
 .phase-badge{font-size:9px;padding:1px 6px;border-radius:20px;background:rgba(59,130,246,0.12);color:#93c5fd;font-weight:500;letter-spacing:0.03em;white-space:nowrap;}
 .phase-badge.gb{background:rgba(245,158,11,0.12);color:#fcd34d;}
-.phase-collapse-icon{margin-left:auto;color:var(--text3);font-size:9px;transition:transform 0.2s;flex-shrink:0;}
-.phase-block.collapsed .phase-collapse-icon{transform:rotate(-90deg);}
-.phase-progress-text{font-size:10px;color:var(--text3);flex-shrink:0;}
+.phase-progress-text{font-size:10px;color:var(--text3);flex-shrink:0;margin-left:auto;}
 .phase-body{padding:5px;border-radius:0 0 10px 10px;overflow-y:auto;max-height:300px;scrollbar-width:none;}
 .phase-body::-webkit-scrollbar{width:0;}
 .phase-block:hover .phase-body{scrollbar-width:thin;scrollbar-color:rgba(127,127,127,0.25) transparent;}
@@ -463,9 +458,17 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .device-step-item:hover{background:var(--bg4);}
 .device-step-item.done{opacity:0.5;}
 .device-step-item.done .device-step-title{text-decoration:line-through;color:var(--text3);}
+.device-step-item.skipped{opacity:0.4;cursor:default;}
+.device-step-item.skipped .device-step-title{text-decoration:line-through;color:var(--text3);}
 .device-step-check{width:12px;height:12px;border-radius:2px;border:1.5px solid var(--border2);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;}
 .device-step-item.done .device-step-check{background:var(--success);border-color:var(--success);}
+.device-step-item.skipped .device-step-check{border-style:dashed;}
 .device-step-title{font-size:11px;font-weight:500;}
+.dev-skip-btn{padding:0 5px;height:15px;border-radius:3px;background:none;border:1px solid transparent;color:var(--text3);font-size:9px;cursor:pointer;flex-shrink:0;white-space:nowrap;transition:all 0.15s;opacity:0;align-self:center;}
+.device-step-item:hover .dev-skip-btn{opacity:0.6;}
+.dev-skip-btn:hover{border-color:var(--border2);opacity:1!important;}
+.dev-skip-btn.active{opacity:1!important;border-color:var(--warn);color:var(--warn);}
+.device-guide-header{display:flex;align-items:center;gap:8px;padding:9px 13px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:6px;}
 .device-step-detail{font-size:10px;color:var(--text2);margin-top:1px;}
 .device-notes-label{font-size:9px;color:var(--text2);margin-bottom:3px;font-weight:500;text-transform:uppercase;letter-spacing:0.04em;}
 .device-notes{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:6px;color:var(--text);font-size:11px;font-family:var(--sans);resize:vertical;min-height:48px;outline:none;}
@@ -689,10 +692,6 @@ span.bk-expand-toggle{opacity:0;pointer-events:none;}
 /* Step title row (title + Notes btn inline) */
 .step-title-row{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;}
 .step-title-row .step-title{flex-shrink:1;min-width:0;}
-/* Step notes — text label, inline with title */
-.step-note-btn{padding:1px 6px;border-radius:4px;background:none;border:1px solid var(--border);color:var(--text3);font-size:10px;font-family:var(--sans);cursor:pointer;flex-shrink:0;white-space:nowrap;transition:all 0.15s;}
-.step-note-btn:hover{border-color:var(--accent);color:var(--accent);}
-.step-note-btn.has-note{border-color:var(--warn);color:var(--warn);background:rgba(245,158,11,0.08);}
 /* Sidebar client item — dot in top-right corner */
 .client-item .notify-dot{position:absolute;top:6px;right:7px;margin:0;}
 /* Device step item — dot on right, vertically centred */
@@ -5147,8 +5146,12 @@ function overallProgress(c){
   return{done,total:all.length};
 }
 function devStatus(dev,steps){
-  const done=steps.filter(s=>dev.steps&&dev.steps[s.id]).length;
-  if(!done)return'not-started';if(done===steps.length)return'complete';return'in-progress';
+  const active=steps.filter(s=>!(dev.skipped&&dev.skipped[s.id]));
+  if(!active.length)return'complete';
+  const done=active.filter(s=>dev.steps&&dev.steps[s.id]).length;
+  if(!done)return'not-started';
+  if(done===active.length)return'complete';
+  return'in-progress';
 }
 
 // \u2500\u2500\u2500 Rendering \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -5165,7 +5168,7 @@ function renderStep(clientId,step){
   const expandIcon=hasSubs?`<span class="step-expand-icon">&#9654;</span>`:'';
   const guideBtn=hasGuide?`<button class="btn-guide" onclick="event.stopPropagation();openGuide('${step.guide}')">Guide &#x2197;</button>`:'';
   const stepNote=client.stepNotes&&client.stepNotes[step.id]||'';
-  const noteBtn=`<button class="step-note-btn ${stepNote?'has-note':''}" onclick="event.stopPropagation();toggleStepNote('${step.id}')">Notes</button>`;
+  const noteBtn=`<button class="quote-note-btn${stepNote?' has-note':''}" onclick="event.stopPropagation();toggleStepNote('${step.id}')" title="Step note">&#9998;</button>`;
   // Tags + guide in same row; guide on far right of badges
   const tags=(step.tags?.length||hasGuide)?`<div class="step-tags">${(step.tags||[]).map(t=>`<span class="step-tag ${t}">${t}</span>`).join('')}${guideBtn}</div>`:'';
   const installerUrl=step.installer_url&&clients[clientId].syncroInstallerUrl;
@@ -5220,18 +5223,16 @@ function renderStep(clientId,step){
   </div>`;
 }
 
-function renderPhase(clientId,phase,phaseNum,forceCollapsed){
+function renderPhase(clientId,phase,phaseNum){
   const client=clients[clientId];
   const complete=isPhaseComplete(client,phase);
   const prog=phaseProgress(client,phase);
-  const collapsed=forceCollapsed||complete;
-  return `<div class="phase-block ${complete?'completed':''} ${collapsed?'collapsed':''}" id="phase-${phase.id}" data-notify-id="ph:${phase.id}">
-    <div class="phase-header" onclick="togglePhase('${phase.id}')">
+  return `<div class="phase-block ${complete?'completed':''}" id="phase-${phase.id}" data-notify-id="ph:${phase.id}">
+    <div class="phase-header">
       <div class="phase-num">${complete?chk():phaseNum}</div>
       <h3>${phase.title}</h3>
       ${phase.badge?`<span class="phase-badge">${phase.badge}</span>`:''}
       <span class="phase-progress-text">${prog.done}/${prog.total}</span>
-      <span class="phase-collapse-icon">&#9660;</span>
     </div>
     <div class="phase-body">${phase.steps.map(s=>renderStep(clientId,s)).join('')}</div>
   </div>`;
@@ -5377,23 +5378,26 @@ function renderDeviceGuide(clientId){
   const devices=client.devices||{};
   const devList=Object.values(devices);
   const doneCount=devList.filter(d=>devStatus(d,devSteps)==='complete').length;
+  const buildStepRow=(dev,s)=>{
+    const done=!!(dev.steps&&dev.steps[s.id]);
+    const skipped=!!(dev.skipped&&dev.skipped[s.id]);
+    const gb=s.vpn_selector?`<div class="vpn-selector">${VPN_OPTIONS.map(v=>`<button class="vpn-btn" onclick="event.stopPropagation();openGuide('${v.id}')">${v.label} VPN Guide &#x2197;</button>`).join('')}</div>`:'';
+    const installerHtml=s.installer_url?renderInstEntry(clientId,dev):'';
+    const checkMark=done?chk():skipped?`<span style="font-size:9px;color:var(--text3);">N/A</span>`:'';
+    return `<div class="device-step-item ${done?'done':skipped?'skipped':''}" onclick="${skipped?`toggleDeviceSkip('${clientId}','${dev.id}','${s.id}')`:`toggleDeviceStep('${clientId}','${dev.id}','${s.id}')`}" id="dvs-${dev.id}-${s.id}" data-notify-id="dvst:${dev.id}:${s.id}">
+      <div class="device-step-check">${checkMark}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="device-step-title">${s.title}</div>
+        ${s.detail?`<div class="device-step-detail">${s.detail}</div>`:''}
+        ${installerHtml}${gb}
+      </div>
+      ${!done?`<button class="dev-skip-btn${skipped?' active':''}" onclick="event.stopPropagation();toggleDeviceSkip('${clientId}','${dev.id}','${s.id}')" title="${skipped?'Restore step':'Mark N/A'}">${skipped?'Restore':'N/A'}</button>`:''}
+    </div>`;
+  };
   const rows=devList.map(dev=>{
     const status=devStatus(dev,devSteps);
     const lmap={'not-started':'Not Started','in-progress':'In Progress','complete':'Complete'};
-    const stepsHtml=devSteps.map(s=>{
-      const done=!!(dev.steps&&dev.steps[s.id]);
-      const gb=s.vpn_selector?`<div class="vpn-selector">${VPN_OPTIONS.map(v=>`<button class="vpn-btn" onclick="event.stopPropagation();openGuide('${v.id}')">${v.label} VPN Guide &#x2197;</button>`).join('')}</div>`:'';
-      const installerHtml=s.installer_url?renderInstEntry(clientId,dev):'';
-      return `<div class="device-step-item ${done?'done':''}" onclick="toggleDeviceStep('${clientId}','${dev.id}','${s.id}')" id="dvs-${dev.id}-${s.id}" data-notify-id="dvst:${dev.id}:${s.id}">
-        <div class="device-step-check">${done?chk():''}</div>
-        <div style="flex:1;min-width:0;">
-          <div class="device-step-title">${s.title}</div>
-          ${s.detail?`<div class="device-step-detail">${s.detail}</div>`:''}
-          ${installerHtml}
-          ${gb}
-        </div>
-      </div>`;
-    }).join('');
+    const stepsHtml=devSteps.map(s=>buildStepRow(dev,s)).join('');
     return `<div class="device-entry ${isDevExpanded(clientId,dev.id)?'expanded':''}" id="dev-${dev.id}" data-notify-id="dva:${dev.id}">
       <div class="device-entry-header" onclick="toggleDeviceEntry('${clientId}','${dev.id}')">
         <span class="device-entry-name">${dev.name}</span>
@@ -5414,19 +5418,15 @@ function renderDeviceGuide(clientId){
       </div>
     </div>`;
   }).join('');
-  return `<div class="phase-block" id="phase-device-guide">
-    <div class="phase-header" onclick="togglePhase('device-guide')">
-      <div class="phase-num" style="background:var(--warn);">&#9654;</div>
-      <h3>Device Deployment Guide</h3>
+  return `<div id="device-guide-container">
+    <div class="device-guide-header">
+      <h3 style="font-size:12px;font-weight:600;">Device Deployment Guide</h3>
       <span class="phase-badge gb">PER DEVICE</span>
-      <span class="phase-progress-text">${doneCount}/${devList.length} complete</span>
-      <span class="phase-collapse-icon">&#9660;</span>
+      <span class="phase-progress-text" id="device-guide-progress">${doneCount}/${devList.length} complete</span>
+      <button class="btn-primary btn-sm" style="margin-left:auto;" onclick="showAddDeviceModal('${clientId}')">+ Add Device</button>
     </div>
-    <div class="phase-body">
-      <div class="device-add-btn-wrap">
-        <button class="btn-primary btn-sm" onclick="showAddDeviceModal('${clientId}')">+ Add Device</button>
-      </div>
-      ${devList.length===0?`<div style="padding:4px 3px 10px;font-size:11px;color:var(--text3);">No devices added yet. Click + Add Device to begin tracking deployment.</div>`:`<div class="device-grid">${rows}</div>`}
+    <div id="device-guide-body">
+      ${devList.length===0?`<div style="padding:10px 3px;font-size:11px;color:var(--text3);">No devices added yet. Click + Add Device to begin tracking deployment.</div>`:`<div class="device-grid">${rows}</div>`}
     </div>
   </div>`;
 }
@@ -5476,7 +5476,7 @@ function loadClientChecklist(id){
     </div>
     <div class="header-actions">
       <button class="clear-updates-btn" id="clear-updates-btn" style="display:none" onclick="clearAllUpdateDots()">&#9679; Clear updates</button>
-      <button class="step-note-btn${client.notes?' has-note':''}" id="cnotes-btn-${id}" onclick="toggleHeaderNote('${id}','client')" title="Client notes">Notes</button>
+      <button class="quote-note-btn${client.notes?' has-note':''}" id="cnotes-btn-${id}" onclick="toggleHeaderNote('${id}','client')" title="Client notes">&#9998;</button>
       <div class="client-menu-wrap" id="cmenu-wrap-${id}">
         <button class="client-menu-btn" onclick="toggleClientMenu('${id}')">&#8230;</button>
         <div class="client-menu-dropdown" id="cmenu-${id}">
@@ -5534,12 +5534,12 @@ function loadClientChecklist(id){
   </div>
   <div class="phase-grid">`;
 
-  activePhases.forEach((p,i)=>{ html+=renderPhase(id,p,i+1,false); }); // all open by default
+  activePhases.forEach((p,i)=>{ html+=renderPhase(id,p,i+1); });
   html+=`</div>`;
 
   if(completedPhases.length){
     html+=`<div class="completed-section"><div class="completed-section-hdr">Completed</div><div class="phase-grid">`;
-    completedPhases.forEach(p=>{ html+=renderPhase(id,p,'✓',true); }); // completed collapsed
+    completedPhases.forEach(p=>{ html+=renderPhase(id,p,'✓'); });
     html+=`</div></div>`;
   }
   html+=`</div>`;
@@ -5997,6 +5997,20 @@ async function toggleDeviceStep(cid,did,sid){
   await saveClients();
   refreshDeviceGuide(cid);
 }
+async function toggleDeviceSkip(cid,did,sid){
+  const c=clients[cid];if(!c.devices||!c.devices[did])return;
+  if(!c.devices[did].skipped)c.devices[did].skipped={};
+  const nowSkipping=!c.devices[did].skipped[sid];
+  if(nowSkipping){
+    c.devices[did].skipped[sid]=true;
+    if(c.devices[did].steps)delete c.devices[did].steps[sid];
+  }else{
+    delete c.devices[did].skipped[sid];
+  }
+  c.devices[did].expanded=true;
+  await saveClients();
+  refreshDeviceGuide(cid);
+}
 function devExpKey(cid,did){return`devexp-${cid}-${did}`;}
 function isDevExpanded(cid,did){
   const s=sessionStorage.getItem(devExpKey(cid,did));
@@ -6012,51 +6026,38 @@ function toggleDeviceEntry(cid,did){
   refreshDeviceGuide(cid);
 }
 function refreshDeviceGuide(clientId){
-  const guideEl=document.getElementById('phase-device-guide');
-  if(!guideEl){
-    // Not rendered yet (wrong tab) — just update the tab button count
-    const client=clients[clientId];
-    const devSteps=buildDeviceSteps(client);
-    const devList=Object.values(client.devices||{});
-    const devDone=devList.filter(d=>devStatus(d,devSteps)==='complete').length;
-    const tabBtn=document.getElementById(`tab-btn-devices-${clientId}`);
-    if(tabBtn) tabBtn.textContent=`Devices (${devDone}/${devList.length})`;
-    return;
-  }
-  // Re-render just the device guide's inner content
   const client=clients[clientId];
   const devSteps=buildDeviceSteps(client);
   const devList=Object.values(client.devices||{});
   const doneCount=devList.filter(d=>devStatus(d,devSteps)==='complete').length;
-
-  // Update progress text
-  const progText=guideEl.querySelector('.phase-progress-text');
-  if(progText) progText.textContent=`${doneCount}/${devList.length} complete`;
-
-  // Update tab button
   const tabBtn=document.getElementById(`tab-btn-devices-${clientId}`);
   if(tabBtn) tabBtn.textContent=`Devices (${doneCount}/${devList.length})`;
-
-  // Re-render device rows inside the phase body (preserve open state)
-  const body=guideEl.querySelector('.phase-body');
+  const guideEl=document.getElementById('device-guide-container');
+  if(!guideEl) return;
+  const progText=document.getElementById('device-guide-progress');
+  if(progText) progText.textContent=`${doneCount}/${devList.length} complete`;
+  const body=document.getElementById('device-guide-body');
   if(!body) return;
-
+  const buildStepRow=(dev,s)=>{
+    const done=!!(dev.steps&&dev.steps[s.id]);
+    const skipped=!!(dev.skipped&&dev.skipped[s.id]);
+    const gb=s.vpn_selector?`<div class="vpn-selector">${VPN_OPTIONS.map(v=>`<button class="vpn-btn" onclick="event.stopPropagation();openGuide('${v.id}')">${v.label} VPN Guide &#x2197;</button>`).join('')}</div>`:'';
+    const installerHtml=s.installer_url?renderInstEntry(clientId,dev):'';
+    const checkMark=done?chk():skipped?`<span style="font-size:9px;color:var(--text3);">N/A</span>`:'';
+    return `<div class="device-step-item ${done?'done':skipped?'skipped':''}" onclick="${skipped?`toggleDeviceSkip('${clientId}','${dev.id}','${s.id}')`:`toggleDeviceStep('${clientId}','${dev.id}','${s.id}')`}" id="dvs-${dev.id}-${s.id}" data-notify-id="dvst:${dev.id}:${s.id}">
+      <div class="device-step-check">${checkMark}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="device-step-title">${s.title}</div>
+        ${s.detail?`<div class="device-step-detail">${s.detail}</div>`:''}
+        ${installerHtml}${gb}
+      </div>
+      ${!done?`<button class="dev-skip-btn${skipped?' active':''}" onclick="event.stopPropagation();toggleDeviceSkip('${clientId}','${dev.id}','${s.id}')" title="${skipped?'Restore step':'Mark N/A'}">${skipped?'Restore':'N/A'}</button>`:''}
+    </div>`;
+  };
   const rows=devList.map(dev=>{
     const status=devStatus(dev,devSteps);
     const lmap={'not-started':'Not Started','in-progress':'In Progress','complete':'Complete'};
-    const stepsHtml=devSteps.map(s=>{
-      const done=!!(dev.steps&&dev.steps[s.id]);
-      const installerHtml=s.installer_url?renderInstEntry(clientId,dev):'';
-      const gb=s.vpn_selector?`<div class="vpn-selector">${VPN_OPTIONS.map(v=>`<button class="vpn-btn" onclick="event.stopPropagation();openGuide('${v.id}')">${v.label} VPN Guide &#x2197;</button>`).join('')}</div>`:'';
-      return `<div class="device-step-item ${done?'done':''}" onclick="toggleDeviceStep('${clientId}','${dev.id}','${s.id}')" id="dvs-${dev.id}-${s.id}" data-notify-id="dvst:${dev.id}:${s.id}">
-        <div class="device-step-check">${done?chk():''}</div>
-        <div style="flex:1;min-width:0;">
-          <div class="device-step-title">${s.title}</div>
-          ${s.detail?`<div class="device-step-detail">${s.detail}</div>`:''}
-          ${installerHtml}${gb}
-        </div>
-      </div>`;
-    }).join('');
+    const stepsHtml=devSteps.map(s=>buildStepRow(dev,s)).join('');
     return `<div class="device-entry ${isDevExpanded(clientId,dev.id)?'expanded':''}" id="dev-${dev.id}" data-notify-id="dva:${dev.id}">
       <div class="device-entry-header" onclick="toggleDeviceEntry('${clientId}','${dev.id}')">
         <span class="device-entry-name">${dev.name}</span>
@@ -6078,11 +6079,9 @@ function refreshDeviceGuide(clientId){
       </div>
     </div>`;
   }).join('');
-
-  body.innerHTML=`<div class="device-add-btn-wrap">
-    <button class="btn-primary btn-sm" onclick="showAddDeviceModal('${clientId}')">+ Add Device</button>
-  </div>
-  ${devList.length===0?`<div style="padding:4px 3px 10px;font-size:11px;color:var(--text3);">No devices added yet. Click + Add Device to begin tracking deployment.</div>`:`<div class="device-grid">${rows}</div>`}`;
+  body.innerHTML=devList.length===0
+    ?`<div style="padding:10px 3px;font-size:11px;color:var(--text3);">No devices added yet. Click + Add Device to begin tracking deployment.</div>`
+    :`<div class="device-grid">${rows}</div>`;
 
   // Inject installer blocks per device
   devList.forEach(dev=>{
