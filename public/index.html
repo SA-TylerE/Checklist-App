@@ -642,6 +642,13 @@ span.bk-expand-toggle{opacity:0;pointer-events:none;}
 .bk-card-issue{font-size:10px;margin-top:4px;font-style:italic;}
 .bk-storage-bar{height:7px;background:var(--bg4);border-radius:2px;margin-top:7px;overflow:hidden;}
 .bk-storage-fill{height:100%;border-radius:2px;transition:width 0.3s;}
+/* Monitor mode */
+.bk-monitor-overlay{position:fixed;inset:0;z-index:9000;background:#0b0f14;overflow:auto;display:flex;flex-direction:column;font-family:var(--sans);}
+.bk-monitor-header{display:flex;align-items:center;gap:14px;padding:10px 20px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.07);flex-shrink:0;flex-wrap:wrap;}
+.bk-monitor-grid{flex:1;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;align-content:start;}
+.bk-monitor-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-left:4px solid transparent;border-radius:8px;padding:12px 14px;}
+.bk-monitor-card-name{font-size:15px;font-weight:700;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:10px;}
+.bk-monitor-lbl{font-size:9px;color:#475569;text-transform:uppercase;letter-spacing:0.05em;}
 
 /* Styled confirm dialog */
 #confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:600;align-items:center;justify-content:center;}
@@ -3226,8 +3233,152 @@ let _bkHideInactive=false;
 let _bkShowCosts=false;
 let _bkProfileNoteOpen=new Set(); // keys: "clientId:profileName"
 let _bkSort={col:null,dir:1}; // col: 'name'|'used'|'oldest'|'compliant'|'allotted'
+let _bkMonitorMode=false;
+let _bkMonitorInterval=null;
+let _bkMonitorCountdownInterval=null;
+let _bkMonitorCountdown=300;
+let _bkMonitorChecking=false;
 
 function bkGetClients(){return appSettings.backupClients||DEFAULT_BACKUP_CLIENTS;}
+
+function bkEnterMonitor(){
+  _bkMonitorMode=true;
+  _bkMonitorCountdown=300;
+  _bkMonitorChecking=false;
+  const el=document.createElement('div');
+  el.id='bk-monitor-overlay';
+  el.className='bk-monitor-overlay';
+  document.body.appendChild(el);
+  bkDrawMonitor();
+  document.addEventListener('keydown',bkMonitorKey);
+  _bkMonitorInterval=setInterval(bkMonitorPoll,300000);
+  _bkMonitorCountdownInterval=setInterval(bkMonitorTick,1000);
+}
+function bkExitMonitor(){
+  _bkMonitorMode=false;
+  clearInterval(_bkMonitorInterval);
+  clearInterval(_bkMonitorCountdownInterval);
+  _bkMonitorInterval=null;
+  _bkMonitorCountdownInterval=null;
+  document.removeEventListener('keydown',bkMonitorKey);
+  const el=document.getElementById('bk-monitor-overlay');
+  if(el)el.remove();
+}
+function bkMonitorKey(e){if(e.key==='Escape')bkExitMonitor();}
+function bkMonitorTick(){
+  _bkMonitorCountdown=Math.max(0,_bkMonitorCountdown-1);
+  const cd=document.getElementById('bk-monitor-cd');
+  const clk=document.getElementById('bk-monitor-clk');
+  if(clk)clk.textContent=new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  if(cd){
+    if(_bkMonitorChecking){cd.textContent='Checking…';}
+    else{const m=Math.floor(_bkMonitorCountdown/60),s=_bkMonitorCountdown%60;cd.textContent=`Next check: ${m}:${String(s).padStart(2,'0')}`;}
+  }
+}
+async function bkMonitorPoll(){
+  _bkMonitorChecking=true;
+  _bkMonitorCountdown=300;
+  try{
+    const r=await fetch('/api/backup-data');
+    const d=await r.json();
+    if(!d.error&&d.lastUpdated&&d.lastUpdated!==_bkLastUpdated){
+      _bkLastUpdated=d.lastUpdated;
+      _backupLiveData={};
+      for(const e of d.data){
+        if(!_backupLiveData[e.client])_backupLiveData[e.client]={usedBytes:0,profiles:[]};
+        _backupLiveData[e.client].usedBytes+=e.diskSize;
+        _backupLiveData[e.client].profiles.push(e);
+      }
+      bkDrawMonitor();
+    }
+  }catch(e){}finally{_bkMonitorChecking=false;}
+}
+function bkDrawMonitor(){
+  const overlay=document.getElementById('bk-monitor-overlay');
+  if(!overlay)return;
+  const clients=bkGetClients();
+  const stColor={error:'#ef4444',warn:'#f59e0b',good:'#22c55e',inactive:'#4b5563'};
+  const issues=clients.filter(c=>['error','warn'].includes(bkRowStatus(c,_backupLiveData?.[c.syncrifyId])));
+  const clearCnt=clients.filter(c=>bkRowStatus(c,_backupLiveData?.[c.syncrifyId])==='good').length;
+  const dataFrom=_bkLastUpdated?'Data from '+new Date(_bkLastUpdated).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
+
+  const cards=clients.map(c=>{
+    const live=_backupLiveData?.[c.syncrifyId];
+    const st=bkRowStatus(c,live);
+    const active=c.syncrify==='Active'||c.wasabi==='Active';
+    const borderColor=live||st==='inactive'?stColor[st]||'#6b7280':'#6b7280';
+    const totalP=live?live.profiles.length:null;
+    const compP=live&&active?live.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))).length:null;
+    const compColor=compP===null?'#475569':compP===totalP?'#22c55e':compP===0?'#ef4444':'#f59e0b';
+
+    // Profile segment bar
+    let segBar='';
+    if(live&&live.profiles.length){
+      const gap=live.profiles.length>15?1:2;
+      const segs=live.profiles.map(p=>{
+        const col=!active?'#4b5563':bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))?'#22c55e':'#ef4444';
+        const freq=bkEffectiveFreq(c,p.profile);
+        const tip=p.lastAccess?`${p.profile} · ${freq} · ${bkFmtDate(p.lastAccess)}`:p.profile;
+        return`<div title="${escHtml(tip)}" style="flex:1;background:${col};border-radius:2px;min-width:3px;"></div>`;
+      }).join('');
+      segBar=`<div style="margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span class="bk-monitor-lbl">Profiles</span>
+          <span style="font-size:11px;color:${compColor};font-weight:700;">${compP!==null?`${compP}/${totalP}`:totalP??'—'}</span>
+        </div>
+        <div style="display:flex;gap:${gap}px;height:10px;">${segs}</div>
+      </div>`;
+    }
+
+    // Oldest backup
+    let oldestHtml='';
+    if(live&&live.profiles.length){
+      const op=live.profiles.reduce((a,b)=>a.lastAccess<b.lastAccess?a:b);
+      const freq=bkEffectiveFreq(c,op.profile);
+      const thresh=freq==='Monthly'?32:freq==='Weekly'?8:2;
+      const age=bkFmtAge(op.lastAccess,thresh);
+      oldestHtml=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span class="bk-monitor-lbl">Oldest backup</span>
+        <span style="font-size:13px;font-weight:700;color:${age.color};" title="${age.date}">${age.text}</span>
+      </div>`;
+    }
+
+    // Storage bar
+    let storBar='';
+    const usedGB=live?live.usedBytes/1e9:null;
+    if(usedGB!==null&&c.allottedGB>0){
+      const pct=Math.min(100,usedGB/c.allottedGB*100);
+      const bc=pct>=90?'#ef4444':pct>=70?'#f59e0b':'#22c55e';
+      storBar=`<div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span class="bk-monitor-lbl">Storage</span>
+          <span style="font-size:11px;color:${bc};font-weight:700;">${bkFmt(usedGB)} / ${bkFmt(c.allottedGB)}</span>
+        </div>
+        <div style="height:10px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;">
+          <div style="height:100%;width:${pct.toFixed(1)}%;background:${bc};border-radius:2px;"></div>
+        </div>
+      </div>`;
+    }
+
+    const dimmed=st==='inactive'?'opacity:0.5;':'';
+    return`<div class="bk-monitor-card" style="border-left-color:${borderColor};${dimmed}">
+      <div class="bk-monitor-card-name">${escHtml(c.name)}</div>
+      ${segBar}${oldestHtml}${storBar}
+    </div>`;
+  }).join('');
+
+  overlay.innerHTML=`
+    <div class="bk-monitor-header">
+      <span style="font-size:16px;font-weight:700;color:#f1f5f9;flex-shrink:0;">Backup Monitor</span>
+      <span id="bk-monitor-clk" style="font-size:22px;font-weight:300;color:#f1f5f9;font-variant-numeric:tabular-nums;flex-shrink:0;">${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span>
+      <span style="color:#475569;font-size:12px;flex:1;">${dataFrom}</span>
+      ${issues.length?`<span style="background:rgba(239,68,68,0.15);color:#f87171;font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid rgba(239,68,68,0.3);">⚠ ${issues.length} issue${issues.length!==1?'s':''}</span>`:''}
+      <span style="background:rgba(34,197,94,0.1);color:#4ade80;font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid rgba(34,197,94,0.2);">${clearCnt} clear</span>
+      <span id="bk-monitor-cd" style="font-size:11px;color:#334155;min-width:130px;text-align:right;"></span>
+      <button onclick="bkExitMonitor()" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);color:#94a3b8;font-size:12px;padding:5px 12px;border-radius:6px;cursor:pointer;flex-shrink:0;">✕ Exit  <kbd style="font-size:10px;opacity:0.6;">Esc</kbd></button>
+    </div>
+    <div class="bk-monitor-grid">${cards}</div>`;
+}
 
 function bkCalcCost(usedGB,devices){
   if(!usedGB&&!devices)return 0;
@@ -3422,6 +3573,7 @@ function bkRenderMain(){
       <button class="client-menu-item" onclick="bkOpenProfiles()">View Profiles</button>
       <button class="client-menu-item" onclick="bkExportCsv()">Export CSV</button>
       <button class="client-menu-item" onclick="bkShowLog()">View Log</button>
+      <button class="client-menu-item" onclick="closeBkMenu();bkEnterMonitor()">Monitor Mode</button>
       ${!isAll?`<div class="client-menu-sep"></div><button class="client-menu-item" style="color:var(--danger);" onclick="closeBkMenu();bkRemoveClient('${_bkActiveClient}')">Remove Client…</button>`:''}
     </div>
   </div>`;
