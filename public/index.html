@@ -957,23 +957,29 @@ body.light{
   .bk-mh-left{flex-wrap:wrap;gap:8px;}
   .bk-mh-right{justify-content:flex-end;}
   #bk-monitor-clk{font-size:16px!important;}
-  /* Expand row: break out of the scrolling table so it always fills the viewport */
-  .bk-expand-row>td{
-    position:sticky;left:0;
-    width:100vw;max-width:100vw;box-sizing:border-box;
-    padding:4px 8px 8px 8px!important;
-    overflow:hidden;
-  }
-  /* Expand table: flex-wrap cards — each profile row wraps all its content vertically */
-  .bk-expand-table,.bk-expand-table tbody{display:block;}
-  .bk-expand-table thead{display:none;}
+  /* Outer table: escape table layout engine entirely — become block stacks */
+  .bk-table-wrap{overflow-x:hidden;}
+  .bk-table{display:block;width:100%;min-width:0;}
+  .bk-table thead{display:none;}
+  .bk-table tbody{display:block;width:100%;}
+  /* Client rows: flex, show only name column, hide all data columns */
+  .bk-table tbody tr:not(.bk-expand-row):not(.bk-note-row){display:flex;width:100%;align-items:center;}
+  .bk-table tbody tr:not(.bk-expand-row):not(.bk-note-row) td:not(.bk-td-name){display:none;}
+  .bk-table tbody tr:not(.bk-expand-row):not(.bk-note-row) td.bk-td-name{flex:1;position:static;box-shadow:none;background:transparent;}
+  /* Expand row: full-width block — no table column constraint */
+  .bk-expand-row{display:block;width:100%;}
+  .bk-expand-row>td{display:block;width:100%;box-sizing:border-box;padding:4px 12px 8px!important;}
+  /* Notes row: same treatment */
+  .bk-note-row{display:block;width:100%;}
+  .bk-note-row>td{display:block;width:100%;box-sizing:border-box;}
+  /* Inner expand table: flex-wrap cards, profile name takes full row, rest wraps inline */
+  .bk-expand-table,.bk-expand-table tbody{display:block;width:100%;}
+  .bk-expand-table thead{display:none!important;}
   .bk-expand-sep{display:none!important;}
   .bk-expand-table tbody tr{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:6px 0;border-bottom:1px solid var(--border2);}
   .bk-expand-table tbody tr:last-child{border-bottom:none;}
   .bk-expand-table td{display:flex;align-items:center;white-space:normal;padding:2px 4px 2px 0;min-width:0;border-top:none!important;}
-  /* Profile name + role chips: always full width */
   .bk-expand-table td:first-child{flex:0 0 100%;padding:0 0 2px 0;}
-  /* Note textarea row: full width */
   .bk-expand-table td[colspan]{flex:0 0 100%;}
 }
 /* Small mobile padding */
