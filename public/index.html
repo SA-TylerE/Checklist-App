@@ -649,7 +649,9 @@ span.bk-expand-toggle{opacity:0;pointer-events:none;}
 .bk-storage-fill{height:100%;border-radius:2px;transition:width 0.3s;}
 /* Monitor mode */
 .bk-monitor-overlay{position:fixed;inset:0;z-index:9000;background:var(--bg);overflow:auto;display:flex;flex-direction:column;font-family:var(--sans);}
-.bk-monitor-header{display:flex;align-items:center;gap:14px;padding:10px 20px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;}
+.bk-monitor-header{display:flex;align-items:center;gap:10px;padding:10px 20px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;}
+.bk-mh-left{display:flex;align-items:center;gap:12px;flex:1;min-width:0;overflow:hidden;}
+.bk-mh-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
 .bk-monitor-grid{flex:1;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;align-content:start;}
 .bk-monitor-card{background:var(--bg2);border:1px solid var(--border);border-left:4px solid transparent;border-radius:8px;padding:12px 14px;}
 .bk-monitor-card-name{font-size:15px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:10px;}
@@ -950,8 +952,15 @@ body.light{
   .bk-page-subtitle{font-size:11px;}
   .bk-summary-bar{gap:6px;}
   .bk-sum-card{min-width:70px;padding:8px 10px;}
-  .bk-monitor-header{padding:8px 12px;gap:8px;}
+  /* Monitor header: stack left/right onto separate rows */
+  .bk-monitor-header{flex-direction:column;align-items:stretch;padding:8px 12px;gap:6px;}
+  .bk-mh-left{flex-wrap:wrap;gap:8px;}
+  .bk-mh-right{justify-content:flex-end;}
   #bk-monitor-clk{font-size:16px!important;}
+  /* Expand table: compress instead of scroll */
+  .bk-expand-table th{padding:4px 8px 4px 0;white-space:normal;}
+  .bk-expand-table td{padding:4px 8px 4px 0;white-space:normal;}
+  .bk-expand-table td:first-child{min-width:0!important;}
 }
 /* Small mobile padding */
 @media(max-width:768px){
@@ -970,7 +979,7 @@ body.light{
   .bk-card-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));}
   .bk-monitor-grid{grid-template-columns:repeat(2,1fr);padding:10px;}
   .bk-monitor-card{padding:10px 12px;}
-  #bk-monitor-df{display:none;}
+  #bk-monitor-df{font-size:10px;}
   .bk-client-card{padding:10px 11px;}
 }
 @media(max-width:480px){
@@ -3301,7 +3310,7 @@ function bkMonitorTick(){
     else{
       const m=Math.floor(_bkMonitorCountdown/60),s=_bkMonitorCountdown%60;
       const lc=_bkMonitorLastChecked?'Checked '+new Date(_bkMonitorLastChecked).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',second:'2-digit'})+' · ':'';
-      cd.textContent=`${lc}Next: ${m}:${String(s).padStart(2,'0')}`;
+      cd.textContent=`${lc}Refresh in: ${m}:${String(s).padStart(2,'0')}`;
     }
   }
 }
@@ -3347,15 +3356,18 @@ function bkDrawMonitor(){
 
   overlay.innerHTML=`
     <div class="bk-monitor-header">
-      <span style="font-size:16px;font-weight:700;color:var(--text);flex-shrink:0;">Backup Monitor</span>
-      <span id="bk-monitor-clk" style="font-size:22px;font-weight:300;color:var(--text);font-variant-numeric:tabular-nums;flex-shrink:0;">${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span>
-      <span id="bk-monitor-df" style="color:var(--text3);font-size:12px;">${dataFrom}</span>
-      ${stalest?`<div style="display:flex;flex-direction:column;gap:1px;padding:4px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;min-width:0;"><span style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;">Most Stale</span><span style="font-size:12px;font-weight:600;color:${stalestAge.color};white-space:nowrap;" title="${escHtml(stalest.profile)} — ${escHtml(stalest.clientName)}">${stalestAge.text} · ${escHtml(stalest.clientName)}</span></div>`:''}
-      <div style="flex:1;"></div>
-      ${issues.length?`<span style="background:rgba(239,68,68,0.15);color:#f87171;font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid rgba(239,68,68,0.3);flex-shrink:0;">⚠ ${issues.length} issue${issues.length!==1?'s':''}</span>`:''}
-      <span style="background:rgba(34,197,94,0.1);color:#4ade80;font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid rgba(34,197,94,0.2);flex-shrink:0;">${clearCnt} clear</span>
-      <span id="bk-monitor-cd" style="font-size:11px;color:var(--text3);min-width:220px;text-align:right;white-space:nowrap;"></span>
-      <button onclick="bkExitMonitor()" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);font-size:12px;padding:5px 12px;border-radius:6px;cursor:pointer;flex-shrink:0;">✕ Exit  <kbd style="font-size:10px;opacity:0.6;">Esc</kbd></button>
+      <div class="bk-mh-left">
+        <span style="font-size:16px;font-weight:700;color:var(--text);flex-shrink:0;">Backup Monitor</span>
+        <span id="bk-monitor-clk" style="font-size:22px;font-weight:300;color:var(--text);font-variant-numeric:tabular-nums;flex-shrink:0;">${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span>
+        <span id="bk-monitor-df" style="color:var(--text3);font-size:12px;white-space:nowrap;">${dataFrom}</span>
+        ${stalest?`<div style="display:flex;flex-direction:column;gap:1px;padding:4px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;min-width:0;flex-shrink:1;overflow:hidden;"><span style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;">Most Stale</span><span style="font-size:12px;font-weight:600;color:${stalestAge.color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(stalest.profile)} — ${escHtml(stalest.clientName)}">${stalestAge.text} · ${escHtml(stalest.clientName)}</span></div>`:''}
+      </div>
+      <div class="bk-mh-right">
+        ${issues.length?`<span style="background:rgba(239,68,68,0.15);color:#f87171;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid rgba(239,68,68,0.3);white-space:nowrap;">⚠ ${issues.length} issue${issues.length!==1?'s':''}</span>`:''}
+        <span style="background:rgba(34,197,94,0.1);color:#4ade80;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid rgba(34,197,94,0.2);white-space:nowrap;">${clearCnt} clear</span>
+        <span id="bk-monitor-cd" style="font-size:11px;color:var(--text3);white-space:nowrap;"></span>
+        <button onclick="bkExitMonitor()" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);font-size:12px;padding:5px 12px;border-radius:6px;cursor:pointer;flex-shrink:0;">✕ Exit</button>
+      </div>
     </div>
     <div class="bk-monitor-grid" id="bk-monitor-grid">${bkBuildMonitorCards()}</div>`;
 }
