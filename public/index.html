@@ -943,6 +943,15 @@ body.light{
   .guide-drag-handle{display:block;}
   #checklist-pane{padding:20px;}
   #overlay-bg{z-index:199;}
+  /* Backup page */
+  .bk-scroll{padding:10px;}
+  .bk-page-header{padding:8px 12px;gap:8px;}
+  .bk-page-title{font-size:14px;}
+  .bk-page-subtitle{font-size:11px;}
+  .bk-summary-bar{gap:6px;}
+  .bk-sum-card{min-width:70px;padding:8px 10px;}
+  .bk-monitor-header{padding:8px 12px;gap:8px;}
+  #bk-monitor-clk{font-size:16px!important;}
 }
 /* Small mobile padding */
 @media(max-width:768px){
@@ -956,11 +965,25 @@ body.light{
   .editor-form-pane{padding:14px 16px;}
   .editor-tree-footer{flex-direction:row;flex-wrap:wrap;}
 }
+/* Mid-mobile — backup cards and monitor grid */
+@media(max-width:600px){
+  .bk-card-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));}
+  .bk-monitor-grid{grid-template-columns:repeat(2,1fr);padding:10px;}
+  .bk-monitor-card{padding:10px 12px;}
+  #bk-monitor-df{display:none;}
+  .bk-client-card{padding:10px 11px;}
+}
 @media(max-width:480px){
   .products-grid{grid-template-columns:1fr;}
   .phase-grid,.device-grid{grid-template-columns:1fr;}
   .checklist-header{flex-direction:column;gap:6px;}
   .header-actions{align-self:flex-end;}
+  /* Backup page */
+  .bk-card-grid{grid-template-columns:1fr;}
+  .bk-monitor-grid{grid-template-columns:1fr;padding:8px;}
+  .bk-scroll{padding:8px;}
+  .bk-sum-card{flex:1;min-width:60px;}
+  .bk-page-header{flex-wrap:wrap;}
 }
 </style>
 </head>
@@ -3232,6 +3255,7 @@ let _bkExpanded=new Set();
 let _bkNoteOpen=new Set();
 let _bkHideInactive=false;
 let _bkShowCosts=false;
+let _bkFilterNonCompliant=false;
 let _bkProfileNoteOpen=new Set(); // keys: "clientId:profileName"
 let _bkSort={col:null,dir:1}; // col: 'name'|'used'|'oldest'|'compliant'|'allotted'
 let _bkMonitorMode=false;
@@ -3296,11 +3320,8 @@ async function bkMonitorPoll(){
         _backupLiveData[e.client].usedBytes+=e.diskSize;
         _backupLiveData[e.client].profiles.push(e);
       }
-      // Update data-dependent header elements in-place, then refresh cards
-      const dfEl=document.getElementById('bk-monitor-df');
-      if(dfEl)dfEl.textContent='Data from '+new Date(_bkLastUpdated).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'});
-      const grid=document.getElementById('bk-monitor-grid');
-      if(grid)grid.innerHTML=bkBuildMonitorCards();
+      // New data arrived — full redraw (updates most-stale, cards, and header)
+      bkDrawMonitor();
     }
   }catch(e){}finally{_bkMonitorChecking=false;}
 }
@@ -3311,14 +3332,28 @@ function bkDrawMonitor(){
   const issues=clients.filter(c=>['error','warn'].includes(bkRowStatus(c,_backupLiveData?.[c.syncrifyId])));
   const clearCnt=clients.filter(c=>bkRowStatus(c,_backupLiveData?.[c.syncrifyId])==='good').length;
   const dataFrom=_bkLastUpdated?'Data from '+new Date(_bkLastUpdated).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}):'No data yet';
+  // Most stale: find the oldest non-disabled profile across all active clients
+  const stalest=_backupLiveData?clients.reduce((worst,c)=>{
+    const live=_backupLiveData[c.syncrifyId];
+    if(!live||(c.syncrify!=='Active'&&c.wasabi!=='Active'))return worst;
+    for(const p of live.profiles){
+      if(bkEffectiveFreq(c,p.profile)==='Disabled'||!p.lastAccess)continue;
+      if(!worst||p.lastAccess<worst.lastAccess)worst={...p,clientName:c.name};
+    }
+    return worst;
+  },null):null;
+  const stalestFreq=stalest?bkGetClients().reduce((freq,c)=>{const live=_backupLiveData?.[c.syncrifyId];if(live&&live.profiles.find(p=>p.profile===stalest.profile&&c.name===stalest.clientName))return bkEffectiveFreq(c,stalest.profile);return freq;},'Daily'):'Daily';
+  const stalestAge=stalest?bkFmtAge(stalest.lastAccess,stalestFreq==='Monthly'?32:stalestFreq==='Weekly'?8:2):null;
 
   overlay.innerHTML=`
     <div class="bk-monitor-header">
       <span style="font-size:16px;font-weight:700;color:var(--text);flex-shrink:0;">Backup Monitor</span>
       <span id="bk-monitor-clk" style="font-size:22px;font-weight:300;color:var(--text);font-variant-numeric:tabular-nums;flex-shrink:0;">${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span>
-      <span id="bk-monitor-df" style="color:var(--text3);font-size:12px;flex:1;">${dataFrom}</span>
-      ${issues.length?`<span style="background:rgba(239,68,68,0.15);color:#f87171;font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid rgba(239,68,68,0.3);">⚠ ${issues.length} issue${issues.length!==1?'s':''}</span>`:''}
-      <span style="background:rgba(34,197,94,0.1);color:#4ade80;font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid rgba(34,197,94,0.2);">${clearCnt} clear</span>
+      <span id="bk-monitor-df" style="color:var(--text3);font-size:12px;">${dataFrom}</span>
+      ${stalest?`<div style="display:flex;flex-direction:column;gap:1px;padding:4px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;min-width:0;"><span style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;">Most Stale</span><span style="font-size:12px;font-weight:600;color:${stalestAge.color};white-space:nowrap;" title="${escHtml(stalest.profile)} — ${escHtml(stalest.clientName)}">${stalestAge.text} · ${escHtml(stalest.clientName)}</span></div>`:''}
+      <div style="flex:1;"></div>
+      ${issues.length?`<span style="background:rgba(239,68,68,0.15);color:#f87171;font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid rgba(239,68,68,0.3);flex-shrink:0;">⚠ ${issues.length} issue${issues.length!==1?'s':''}</span>`:''}
+      <span style="background:rgba(34,197,94,0.1);color:#4ade80;font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid rgba(34,197,94,0.2);flex-shrink:0;">${clearCnt} clear</span>
       <span id="bk-monitor-cd" style="font-size:11px;color:var(--text3);min-width:220px;text-align:right;white-space:nowrap;"></span>
       <button onclick="bkExitMonitor()" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);font-size:12px;padding:5px 12px;border-radius:6px;cursor:pointer;flex-shrink:0;">✕ Exit  <kbd style="font-size:10px;opacity:0.6;">Esc</kbd></button>
     </div>
@@ -3342,8 +3377,9 @@ function bkBuildMonitorCards(){
       const gap=monP.length>15?1:2;
       const segs=monP.map(p=>{
         const freq=bkEffectiveFreq(c,p.profile);
-        const col=!active?'#4b5563':bkIsCompliant(p.lastAccess,freq)?'#22c55e':'#ef4444';
-        const tip=p.lastAccess?`${p.profile} · ${freq} · ${bkFmtDate(p.lastAccess)}`:p.profile;
+        const comp=bkIsCompliant(p.lastAccess,freq);
+        const col=!active?'#4b5563':comp===false?'#ef4444':comp==='grace'?'#f59e0b':'#22c55e';
+        const tip=p.lastAccess?`${p.profile} · ${freq} · ${bkFmtDate(p.lastAccess)}${comp==='grace'?' · weekend grace':''}`:p.profile;
         return`<div title="${escHtml(tip)}" style="flex:1;background:${col};border-radius:2px;min-width:3px;"></div>`;
       }).join('');
       segBar=`<div style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span class="bk-monitor-lbl">Profiles</span><span style="font-size:11px;color:${compColor};font-weight:700;">${compP!==null?`${compP}/${totalP}`:totalP??'—'}</span></div><div style="display:flex;gap:${gap}px;height:10px;">${segs}</div></div>`;
@@ -3448,7 +3484,15 @@ function bkIsCompliant(lastAccessMs,frequency){
   if(!lastAccessMs)return null;
   const ageDays=(Date.now()-lastAccessMs)/86400000;
   if(frequency==='Monthly')return ageDays<=32;
-  return frequency==='Weekly'?ageDays<=8:ageDays<=2;
+  if(frequency==='Weekly')return ageDays<=8;
+  // Daily: within normal 2-day window
+  if(ageDays<=2)return true;
+  // Grace: last backup was on Friday, today is Monday, gap < 4 days
+  // (weekend-only gap — no business day was missed)
+  const lastDow=new Date(lastAccessMs).getDay();
+  const nowDow=new Date().getDay();
+  if(lastDow===5&&nowDow===1&&ageDays<4)return'grace';
+  return false;
 }
 function bkEffectiveFreq(c,profileName){
   return(c.profileSettings&&c.profileSettings[profileName]?.frequency)||'Daily';
@@ -3618,7 +3662,7 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
         ${!live&&!c.syncrifyId?`<span style="color:var(--danger);">No Syncrify ID</span>`:''}
       </div>
       ${st==='warn'?issueNote:''}
-      ${(()=>{if(!live||!monP.length)return'';const active=c.syncrify==='Active'||c.wasabi==='Active';const gap=monP.length>15?1:2;const segHtml=monP.map(p=>{const freq=bkEffectiveFreq(c,p.profile);const col=!active?'#4b5563':bkIsCompliant(p.lastAccess,freq)?'#22c55e':'#ef4444';const tip=p.lastAccess?`${escHtml(p.profile)} · ${freq} · ${bkFmtDate(p.lastAccess)}`:escHtml(p.profile);return`<div title="${tip}" style="flex:1;background:${col};border-radius:2px;min-width:3px;"></div>`;}).join('');const rightLabel=active?`${compP}/${totalP}`:`${totalP}`;const rightColor=active?compColor:'var(--text3)';return`<div style="margin-top:7px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;">Profiles</span><span style="font-size:9px;color:${rightColor};font-weight:600;">${rightLabel}</span></div><div style="display:flex;gap:${gap}px;height:7px;">${segHtml}</div></div>`;})()}
+      ${(()=>{if(!live||!monP.length)return'';const active=c.syncrify==='Active'||c.wasabi==='Active';const gap=monP.length>15?1:2;const segHtml=monP.map(p=>{const freq=bkEffectiveFreq(c,p.profile);const comp=bkIsCompliant(p.lastAccess,freq);const col=!active?'#4b5563':comp===false?'#ef4444':comp==='grace'?'#f59e0b':'#22c55e';const tip=p.lastAccess?`${escHtml(p.profile)} · ${freq} · ${bkFmtDate(p.lastAccess)}${comp==='grace'?' · weekend grace':''}`:escHtml(p.profile);return`<div title="${tip}" style="flex:1;background:${col};border-radius:2px;min-width:3px;"></div>`;}).join('');const rightLabel=active?`${compP}/${totalP}`:`${totalP}`;const rightColor=active?compColor:'var(--text3)';return`<div style="margin-top:7px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;">Profiles</span><span style="font-size:9px;color:${rightColor};font-weight:600;">${rightLabel}</span></div><div style="display:flex;gap:${gap}px;height:7px;">${segHtml}</div></div>`;})()}
       ${(()=>{if(usedGB===null||!(c.allottedGB>0))return'';const pct=Math.min(100,usedGB/c.allottedGB*100);const barColor=pct>=90?'#ef4444':pct>=70?'#f59e0b':'#22c55e';return`<div style="margin-top:7px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;">Storage</span><span style="font-size:9px;color:${barColor};font-weight:600;">${bkFmt(usedGB)} / ${bkFmt(c.allottedGB)}</span></div><div class="bk-storage-bar"><div class="bk-storage-fill" style="width:${pct.toFixed(1)}%;background:${barColor};"></div></div></div>`;})()}
       ${(()=>{const coveredRoles=new Set();if(c.profileSettings)Object.values(c.profileSettings).forEach(ps=>{if(Array.isArray(ps.roles))ps.roles.forEach(r=>coveredRoles.add(r));});if(!coveredRoles.size)return'';return`<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px;">${BK_ROLES.map(r=>coveredRoles.has(r.id)?`<span style="font-size:8px;padding:1px 5px;border-radius:8px;background:${r.fg}25;color:${r.fg};border:1px solid ${r.fg}55;font-weight:600;">${r.label}</span>`:'').filter(Boolean).join('')}</div>`;})()}
     </div>`;
@@ -3810,6 +3854,7 @@ function bkRenderOverview(){
   let clients=bkGetClients();
   if(_bkActiveClient!=='all')clients=clients.filter(c=>c.id===_bkActiveClient);
   if(_bkHideInactive)clients=clients.filter(c=>c.syncrify==='Active'||c.wasabi==='Active');
+  if(_bkFilterNonCompliant)clients=clients.filter(c=>bkRowStatus(c,_backupLiveData?.[c.syncrifyId])==='error');
 
   // Apply column sort
   if(_bkSort.col){
@@ -3895,6 +3940,7 @@ function bkRenderOverview(){
       </div>
     </div>`:''}
   </div>`:'')
+  +(_bkActiveClient==='all'?`<div style="display:flex;justify-content:flex-end;margin-bottom:6px;"><button class="btn-secondary" style="font-size:11px;padding:3px 10px;${_bkFilterNonCompliant?'border-color:var(--danger);color:var(--danger);background:rgba(239,68,68,0.08);':''}" onclick="_bkFilterNonCompliant=!_bkFilterNonCompliant;bkRenderMain()">${_bkFilterNonCompliant?'✕ Clear filter':'⚠ Non-compliant only'}</button></div>`:'')
   +`<div class="bk-table-wrap"><table class="bk-table">
     <thead>
       <tr>
@@ -3985,7 +4031,7 @@ function bkRenderOverview(){
                   <td style="text-align:center;vertical-align:top;padding-top:6px;">
                     <button class="quote-note-btn${hasNote?' has-note':''}" onclick="bkToggleProfileNote('${c.id}','${escHtml(p.profile)}')" title="${hasNote?escHtml(ps.note||''):'Add note'}">&#9998;</button>
                   </td>
-                  <td style="text-align:center;padding-right:0;vertical-align:top;padding-top:8px;">${pOk===null?'—':pOk?'<span class="bk-pos">✓</span>':'<span class="bk-neg">✗</span>'}</td>
+                  <td style="text-align:center;padding-right:0;vertical-align:top;padding-top:8px;">${pOk===null?'—':pOk===false?'<span class="bk-neg">✗</span>':pOk==='grace'?'<span style="color:#f59e0b;font-weight:600;" title="Weekend grace — assumed good">~</span>':'<span class="bk-pos">✓</span>'}</td>
                 </tr>`;
                 const noteRow=noteOpen?`<tr>
                   <td colspan="6" style="padding:2px 0 8px 0;border-top:none;">
