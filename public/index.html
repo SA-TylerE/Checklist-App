@@ -957,37 +957,27 @@ body.light{
   .bk-mh-left{flex-wrap:wrap;gap:8px;}
   .bk-mh-right{justify-content:flex-end;}
   #bk-monitor-clk{font-size:16px!important;}
-  /* Outer table: escape table layout — use > so inner expand-table rows are NOT matched */
-  .bk-table-wrap{overflow-x:hidden;}
-  .bk-table{display:block;width:100%;min-width:0;}
-  .bk-table>thead{display:none;}
-  .bk-table>tbody{display:block;width:100%;}
-  /* Client rows: direct children only — flex row showing only the name */
-  .bk-table>tbody>tr:not(.bk-expand-row):not(.bk-note-row){display:flex;width:100%;align-items:center;}
-  .bk-table>tbody>tr:not(.bk-expand-row):not(.bk-note-row)>td:not(.bk-td-name){display:none;}
-  .bk-table>tbody>tr:not(.bk-expand-row):not(.bk-note-row)>td.bk-td-name{flex:1;position:static;box-shadow:none;background:transparent;}
-  /* Expand row: full-width block */
-  .bk-table>tbody>.bk-expand-row{display:block;width:100%;}
-  .bk-expand-row>td{display:block;width:100%;box-sizing:border-box;padding:4px 12px 8px!important;}
-  /* Notes row */
-  .bk-table>tbody>.bk-note-row{display:block;width:100%;}
-  .bk-note-row>td{display:block;width:100%;box-sizing:border-box;}
-  /* Inner expand table: flex-wrap cards — unaffected by outer rules above */
-  .bk-expand-table,.bk-expand-table>tbody{display:block;width:100%;}
+  /* Expand row td: sticky to viewport left — outer table scrolls normally, profile section stays pinned */
+  .bk-expand-row>td{position:sticky;left:0;z-index:2;background:var(--bg);padding:4px 12px 8px!important;}
+  /* Inner expand table: max-width caps at viewport so role chips wrap, no extra scroll */
+  .bk-expand-table{display:block;width:100%;max-width:calc(100vw - 24px);box-sizing:border-box;}
+  .bk-expand-table>tbody{display:block;}
   .bk-expand-table>thead{display:none!important;}
   .bk-expand-sep{display:none!important;}
-  /* Row: highlight the tr background, not individual tds */
-  .bk-expand-table>tbody>tr{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:7px 4px;border-bottom:1px solid var(--border2);}
+  /* Profile rows: flex-wrap, hover on row */
+  .bk-expand-table>tbody>tr{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px;padding:7px 4px;border-bottom:1px solid var(--border2);}
   .bk-expand-table>tbody>tr:last-child{border-bottom:none;}
   .bk-expand-table>tbody>tr:hover{background:var(--bg3)!important;border-radius:5px;}
   .bk-expand-table>tbody>tr:hover>td{background:transparent!important;}
-  /* All tds: flex items, normal text wrap, no legacy table spacing */
-  .bk-expand-table>tbody>tr>td{display:flex;align-items:center;white-space:normal;padding:0;min-width:0;border-top:none!important;}
-  /* First td: full width, stacked column so name sits above role chips */
-  .bk-expand-table>tbody>tr>td:first-child{flex:0 0 100%;flex-direction:column;align-items:flex-start;gap:4px;padding-bottom:2px;}
+  /* All tds: flex items */
+  .bk-expand-table>tbody>tr>td{display:flex;align-items:center;white-space:normal;padding:2px 4px 2px 0;min-width:0;border-top:none!important;}
+  /* Compliance (last td): pull to front, sits next to profile name */
+  .bk-expand-table>tbody>tr>td:last-child{order:-1;padding:2px 8px 0 0;flex-shrink:0;}
+  /* Profile name + roles (first td): takes remaining width after compliance, stacks vertically */
+  .bk-expand-table>tbody>tr>td:first-child{flex:1;min-width:0;flex-direction:column;align-items:flex-start;gap:4px;}
   /* Profile name: single line with ellipsis */
-  .bk-expand-table>tbody>tr>td:first-child>div:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;font-size:12px!important;}
-  /* Note textarea row: full width */
+  .bk-expand-table>tbody>tr>td:first-child>div:first-child{font-size:12px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;}
+  /* Note textarea: full width */
   .bk-expand-table>tbody>tr>td[colspan]{flex:0 0 100%;}
 }
 /* Small mobile padding */
