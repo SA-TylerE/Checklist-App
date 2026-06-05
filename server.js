@@ -196,6 +196,9 @@ app.get('/api/backup-data', async (req, res) => {
       if (status !== 200) {
         return res.status(500).json({ error: `URL returned HTTP ${status}. Check the URL is correct and the file is publicly accessible.` });
       }
+      if (!trimmed) {
+        return res.status(500).json({ error: 'URL returned empty content. The backup script may not have run yet or the file may be empty.' });
+      }
       if (trimmed.startsWith('<') || trimmed.startsWith('{') && trimmed.includes('"error"')) {
         const preview = trimmed.slice(0, 200).replace(/\n/g, ' ');
         return res.status(500).json({ error: `URL returned a web page instead of file content. Make sure the URL points directly to the raw file (not a web page). Preview: ${preview}` });

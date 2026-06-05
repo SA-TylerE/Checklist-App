@@ -3345,9 +3345,11 @@ async function bkMonitorPoll(){
   _bkMonitorChecking=true;
   _bkMonitorCountdown=300;
   try{
-    const r=await fetch('/api/backup-data');
-    const d=await r.json();
+    const [dataRes,settingsRes]=await Promise.all([fetch('/api/backup-data'),fetch('/api/settings')]);
+    const d=await dataRes.json();
+    const s=await settingsRes.json();
     _bkMonitorLastChecked=Date.now();
+    let changed=false;
     if(!d.error&&d.lastUpdated&&d.lastUpdated!==_bkLastUpdated){
       _bkLastUpdated=d.lastUpdated;
       _backupLiveData={};
@@ -3356,9 +3358,13 @@ async function bkMonitorPoll(){
         _backupLiveData[e.client].usedBytes+=e.diskSize;
         _backupLiveData[e.client].profiles.push(e);
       }
-      // New data arrived — full redraw (updates most-stale, cards, and header)
-      bkDrawMonitor();
+      changed=true;
     }
+    if(s&&!s.error&&JSON.stringify(s.backupClients)!==JSON.stringify(appSettings.backupClients)){
+      appSettings={...appSettings,...s};
+      changed=true;
+    }
+    if(changed)bkDrawMonitor();
   }catch(e){}finally{_bkMonitorChecking=false;}
 }
 function bkDrawMonitor(){
@@ -3433,10 +3439,16 @@ function bkBuildMonitorCards(){
     }
     let storBar='';
     const usedGB=live?live.usedBytes/1e9:null;
-    if(usedGB!==null&&c.allottedGB>0){
-      const pct=Math.min(100,usedGB/c.allottedGB*100);
-      const bc=pct>=90?'#ef4444':pct>=70?'#f59e0b':'#22c55e';
-      storBar=`<div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span class="bk-monitor-lbl">Storage</span><span style="font-size:11px;color:${bc};font-weight:700;">${bkFmt(usedGB)} / ${bkFmt(c.allottedGB)}</span></div><div style="height:10px;background:var(--bg4);border-radius:2px;overflow:hidden;"><div style="height:100%;width:${pct.toFixed(1)}%;background:${bc};border-radius:2px;"></div></div></div>`;
+    if(usedGB!==null){
+      if(c.allottedGB===-1){
+        storBar=`<div><div style="display:flex;justify-content:space-between;align-items:center;"><span class="bk-monitor-lbl">Storage</span><span style="font-size:11px;color:var(--text3);font-weight:700;">${bkFmt(usedGB)} · ∞</span></div></div>`;
+      } else if(c.allottedGB===0){
+        storBar=`<div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span class="bk-monitor-lbl">Storage</span><span style="font-size:11px;color:#ef4444;font-weight:700;">${bkFmt(usedGB)} / —</span></div><div style="height:10px;background:var(--bg4);border-radius:2px;overflow:hidden;"><div style="height:100%;width:100%;background:#ef4444;border-radius:2px;"></div></div></div>`;
+      } else {
+        const pct=Math.min(100,usedGB/c.allottedGB*100);
+        const bc=pct>=90?'#ef4444':pct>=70?'#f59e0b':'#22c55e';
+        storBar=`<div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span class="bk-monitor-lbl">Storage</span><span style="font-size:11px;color:${bc};font-weight:700;">${bkFmt(usedGB)} / ${bkFmt(c.allottedGB)}</span></div><div style="height:10px;background:var(--bg4);border-radius:2px;overflow:hidden;"><div style="height:100%;width:${pct.toFixed(1)}%;background:${bc};border-radius:2px;"></div></div></div>`;
+      }
     }
     const dimmed=st==='inactive'?'opacity:0.5;':'';
     return`<div class="bk-monitor-card" style="border-left-color:${borderColor};${dimmed}"><div class="bk-monitor-card-name">${escHtml(c.name)}</div>${segBar}${oldestHtml}${storBar}</div>`;
@@ -3544,7 +3556,7 @@ function bkRowStatus(c,live){
     if(anyNonCompliant)return'error';
   }
   const usedGB=live?live.usedBytes/1e9:0;
-  if(c.allottedGB>0&&usedGB>c.allottedGB)return'warn';
+  if(c.allottedGB!==-1){if(c.allottedGB===0?usedGB>0:usedGB>c.allottedGB)return'warn';}
   const calc=bkCalcCost(usedGB,live?live.profiles.length:0);
   if(c.charged>0&&calc>c.charged+5)return'warn';
   return'good';
@@ -3689,7 +3701,7 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
     const compColor=compP===null?'var(--text3)':compP===totalP?'#22c55e':compP===0?'#ef4444':'#f59e0b';
     let issueNote='';
     if(st==='error'&&live){const nc=live.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))===false);issueNote=`<div class="bk-card-issue" style="color:#f87171;">${nc.length} profile${nc.length!==1?'s':''} non-compliant</div>`;}
-    else if(st==='warn'&&live){const ug=live.usedBytes/1e9;const storageOver=c.allottedGB>0&&ug>c.allottedGB;const calc=bkCalcCost(ug,live.profiles.length);const costOver=c.charged>0&&calc>c.charged;issueNote=`<div class="bk-card-issue" style="color:#fbbf24;">${storageOver?`Storage: ${bkFmt(ug)} / ${bkFmt(c.allottedGB)}`:costOver?`Cost overrun: +${bkFmtCur(calc-(c.charged||0))}`:''}</div>`;}
+    else if(st==='warn'&&live){const ug=live.usedBytes/1e9;const storageOver=c.allottedGB!==-1&&(c.allottedGB===0?ug>0:ug>c.allottedGB);const calc=bkCalcCost(ug,live.profiles.length);const costOver=c.charged>0&&calc>c.charged;issueNote=`<div class="bk-card-issue" style="color:#fbbf24;">${storageOver?`Storage: ${bkFmt(ug)} / ${c.allottedGB>0?bkFmt(c.allottedGB):'—'}`:costOver?`Cost overrun: +${bkFmtCur(calc-(c.charged||0))}`:''}</div>`;}
     else if(!live&&c.syncrifyId){issueNote=`<div class="bk-card-issue" style="color:var(--text3);">ID: ${escHtml(c.syncrifyId)}</div>`;}
     else if(st==='inactive'){issueNote=`<div class="bk-card-issue" style="color:var(--text3);">Both services inactive</div>`;}
     return`<div class="bk-client-card" style="border-left-color:${live||st==='inactive'?stColor[st]||'#4b5563':'#6b7280'};" onclick="bkSwitchClient('${c.id}')">
@@ -3702,7 +3714,13 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
       </div>
       ${st==='warn'?issueNote:''}
       ${(()=>{if(!live||!monP.length)return'';const active=c.syncrify==='Active'||c.wasabi==='Active';const gap=monP.length>15?1:2;const segHtml=monP.map(p=>{const freq=bkEffectiveFreq(c,p.profile);const comp=bkIsCompliant(p.lastAccess,freq);const col=!active?'#4b5563':comp===false?'#ef4444':comp==='grace'?'#f59e0b':'#22c55e';const tip=p.lastAccess?`${escHtml(p.profile)} · ${freq} · ${bkFmtDate(p.lastAccess)}${comp==='grace'?' · weekend grace':''}`:escHtml(p.profile);return`<div title="${tip}" style="flex:1;background:${col};border-radius:2px;min-width:3px;"></div>`;}).join('');const rightLabel=active?`${compP}/${totalP}`:`${totalP}`;const rightColor=active?compColor:'var(--text3)';return`<div style="margin-top:7px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;">Profiles</span><span style="font-size:9px;color:${rightColor};font-weight:600;">${rightLabel}</span></div><div style="display:flex;gap:${gap}px;height:7px;">${segHtml}</div></div>`;})()}
-      ${(()=>{if(usedGB===null||!(c.allottedGB>0))return'';const pct=Math.min(100,usedGB/c.allottedGB*100);const barColor=pct>=90?'#ef4444':pct>=70?'#f59e0b':'#22c55e';return`<div style="margin-top:7px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;">Storage</span><span style="font-size:9px;color:${barColor};font-weight:600;">${bkFmt(usedGB)} / ${bkFmt(c.allottedGB)}</span></div><div class="bk-storage-bar"><div class="bk-storage-fill" style="width:${pct.toFixed(1)}%;background:${barColor};"></div></div></div>`;})()}
+      ${(()=>{
+        if(usedGB===null)return'';
+        if(c.allottedGB===-1)return`<div style="margin-top:7px;"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;">Storage</span><span style="font-size:9px;color:var(--text3);font-weight:600;">${bkFmt(usedGB)} · ∞</span></div></div>`;
+        if(c.allottedGB===0)return`<div style="margin-top:7px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;">Storage</span><span style="font-size:9px;color:#ef4444;font-weight:600;">${bkFmt(usedGB)} / —</span></div><div class="bk-storage-bar"><div class="bk-storage-fill" style="width:100%;background:#ef4444;"></div></div></div>`;
+        const pct=Math.min(100,usedGB/c.allottedGB*100);const barColor=pct>=90?'#ef4444':pct>=70?'#f59e0b':'#22c55e';
+        return`<div style="margin-top:7px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;">Storage</span><span style="font-size:9px;color:${barColor};font-weight:600;">${bkFmt(usedGB)} / ${bkFmt(c.allottedGB)}</span></div><div class="bk-storage-bar"><div class="bk-storage-fill" style="width:${pct.toFixed(1)}%;background:${barColor};"></div></div></div>`;
+      })()}
       ${(()=>{const coveredRoles=new Set();if(c.profileSettings)Object.values(c.profileSettings).forEach(ps=>{if(Array.isArray(ps.roles))ps.roles.forEach(r=>coveredRoles.add(r));});if(!coveredRoles.size)return'';return`<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px;">${BK_ROLES.map(r=>coveredRoles.has(r.id)?`<span style="font-size:8px;padding:1px 5px;border-radius:8px;background:${r.fg}25;color:${r.fg};border:1px solid ${r.fg}55;font-weight:600;">${r.label}</span>`:'').filter(Boolean).join('')}</div>`;})()}
     </div>`;
   };
@@ -4013,7 +4031,7 @@ function bkRenderOverview(){
         const st=bkRowStatus(c,live);
         const estCost=c.allottedGB>0?bkEstCost(c.allottedGB,c.contractDevices):null;
         const inp=(field,val,style='')=>`<input type="text" class="bk-cell-input" value="${escHtml(String(val??''))}" onblur="bkSaveClient('${c.id}','${field}',this.value)" onkeydown="if(event.key==='Enter')this.blur()"${style?` style="${style}"`:''}>`
-        const num=(field,val,step=1)=>`<input type="number" class="bk-cell-input bk-cell-num" min="0" step="${step}" value="${val||0}" onblur="bkSaveClient('${c.id}','${field}',this.value)" onkeydown="if(event.key==='Enter')this.blur()">`;
+        const num=(field,val,step=1,min=0)=>`<input type="number" class="bk-cell-input bk-cell-num" min="${min}" step="${step}" value="${val??0}" onblur="bkSaveClient('${c.id}','${field}',this.value)" onkeydown="if(event.key==='Enter')this.blur()">`;
         const chevron=`<span class="bk-expand-toggle" style="opacity:0;pointer-events:none;">▸</span>`;
         const profilesCell=totalProfiles===null?'—'
           :compliantCount===null?`<span class="bk-dim">${totalProfiles}</span>`
@@ -4094,11 +4112,11 @@ function bkRenderOverview(){
               </div>
             </div>
           </td>
-          <td data-label="Allotted"><div style="display:flex;align-items:center;justify-content:flex-end;gap:3px;">${num('allottedGB',c.allottedGB,500)}<span style="font-size:9px;color:var(--text3);flex-shrink:0;">GB</span></div></td>
-          <td data-label="Devices">${num('contractDevices',c.contractDevices)}</td>
+          <td data-label="Allotted"><div style="display:flex;align-items:center;justify-content:flex-end;gap:3px;">${num('allottedGB',c.allottedGB,500,-1)}<span style="font-size:9px;color:var(--text3);flex-shrink:0;">${c.allottedGB===-1?'∞':'GB'}</span></div></td>
+          <td data-label="Devices">${num('contractDevices',c.contractDevices,1,-1)}</td>
           ${_bkShowCosts?`<td data-label="Est." style="color:var(--text3);">${estCost!==null?bkFmtCur(estCost):'—'}</td>
           <td data-label="Charged"><div style="display:flex;align-items:center;justify-content:flex-end;gap:1px;"><span style="font-size:9px;color:var(--text3);flex-shrink:0;">$</span>${num('charged',c.charged,5)}</div></td>`:''}
-          <td data-label="Used">${usedGB!==null?(()=>{const over=c.allottedGB>0&&usedGB>c.allottedGB;return`<span style="${over?'color:#ef4444;font-weight:600;':''}" title="${over?'⚠ Exceeds allotted storage':''}">${bkFmt(usedGB)}${over?' ⚠':''}</span>`;})():'<span class="bk-dim">—</span>'}</td>
+          <td data-label="Used">${usedGB!==null?(()=>{const over=c.allottedGB!==-1&&(c.allottedGB===0?usedGB>0:usedGB>c.allottedGB);return`<span style="${over?'color:#ef4444;font-weight:600;':''}" title="${over?'⚠ Exceeds allotted storage':''}">${bkFmt(usedGB)}${over?' ⚠':''}</span>`;})():'<span class="bk-dim">—</span>'}</td>
           <td data-label="Live">${devCnt!==null?devCnt:'<span class="bk-dim">—</span>'}</td>
           ${_bkShowCosts?`<td data-label="Calc.">${calc!==null?bkFmtCur(calc):'<span class="bk-dim">—</span>'}</td>
           <td data-label="Diff" class="${diff!==null?(diff>=0?'bk-pos':'bk-neg'):''}">${diff!==null?bkFmtCur(diff):'<span class="bk-dim">—</span>'}</td>`:''}
