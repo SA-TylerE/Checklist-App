@@ -3542,11 +3542,11 @@ function bkIsCompliant(lastAccessMs,frequency){
   if(frequency==='Weekly')return ageDays<=8;
   // Daily: within normal 2-day window
   if(ageDays<=2)return true;
-  // Grace: last backup was on Friday, today is Monday, gap < 4 days
+  // Grace: last backup was Fri or Sat, today is Monday, gap < 4 days
   // (weekend-only gap — no business day was missed)
   const lastDow=new Date(lastAccessMs).getDay();
   const nowDow=new Date().getDay();
-  if(lastDow===5&&nowDow===1&&ageDays<4)return'grace';
+  if(nowDow===1&&(lastDow===5||lastDow===6)&&ageDays<4)return'grace';
   return false;
 }
 function bkEffectiveFreq(c,profileName){
