@@ -3606,7 +3606,7 @@ async function bkFetchSrep(){
 }
 function bkGetActiveJobs(){
   if(!_backupSrepData)return[];
-  return _backupSrepData.filter(j=>j.status==='Running/NoReport');
+  return _backupSrepData.filter(j=>j.active);
 }
 
 function bkSwitchClient(id){

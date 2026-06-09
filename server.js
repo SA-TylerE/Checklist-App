@@ -249,7 +249,7 @@ function parseSrepCsv(text) {
   const data = [];
   for (let i = 1; i < lines.length; i++) { // skip header row
     const f = lines[i].split(',');
-    if (f.length < 11) continue;
+    if (f.length < 12) continue;
     data.push({
       jobNumber:   f[0],
       client:      f[1],
@@ -262,6 +262,7 @@ function parseSrepCsv(text) {
       clientIp:    f[8],
       status:      f[9],
       reportCsv:   f[10],
+      active:      f[11] === '1',
     });
   }
   return data;
