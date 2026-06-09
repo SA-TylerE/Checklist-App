@@ -578,6 +578,7 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .bk-client-item.active{background:var(--bg3);color:var(--text);font-weight:600;}
 .bk-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 .bk-dot-good{background:#22c55e;}.bk-dot-warn{background:#f59e0b;}.bk-dot-error{background:#ef4444;}.bk-dot-inactive{background:#4b5563;}
+.bk-live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;flex-shrink:0;animation:dotPulse 1.5s ease-in-out infinite;}
 #backups-content{display:flex;flex-direction:column;height:100%;overflow:hidden;}
 .bk-page-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 18px 10px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg2);}
 .bk-page-title{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px;}
@@ -3283,6 +3284,8 @@ const BK_ROLES=[
   {id:'prx-data-offsite',label:'Prx Data · Off-site',  bg:'#12122a',fg:'#6366f1'},
 ];
 let _backupLiveData=null; // null=not fetched; obj keyed by syncrifyId → {usedBytes, profiles:[]}
+let _backupSrepData=null; // null=not fetched; array of job rows from srep dataset
+let _bkSrepLastUpdated=null; // mtimeMs from server
 let _bkLastUpdated=null; // mtimeMs from server
 let _bkActiveClient='all';
 let _bkTab='overview';
@@ -3345,9 +3348,10 @@ async function bkMonitorPoll(){
   _bkMonitorChecking=true;
   _bkMonitorCountdown=300;
   try{
-    const [dataRes,settingsRes]=await Promise.all([fetch('/api/backup-data'),fetch('/api/settings')]);
+    const [dataRes,settingsRes,srepRes]=await Promise.all([fetch('/api/backup-data'),fetch('/api/settings'),fetch('/api/backup-srep')]);
     const d=await dataRes.json();
     const s=await settingsRes.json();
+    const sr=await srepRes.json();
     _bkMonitorLastChecked=Date.now();
     let changed=false;
     if(!d.error&&d.lastUpdated&&d.lastUpdated!==_bkLastUpdated){
@@ -3358,6 +3362,11 @@ async function bkMonitorPoll(){
         _backupLiveData[e.client].usedBytes+=e.diskSize;
         _backupLiveData[e.client].profiles.push(e);
       }
+      changed=true;
+    }
+    if(!sr.error&&Array.isArray(sr.data)&&sr.lastUpdated!==_bkSrepLastUpdated){
+      _bkSrepLastUpdated=sr.lastUpdated;
+      _backupSrepData=sr.data;
       changed=true;
     }
     if(s&&!s.error&&JSON.stringify(s.backupClients)!==JSON.stringify(appSettings.backupClients)){
@@ -3455,7 +3464,9 @@ function bkBuildMonitorCards(){
       }
     }
     const dimmed=st==='inactive'?'opacity:0.5;':'';
-    return`<div class="bk-monitor-card" style="border-left-color:${borderColor};${dimmed}"><div class="bk-monitor-card-name">${escHtml(c.name)}</div>${segBar}${oldestHtml}${storBar}</div>`;
+    const running=bkGetActiveJobs().some(j=>j.client===c.syncrifyId);
+    const liveBadge=running?`<span class="bk-live-dot" title="Backup currently running" style="margin-left:6px;"></span>`:'';
+    return`<div class="bk-monitor-card" style="border-left-color:${borderColor};${dimmed}"><div class="bk-monitor-card-name">${escHtml(c.name)}${liveBadge}</div>${segBar}${oldestHtml}${storBar}</div>`;
   }).join('');
 }
 
@@ -3583,6 +3594,19 @@ async function bkFetchLive(){
       _backupLiveData[e.client].profiles.push(e);
     }
   }catch(err){_bkFetchError=err.message;_backupLiveData={};bkLogAction('bk_fetch_error',{note:err.message});}finally{_bkFetching=false;bkUpdateNavBadge();}
+  await bkFetchSrep();
+}
+async function bkFetchSrep(){
+  try{
+    const r=await fetch('/api/backup-srep');
+    const d=await r.json();
+    _backupSrepData=(!d.error&&Array.isArray(d.data))?d.data:[];
+    _bkSrepLastUpdated=d.lastUpdated||null;
+  }catch(err){_backupSrepData=[];}
+}
+function bkGetActiveJobs(){
+  if(!_backupSrepData)return[];
+  return _backupSrepData.filter(j=>j.status==='Running/NoReport');
 }
 
 function bkSwitchClient(id){
@@ -3613,7 +3637,9 @@ function renderBackupsSidebar(){
       const badgeColor=compP===null?'var(--text3)':compP===totalP?'#22c55e':compP===0?'#ef4444':'#f59e0b';
       const badgeText=compP!==null?`${compP}/${totalP}`:st==='inactive'?'inactive':'—';
       const badge=totalP!==null?`<span style="font-size:9px;color:${badgeColor};font-weight:600;flex-shrink:0;margin-right:2px;">${badgeText}</span>`:'';
-      return`<div class="bk-client-item${_bkActiveClient===c.id?' active':''}" data-bkid="${c.id}" onclick="bkSwitchClient('${c.id}')"><span class="bk-dot bk-dot-${st}"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(c.name)}</span>${badge}</div>`;
+      const running=bkGetActiveJobs().some(j=>j.client===c.syncrifyId);
+      const liveBadge=running?`<span class="bk-live-dot" title="Backup currently running" style="margin-right:2px;"></span>`:'';
+      return`<div class="bk-client-item${_bkActiveClient===c.id?' active':''}" data-bkid="${c.id}" onclick="bkSwitchClient('${c.id}')"><span class="bk-dot bk-dot-${st}"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(c.name)}</span>${liveBadge}${badge}</div>`;
     }).join('');
 }
 
@@ -3707,9 +3733,11 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
     else if(st==='warn'&&live){const ug=live.usedBytes/1e9;const storageOver=c.allottedGB!==-1&&(c.allottedGB===0?ug>0:ug>c.allottedGB);const calc=bkCalcCost(ug,live.profiles.length);const costOver=c.charged>0&&calc>c.charged;issueNote=`<div class="bk-card-issue" style="color:#fbbf24;">${storageOver?`Storage: ${bkFmt(ug)} / ${c.allottedGB>0?bkFmt(c.allottedGB):'—'}`:costOver?`Cost overrun: +${bkFmtCur(calc-(c.charged||0))}`:''}</div>`;}
     else if(!live&&c.syncrifyId){issueNote=`<div class="bk-card-issue" style="color:var(--text3);">ID: ${escHtml(c.syncrifyId)}</div>`;}
     else if(st==='inactive'){issueNote=`<div class="bk-card-issue" style="color:var(--text3);">Both services inactive</div>`;}
+    const running=bkGetActiveJobs().some(j=>j.client===c.syncrifyId);
     return`<div class="bk-client-card" style="border-left-color:${live||st==='inactive'?stColor[st]||'#4b5563':'#6b7280'};" onclick="bkSwitchClient('${c.id}')">
       <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;">
         <span class="bk-card-name">${escHtml(c.name)}</span>
+        ${running?`<span class="bk-live-dot" title="Backup currently running"></span>`:''}
       </div>
       <div class="bk-card-meta">
         ${!live?'<span>No profile data</span>':''}
@@ -3744,6 +3772,27 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
       <div class="dash-stat">${statVal(visible.length,'var(--accent)')}<div class="dash-stat-label">Total</div></div>
     </div>
     ${(()=>{const oi=bkGetOrphanIds();if(!oi.length||loading)return'';return`<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:7px;padding:10px 14px;margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="color:#f59e0b;font-size:12px;font-weight:600;flex-shrink:0;">⚠ ${oi.length} unrecognized Syncrify ID${oi.length!==1?'s':''}</span><span style="color:var(--text3);font-size:11px;flex:1;min-width:80px;">${oi.map(id=>`<code style="background:var(--bg3);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:10px;">${escHtml(id)}</code>`).join(' ')}</span><button onclick="bkOpenProfiles()" style="font-size:11px;color:var(--accent);background:none;border:1px solid var(--border2);border-radius:4px;cursor:pointer;padding:3px 9px;white-space:nowrap;flex-shrink:0;">View Profiles →</button></div>`;})()}
+    ${(()=>{
+      const jobs=bkGetActiveJobs();
+      if(!jobs.length||loading)return'';
+      const rows=jobs.map(j=>{
+        const c=bkGetClients().find(x=>x.syncrifyId===j.client);
+        const name=c?c.name:j.client;
+        const startMs=Date.parse((j.start||'').replace(' ','T'));
+        const elapsedMin=startMs?Math.max(0,Math.floor((Date.now()-startMs)/60000)):null;
+        const elapsedText=elapsedMin===null?'':elapsedMin<60?`running ${elapsedMin}m`:`running ${(elapsedMin/60).toFixed(1)}h`;
+        return`<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:11px;">
+          <span class="bk-live-dot"></span>
+          <span style="font-weight:600;color:var(--text);">${escHtml(name)}</span>
+          <span style="color:var(--text3);">${escHtml(j.profile)}</span>
+          ${elapsedText?`<span style="margin-left:auto;color:var(--text3);">${elapsedText}</span>`:''}
+        </div>`;
+      }).join('');
+      return`<div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.25);border-radius:7px;padding:10px 14px;margin-bottom:16px;">
+        <div style="color:#22c55e;font-size:12px;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:6px;"><span class="bk-live-dot"></span>${jobs.length} backup${jobs.length!==1?'s':''} currently running</div>
+        ${rows}
+      </div>`;
+    })()}
     ${issueList.length?`<div style="margin-bottom:20px;"><div class="dash-section-label" style="color:var(--danger);">Issues (${issueList.length})</div>${cardGrid(issueList)}</div>`:''}
     ${noData.length?`<div style="margin-bottom:20px;"><div class="dash-section-label" style="color:var(--warn);">No Live Data (${noData.length})</div>${cardGrid(noData)}</div>`:''}
     ${good.length?`<div style="margin-bottom:20px;"><div class="dash-section-label" style="color:var(--success);">All Clear (${good.length})</div>${cardGrid(good)}</div>`:''}
@@ -4090,9 +4139,10 @@ function bkRenderOverview(){
                 }).join('');
                 const pAgeInfo=bkFmtAge(p.lastAccess,pThresh,pOk==='grace');
                 const isDisabled=pEffectiveFreq==='Disabled';
+                const pRunning=bkGetActiveJobs().some(j=>j.client===c.syncrifyId&&j.profile===p.profile);
                 const profileRow=`<tr${isDisabled?' style="opacity:0.45;"':''}>
                   <td style="text-align:left;min-width:220px;">
-                    <div style="font-size:11px;font-weight:500;margin-bottom:4px;">${escHtml(p.profile)}</div>
+                    <div style="font-size:11px;font-weight:500;margin-bottom:4px;display:flex;align-items:center;gap:5px;">${escHtml(p.profile)}${pRunning?`<span class="bk-live-dot" title="Backup currently running"></span>`:''}</div>
                     <div style="display:flex;flex-wrap:wrap;gap:3px;">${roleToggleChips}</div>
                   </td>
                   <td style="text-align:right;color:var(--text3);vertical-align:top;padding-top:8px;">${p.diskSize>0?bkFmt(p.diskSize/1e9):'<span class="bk-dim">—</span>'}</td>
@@ -4222,16 +4272,18 @@ function bkRenderProfiles(){
 
 async function saveBkSettings(){
   const url=(document.getElementById('setting-backup-url')?.value||'').trim();
+  const srepUrl=(document.getElementById('setting-backup-srep-url')?.value||'').trim();
   const key=(document.getElementById('setting-backup-key')?.value||'').trim();
   if(key&&key.length!==32){showToast('Encryption key must be exactly 32 characters','error');return;}
   appSettings.backupDataUrl=url||undefined;
+  appSettings.backupSrepUrl=srepUrl||undefined;
   appSettings.backupEncryptionKey=key||undefined;
   const bs=parseFloat(document.getElementById('setting-bk-block-size')?.value||'')||500;
   const cb=parseFloat(document.getElementById('setting-bk-cost-per-block')?.value||'')||40;
   const cd=parseFloat(document.getElementById('setting-bk-cost-per-device')?.value||'')||25;
   appSettings.bkBlockSizeGB=bs;appSettings.bkCostPerBlock=cb;appSettings.bkCostPerDevice=cd;
   const r=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
-  if(r.ok){showToast('Backup settings saved');_backupLiveData=null;_bkFetching=false;}
+  if(r.ok){showToast('Backup settings saved');_backupLiveData=null;_backupSrepData=null;_bkFetching=false;}
   else showToast('Save failed','error');
 }
 function bkGenKey(){
@@ -4410,6 +4462,11 @@ function renderSettingsView(){
                 <button class="btn-secondary" style="flex-shrink:0;white-space:nowrap;" onclick="bkGenKey()">Generate Key</button>
               </div>
               <div class="field-hint">AES-256 requires exactly 32 characters. Keep this secret — it never leaves your server.</div>
+            </div>
+            <div class="field-group" style="margin:0;grid-column:1/-1;">
+              <label>Active Jobs URL <span style="font-weight:400;color:var(--text3);">(optional)</span></label>
+              <input id="setting-backup-srep-url" value="${escHtml(appSettings.backupSrepUrl||'')}" placeholder="https://gist.githubusercontent.com/…/raw/srep_data.enc" style="font-size:11px;">
+              <div class="field-hint">Raw URL to the encrypted near-live job report (<code style="font-size:10px;background:var(--bg3);padding:1px 3px;border-radius:2px;">srep_data.enc</code>). Same encryption key as above. Used to show currently-running backups.</div>
             </div>
           </div>
           <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">

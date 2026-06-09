@@ -163,6 +163,40 @@ function decryptBkContent(b64, keyStr) {
   return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
 }
 
+// Fetch a URL and optionally AES-256-CBC decrypt it. Throws an Error with a
+// user-facing message on any failure (HTTP error, empty body, bad key, etc).
+async function fetchAndDecryptDataset(url, encKey) {
+  const { status, text: content } = await fetchUrl(url);
+  const trimmed = content.trim();
+
+  if (status !== 200) {
+    throw new Error(`URL returned HTTP ${status}. Check the URL is correct and the file is publicly accessible.`);
+  }
+  if (!trimmed) {
+    throw new Error('URL returned empty content. The script may not have run yet or the file may be empty.');
+  }
+  if (trimmed.startsWith('<') || (trimmed.startsWith('{') && trimmed.includes('"error"'))) {
+    const preview = trimmed.slice(0, 200).replace(/\n/g, ' ');
+    throw new Error(`URL returned a web page instead of file content. Make sure the URL points directly to the raw file (not a web page). Preview: ${preview}`);
+  }
+
+  if (!encKey) return trimmed;
+
+  const buf = Buffer.from(trimmed, 'base64');
+  if (buf.length < 17) {
+    throw new Error(`URL returned content that is too short to be encrypted data (${buf.length} decoded bytes). The file may be empty or the URL may be wrong. Content starts with: "${trimmed.slice(0, 100)}"`);
+  }
+  try {
+    return decryptBkContent(trimmed, encKey);
+  } catch (decErr) {
+    const msg = decErr.message || '';
+    if (msg.includes('initialization vector') || msg.includes('wrong final block') || msg.includes('bad decrypt')) {
+      throw new Error('Decryption failed. The encryption key in Settings does not match the key used in the PowerShell script, or the file content is corrupted. Verify both keys are identical (32 characters).');
+    }
+    throw new Error(`Decryption error: ${msg}`);
+  }
+}
+
 function fetchUrl(url, hops = 6) {
   return new Promise((resolve, reject) => {
     const mod    = url.startsWith('https') ? https : http;
@@ -183,45 +217,16 @@ function fetchUrl(url, hops = 6) {
 
 app.get('/api/backup-data', async (req, res) => {
   try {
-    const settings   = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
-    const rawUrl     = (settings.backupDataUrl     || '').trim();
-    const encKey     = (settings.backupEncryptionKey || '').trim();
-    const fetchedAt  = Date.now();
+    const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+    const rawUrl   = (settings.backupDataUrl       || '').trim();
+    const encKey   = (settings.backupEncryptionKey || '').trim();
 
     let text;
     if (rawUrl) {
-      const { status, text: content } = await fetchUrl(rawUrl);
-      const trimmed = content.trim();
-
-      if (status !== 200) {
-        return res.status(500).json({ error: `URL returned HTTP ${status}. Check the URL is correct and the file is publicly accessible.` });
-      }
-      if (!trimmed) {
-        return res.status(500).json({ error: 'URL returned empty content. The backup script may not have run yet or the file may be empty.' });
-      }
-      if (trimmed.startsWith('<') || trimmed.startsWith('{') && trimmed.includes('"error"')) {
-        const preview = trimmed.slice(0, 200).replace(/\n/g, ' ');
-        return res.status(500).json({ error: `URL returned a web page instead of file content. Make sure the URL points directly to the raw file (not a web page). Preview: ${preview}` });
-      }
-
-      if (encKey) {
-        const buf = Buffer.from(trimmed, 'base64');
-        if (buf.length < 17) {
-          return res.status(500).json({
-            error: `URL returned content that is too short to be encrypted data (${buf.length} decoded bytes). The file may be empty or the URL may be wrong. Content starts with: "${trimmed.slice(0, 100)}"`
-          });
-        }
-        try {
-          text = decryptBkContent(trimmed, encKey);
-        } catch (decErr) {
-          const msg = decErr.message || '';
-          if (msg.includes('initialization vector') || msg.includes('wrong final block') || msg.includes('bad decrypt')) {
-            return res.status(500).json({ error: 'Decryption failed. The encryption key in Settings does not match the key used in the PowerShell script, or the file content is corrupted. Verify both keys are identical (32 characters).' });
-          }
-          return res.status(500).json({ error: `Decryption error: ${msg}` });
-        }
-      } else {
-        text = trimmed;
+      try {
+        text = await fetchAndDecryptDataset(rawUrl, encKey);
+      } catch (e) {
+        return res.status(500).json({ error: e.message });
       }
       const existing = fs.existsSync(BACKUP_DATA_FILE) ? fs.readFileSync(BACKUP_DATA_FILE, 'utf8') : null;
       if (existing !== text) atomicWrite(BACKUP_DATA_FILE, text);
@@ -233,6 +238,58 @@ app.get('/api/backup-data', async (req, res) => {
 
     const lastUpdated = fs.existsSync(BACKUP_DATA_FILE) ? fs.statSync(BACKUP_DATA_FILE).mtimeMs : null;
     res.json({ data: parseBkTxt(text), lastUpdated });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Srep data — near-live per-job table (currently running / recently completed jobs)
+const SREP_DATA_FILE = path.join(__dirname, 'data', 'backup-srep.csv');
+
+function parseSrepCsv(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const data = [];
+  for (let i = 1; i < lines.length; i++) { // skip header row
+    const f = lines[i].split(',');
+    if (f.length < 11) continue;
+    data.push({
+      jobNumber:   f[0],
+      client:      f[1],
+      profile:     f[2],
+      start:       f[3],
+      end:         f[4],
+      durationMin: parseFloat(f[5]) || 0,
+      files:       parseInt(f[6]) || 0,
+      bytes:       parseInt(f[7]) || 0,
+      clientIp:    f[8],
+      status:      f[9],
+      reportCsv:   f[10],
+    });
+  }
+  return data;
+}
+
+app.get('/api/backup-srep', async (req, res) => {
+  try {
+    const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+    const rawUrl   = (settings.backupSrepUrl       || '').trim();
+    const encKey   = (settings.backupEncryptionKey || '').trim();
+
+    let text;
+    if (rawUrl) {
+      try {
+        text = await fetchAndDecryptDataset(rawUrl, encKey);
+      } catch (e) {
+        return res.status(500).json({ error: e.message });
+      }
+      const existing = fs.existsSync(SREP_DATA_FILE) ? fs.readFileSync(SREP_DATA_FILE, 'utf8') : null;
+      if (existing !== text) atomicWrite(SREP_DATA_FILE, text);
+    } else if (fs.existsSync(SREP_DATA_FILE)) {
+      text = fs.readFileSync(SREP_DATA_FILE, 'utf8');
+    } else {
+      return res.json({ data: [], lastUpdated: null });
+    }
+
+    const lastUpdated = fs.existsSync(SREP_DATA_FILE) ? fs.statSync(SREP_DATA_FILE).mtimeMs : null;
+    res.json({ data: parseSrepCsv(text), lastUpdated });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
