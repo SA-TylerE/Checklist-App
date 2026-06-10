@@ -3284,8 +3284,8 @@ const BK_ROLES=[
   {id:'prx-data-offsite',label:'Prx Data · Off-site',  bg:'#12122a',fg:'#6366f1'},
 ];
 let _backupLiveData=null; // null=not fetched; obj keyed by syncrifyId → {usedBytes, profiles:[]}
-let _backupSrepData=null; // null=not fetched; array of job rows from srep dataset
-let _bkSrepLastUpdated=null; // mtimeMs from server
+let _backupActivityData=null; // null=not fetched; array of currently-active sessions {profile,bytes,status,clientIp,user}
+let _bkActivityLastUpdated=null; // mtimeMs from server
 let _bkLastUpdated=null; // mtimeMs from server
 let _bkActiveClient='all';
 let _bkTab='overview';
@@ -3348,10 +3348,10 @@ async function bkMonitorPoll(){
   _bkMonitorChecking=true;
   _bkMonitorCountdown=300;
   try{
-    const [dataRes,settingsRes,srepRes]=await Promise.all([fetch('/api/backup-data'),fetch('/api/settings'),fetch('/api/backup-srep')]);
+    const [dataRes,settingsRes,actRes]=await Promise.all([fetch('/api/backup-data'),fetch('/api/settings'),fetch('/api/backup-activity')]);
     const d=await dataRes.json();
     const s=await settingsRes.json();
-    const sr=await srepRes.json();
+    const act=await actRes.json();
     _bkMonitorLastChecked=Date.now();
     let changed=false;
     if(!d.error&&d.lastUpdated&&d.lastUpdated!==_bkLastUpdated){
@@ -3364,9 +3364,9 @@ async function bkMonitorPoll(){
       }
       changed=true;
     }
-    if(!sr.error&&Array.isArray(sr.data)&&sr.lastUpdated!==_bkSrepLastUpdated){
-      _bkSrepLastUpdated=sr.lastUpdated;
-      _backupSrepData=sr.data;
+    if(!act.error&&Array.isArray(act.data)&&act.lastUpdated!==_bkActivityLastUpdated){
+      _bkActivityLastUpdated=act.lastUpdated;
+      _backupActivityData=act.data;
       changed=true;
     }
     if(s&&!s.error&&JSON.stringify(s.backupClients)!==JSON.stringify(appSettings.backupClients)){
@@ -3464,7 +3464,7 @@ function bkBuildMonitorCards(){
       }
     }
     const dimmed=st==='inactive'?'opacity:0.5;':'';
-    const running=bkGetActiveJobs().some(j=>j.client===c.syncrifyId);
+    const running=live&&live.profiles.some(p=>bkGetActiveJobs().some(j=>j.profile===p.profile));
     const liveBadge=running?`<span class="bk-live-dot" title="Backup currently running" style="margin-left:6px;"></span>`:'';
     return`<div class="bk-monitor-card" style="border-left-color:${borderColor};${dimmed}"><div class="bk-monitor-card-name">${escHtml(c.name)}${liveBadge}</div>${segBar}${oldestHtml}${storBar}</div>`;
   }).join('');
@@ -3594,19 +3594,26 @@ async function bkFetchLive(){
       _backupLiveData[e.client].profiles.push(e);
     }
   }catch(err){_bkFetchError=err.message;_backupLiveData={};bkLogAction('bk_fetch_error',{note:err.message});}finally{_bkFetching=false;bkUpdateNavBadge();}
-  await bkFetchSrep();
+  await bkFetchActivity();
 }
-async function bkFetchSrep(){
+async function bkFetchActivity(){
   try{
-    const r=await fetch('/api/backup-srep');
+    const r=await fetch('/api/backup-activity');
     const d=await r.json();
-    _backupSrepData=(!d.error&&Array.isArray(d.data))?d.data:[];
-    _bkSrepLastUpdated=d.lastUpdated||null;
-  }catch(err){_backupSrepData=[];}
+    _backupActivityData=(!d.error&&Array.isArray(d.data))?d.data:[];
+    _bkActivityLastUpdated=d.lastUpdated||null;
+  }catch(err){_backupActivityData=[];}
 }
 function bkGetActiveJobs(){
-  if(!_backupSrepData)return[];
-  return _backupSrepData.filter(j=>j.active);
+  return _backupActivityData||[];
+}
+function bkFindClientByProfile(profileName){
+  if(!_backupLiveData)return null;
+  for(const c of bkGetClients()){
+    const live=_backupLiveData[c.syncrifyId];
+    if(live&&live.profiles.some(p=>p.profile===profileName))return c;
+  }
+  return null;
 }
 
 function bkSwitchClient(id){
@@ -3637,7 +3644,7 @@ function renderBackupsSidebar(){
       const badgeColor=compP===null?'var(--text3)':compP===totalP?'#22c55e':compP===0?'#ef4444':'#f59e0b';
       const badgeText=compP!==null?`${compP}/${totalP}`:st==='inactive'?'inactive':'—';
       const badge=totalP!==null?`<span style="font-size:9px;color:${badgeColor};font-weight:600;flex-shrink:0;margin-right:2px;">${badgeText}</span>`:'';
-      const running=bkGetActiveJobs().some(j=>j.client===c.syncrifyId);
+      const running=live&&live.profiles.some(p=>bkGetActiveJobs().some(j=>j.profile===p.profile));
       const liveBadge=running?`<span class="bk-live-dot" title="Backup currently running" style="margin-right:2px;"></span>`:'';
       return`<div class="bk-client-item${_bkActiveClient===c.id?' active':''}" data-bkid="${c.id}" onclick="bkSwitchClient('${c.id}')"><span class="bk-dot bk-dot-${st}"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(c.name)}</span>${liveBadge}${badge}</div>`;
     }).join('');
@@ -3733,7 +3740,7 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
     else if(st==='warn'&&live){const ug=live.usedBytes/1e9;const storageOver=c.allottedGB!==-1&&(c.allottedGB===0?ug>0:ug>c.allottedGB);const calc=bkCalcCost(ug,live.profiles.length);const costOver=c.charged>0&&calc>c.charged;issueNote=`<div class="bk-card-issue" style="color:#fbbf24;">${storageOver?`Storage: ${bkFmt(ug)} / ${c.allottedGB>0?bkFmt(c.allottedGB):'—'}`:costOver?`Cost overrun: +${bkFmtCur(calc-(c.charged||0))}`:''}</div>`;}
     else if(!live&&c.syncrifyId){issueNote=`<div class="bk-card-issue" style="color:var(--text3);">ID: ${escHtml(c.syncrifyId)}</div>`;}
     else if(st==='inactive'){issueNote=`<div class="bk-card-issue" style="color:var(--text3);">Both services inactive</div>`;}
-    const running=bkGetActiveJobs().some(j=>j.client===c.syncrifyId);
+    const running=live&&live.profiles.some(p=>bkGetActiveJobs().some(j=>j.profile===p.profile));
     return`<div class="bk-client-card" style="border-left-color:${live||st==='inactive'?stColor[st]||'#4b5563':'#6b7280'};" onclick="bkSwitchClient('${c.id}')">
       <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;">
         <span class="bk-card-name">${escHtml(c.name)}</span>
@@ -3776,16 +3783,14 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
       const jobs=bkGetActiveJobs();
       if(!jobs.length||loading)return'';
       const rows=jobs.map(j=>{
-        const c=bkGetClients().find(x=>x.syncrifyId===j.client);
-        const name=c?c.name:j.client;
-        const startMs=Date.parse((j.start||'').replace(' ','T'));
-        const elapsedMin=startMs?Math.max(0,Math.floor((Date.now()-startMs)/60000)):null;
-        const elapsedText=elapsedMin===null?'':elapsedMin<60?`running ${elapsedMin}m`:`running ${(elapsedMin/60).toFixed(1)}h`;
+        const c=bkFindClientByProfile(j.profile);
+        const name=c?c.name:j.profile;
+        const detail=[j.bytes,j.status].filter(Boolean).join(' · ');
         return`<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:11px;">
           <span class="bk-live-dot"></span>
           <span style="font-weight:600;color:var(--text);">${escHtml(name)}</span>
           <span style="color:var(--text3);">${escHtml(j.profile)}</span>
-          ${elapsedText?`<span style="margin-left:auto;color:var(--text3);">${elapsedText}</span>`:''}
+          ${detail?`<span style="margin-left:auto;color:var(--text3);">${escHtml(detail)}</span>`:''}
         </div>`;
       }).join('');
       return`<div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.25);border-radius:7px;padding:10px 14px;margin-bottom:16px;">
@@ -4139,7 +4144,7 @@ function bkRenderOverview(){
                 }).join('');
                 const pAgeInfo=bkFmtAge(p.lastAccess,pThresh,pOk==='grace');
                 const isDisabled=pEffectiveFreq==='Disabled';
-                const pRunning=bkGetActiveJobs().some(j=>j.client===c.syncrifyId&&j.profile===p.profile);
+                const pRunning=bkGetActiveJobs().some(j=>j.profile===p.profile);
                 const profileRow=`<tr${isDisabled?' style="opacity:0.45;"':''}>
                   <td style="text-align:left;min-width:220px;">
                     <div style="font-size:11px;font-weight:500;margin-bottom:4px;display:flex;align-items:center;gap:5px;">${escHtml(p.profile)}${pRunning?`<span class="bk-live-dot" title="Backup currently running"></span>`:''}</div>
@@ -4272,18 +4277,18 @@ function bkRenderProfiles(){
 
 async function saveBkSettings(){
   const url=(document.getElementById('setting-backup-url')?.value||'').trim();
-  const srepUrl=(document.getElementById('setting-backup-srep-url')?.value||'').trim();
+  const activityUrl=(document.getElementById('setting-backup-activity-url')?.value||'').trim();
   const key=(document.getElementById('setting-backup-key')?.value||'').trim();
   if(key&&key.length!==32){showToast('Encryption key must be exactly 32 characters','error');return;}
   appSettings.backupDataUrl=url||undefined;
-  appSettings.backupSrepUrl=srepUrl||undefined;
+  appSettings.backupActivityUrl=activityUrl||undefined;
   appSettings.backupEncryptionKey=key||undefined;
   const bs=parseFloat(document.getElementById('setting-bk-block-size')?.value||'')||500;
   const cb=parseFloat(document.getElementById('setting-bk-cost-per-block')?.value||'')||40;
   const cd=parseFloat(document.getElementById('setting-bk-cost-per-device')?.value||'')||25;
   appSettings.bkBlockSizeGB=bs;appSettings.bkCostPerBlock=cb;appSettings.bkCostPerDevice=cd;
   const r=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
-  if(r.ok){showToast('Backup settings saved');_backupLiveData=null;_backupSrepData=null;_bkFetching=false;}
+  if(r.ok){showToast('Backup settings saved');_backupLiveData=null;_backupActivityData=null;_bkFetching=false;}
   else showToast('Save failed','error');
 }
 function bkGenKey(){
@@ -4465,8 +4470,8 @@ function renderSettingsView(){
             </div>
             <div class="field-group" style="margin:0;grid-column:1/-1;">
               <label>Active Jobs URL <span style="font-weight:400;color:var(--text3);">(optional)</span></label>
-              <input id="setting-backup-srep-url" value="${escHtml(appSettings.backupSrepUrl||'')}" placeholder="https://gist.githubusercontent.com/…/raw/srep_data.enc" style="font-size:11px;">
-              <div class="field-hint">Raw URL to the encrypted near-live job report (<code style="font-size:10px;background:var(--bg3);padding:1px 3px;border-radius:2px;">srep_data.enc</code>). Same encryption key as above. Used to show currently-running backups.</div>
+              <input id="setting-backup-activity-url" value="${escHtml(appSettings.backupActivityUrl||'')}" placeholder="https://gist.githubusercontent.com/…/raw/activity_data.enc" style="font-size:11px;">
+              <div class="field-hint">Raw URL to the encrypted Active Sessions report (<code style="font-size:10px;background:var(--bg3);padding:1px 3px;border-radius:2px;">activity_data.enc</code>), pulled live from Syncrify's <code style="font-size:10px;background:var(--bg3);padding:1px 3px;border-radius:2px;">app?operation=activity</code> dashboard. Same encryption key as above. Used to show currently-running backups.</div>
             </div>
           </div>
           <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">

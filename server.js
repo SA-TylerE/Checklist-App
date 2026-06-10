@@ -241,37 +241,31 @@ app.get('/api/backup-data', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// Srep data — near-live per-job table (currently running / recently completed jobs)
-const SREP_DATA_FILE = path.join(__dirname, 'data', 'backup-srep.csv');
+// Activity data — currently-active Syncrify sessions (from the authenticated
+// app?operation=activity dashboard widget)
+const ACTIVITY_DATA_FILE = path.join(__dirname, 'data', 'backup-activity.csv');
 
-function parseSrepCsv(text) {
+function parseActivityCsv(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   const data = [];
   for (let i = 1; i < lines.length; i++) { // skip header row
     const f = lines[i].split(',');
-    if (f.length < 12) continue;
+    if (f.length < 5) continue;
     data.push({
-      jobNumber:   f[0],
-      client:      f[1],
-      profile:     f[2],
-      start:       f[3],
-      end:         f[4],
-      durationMin: parseFloat(f[5]) || 0,
-      files:       parseInt(f[6]) || 0,
-      bytes:       parseInt(f[7]) || 0,
-      clientIp:    f[8],
-      status:      f[9],
-      reportCsv:   f[10],
-      active:      f[11] === '1',
+      profile:  f[0],
+      bytes:    f[1],
+      status:   f[2],
+      clientIp: f[3],
+      user:     f[4],
     });
   }
   return data;
 }
 
-app.get('/api/backup-srep', async (req, res) => {
+app.get('/api/backup-activity', async (req, res) => {
   try {
     const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
-    const rawUrl   = (settings.backupSrepUrl       || '').trim();
+    const rawUrl   = (settings.backupActivityUrl   || '').trim();
     const encKey   = (settings.backupEncryptionKey || '').trim();
 
     let text;
@@ -281,16 +275,16 @@ app.get('/api/backup-srep', async (req, res) => {
       } catch (e) {
         return res.status(500).json({ error: e.message });
       }
-      const existing = fs.existsSync(SREP_DATA_FILE) ? fs.readFileSync(SREP_DATA_FILE, 'utf8') : null;
-      if (existing !== text) atomicWrite(SREP_DATA_FILE, text);
-    } else if (fs.existsSync(SREP_DATA_FILE)) {
-      text = fs.readFileSync(SREP_DATA_FILE, 'utf8');
+      const existing = fs.existsSync(ACTIVITY_DATA_FILE) ? fs.readFileSync(ACTIVITY_DATA_FILE, 'utf8') : null;
+      if (existing !== text) atomicWrite(ACTIVITY_DATA_FILE, text);
+    } else if (fs.existsSync(ACTIVITY_DATA_FILE)) {
+      text = fs.readFileSync(ACTIVITY_DATA_FILE, 'utf8');
     } else {
       return res.json({ data: [], lastUpdated: null });
     }
 
-    const lastUpdated = fs.existsSync(SREP_DATA_FILE) ? fs.statSync(SREP_DATA_FILE).mtimeMs : null;
-    res.json({ data: parseSrepCsv(text), lastUpdated });
+    const lastUpdated = fs.existsSync(ACTIVITY_DATA_FILE) ? fs.statSync(ACTIVITY_DATA_FILE).mtimeMs : null;
+    res.json({ data: parseActivityCsv(text), lastUpdated });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
