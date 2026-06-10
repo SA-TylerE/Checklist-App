@@ -3570,8 +3570,6 @@ function bkRowStatus(c,live){
   if(live&&live.profiles.length){
     const anyNonCompliant=live.profiles.some(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))===false);
     if(anyNonCompliant)return'error';
-    const anyRunError=live.profiles.some(p=>p.lastRunOk===0&&bkEffectiveFreq(c,p.profile)!=='Disabled');
-    if(anyRunError)return'error';
   }
   const usedGB=live?live.usedBytes/1e9:0;
   if(c.allottedGB!==-1){if(c.allottedGB===0?usedGB>0:usedGB>c.allottedGB)return'warn';}
@@ -3747,14 +3745,7 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
     const oldest=live&&monP.length?Math.min(...monP.map(p=>p.lastAccess)):null;
     const compColor=compP===null?'var(--text3)':compP===totalP?'#22c55e':compP===0?'#ef4444':'#f59e0b';
     let issueNote='';
-    if(st==='error'&&live){
-      const nc=live.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))===false);
-      const re=live.profiles.filter(p=>p.lastRunOk===0&&bkEffectiveFreq(c,p.profile)!=='Disabled');
-      const parts=[];
-      if(nc.length)parts.push(`${nc.length} profile${nc.length!==1?'s':''} non-compliant`);
-      if(re.length)parts.push(`${re.length} run error${re.length!==1?'s':''}`);
-      issueNote=`<div class="bk-card-issue" style="color:#f87171;">${parts.join(' · ')}</div>`;
-    }
+    if(st==='error'&&live){const nc=live.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))===false);issueNote=`<div class="bk-card-issue" style="color:#f87171;">${nc.length} profile${nc.length!==1?'s':''} non-compliant</div>`;}
     else if(st==='warn'&&live){const ug=live.usedBytes/1e9;const storageOver=c.allottedGB!==-1&&(c.allottedGB===0?ug>0:ug>c.allottedGB);const calc=bkCalcCost(ug,live.profiles.length);const costOver=c.charged>0&&calc>c.charged;issueNote=`<div class="bk-card-issue" style="color:#fbbf24;">${storageOver?`Storage: ${bkFmt(ug)} / ${c.allottedGB>0?bkFmt(c.allottedGB):'—'}`:costOver?`Cost overrun: +${bkFmtCur(calc-(c.charged||0))}`:''}</div>`;}
     else if(!live&&c.syncrifyId){issueNote=`<div class="bk-card-issue" style="color:var(--text3);">ID: ${escHtml(c.syncrifyId)}</div>`;}
     else if(st==='inactive'){issueNote=`<div class="bk-card-issue" style="color:var(--text3);">Both services inactive</div>`;}
@@ -4161,8 +4152,7 @@ function bkRenderOverview(){
                 <th class="bk-exp-freq">Freq.</th>
                 <th style="text-align:center;" title="Encrypted">Enc</th>
                 <th style="text-align:center;" title="Last run status">Run</th>
-                <th style="text-align:center;">&#9998;</th>
-                <th style="text-align:center;padding-right:0;">✓</th>
+                <th style="text-align:center;padding-right:0;">&#9998;</th>
               </tr></thead>
               <tbody>${live.profiles.map((p,pi)=>{
                 const pEffectiveFreq=bkEffectiveFreq(c,p.profile);
@@ -4197,18 +4187,17 @@ function bkRenderOverview(){
                     </select>
                   </td>
                   <td style="text-align:center;vertical-align:top;padding-top:8px;" title="${p.encrypted?'Encrypted':'Not encrypted'}">${p.encrypted?'<span class="bk-pos">🔒</span>':'<span class="bk-dim">—</span>'}</td>
-                  <td style="text-align:center;vertical-align:top;padding-top:8px;" title="${p.lastRunOk===1?'Last run completed without errors':p.lastRunOk===0?'Last run reported errors':'No run history'}">${p.lastRunOk===1?'<span class="bk-pos">✓</span>':p.lastRunOk===0?'<span class="bk-neg">✗</span>':'<span class="bk-dim">—</span>'}</td>
-                  <td style="text-align:center;vertical-align:top;padding-top:6px;">
+                  <td style="text-align:center;vertical-align:top;padding-top:8px;" title="${escHtml(p.lastRunOk===1?'Last run completed without errors':p.lastRunOk===0?(p.errFiles&&p.errFiles.length?'Failed files:\n'+p.errFiles.join('\n'):'Last run reported errors'):'No run history')}">${p.lastRunOk===1?'<span class="bk-pos">✓</span>':p.lastRunOk===0?`<span class="bk-neg"${p.errFiles&&p.errFiles.length?' style="cursor:help;border-bottom:1px dotted currentColor;"':''}>✗</span>`:'<span class="bk-dim">—</span>'}</td>
+                  <td style="text-align:center;padding-right:0;vertical-align:top;padding-top:6px;">
                     <button class="quote-note-btn${hasNote?' has-note':''}" onclick="bkToggleProfileNote('${c.id}','${escHtml(p.profile)}')" title="${hasNote?escHtml(ps.note||''):'Add note'}">&#9998;</button>
                   </td>
-                  <td style="text-align:center;padding-right:0;vertical-align:top;padding-top:8px;">${pOk===null?'—':pOk===false?'<span class="bk-neg">✗</span>':pOk==='grace'?'<span style="color:#f59e0b;font-weight:600;" title="Weekend grace — assumed good">~</span>':'<span class="bk-pos">✓</span>'}</td>
                 </tr>`;
                 const noteRow=noteOpen?`<tr>
-                  <td colspan="8" style="padding:2px 0 8px 0;border-top:none;">
+                  <td colspan="7" style="padding:2px 0 8px 0;border-top:none;">
                     <textarea style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text);font-size:11px;font-family:var(--sans);resize:vertical;min-height:36px;outline:none;box-sizing:border-box;display:block;" placeholder="Profile note…" onblur="bkSaveProfileNote('${c.id}','${escHtml(p.profile)}',this.value)" onkeydown="if(event.key==='Escape')bkToggleProfileNote('${c.id}','${escHtml(p.profile)}')">${escHtml(ps.note||'')}</textarea>
                   </td>
                 </tr>`:'';
-                const sep=pi>0?'<tr class="bk-expand-sep"><td colspan="8"></td></tr>':'';
+                const sep=pi>0?'<tr class="bk-expand-sep"><td colspan="7"></td></tr>':'';
                 return sep+profileRow+noteRow;
               }).join('')}</tbody>
             </table>

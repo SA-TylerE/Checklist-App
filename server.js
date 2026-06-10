@@ -150,7 +150,9 @@ function parseBkTxt(text) {
     if (!dsMatch || !laMatch) continue;
     const encMatch = parts[4]?.match(/encrypted=(\d)/);
     const runMatch = parts[5]?.match(/lastRunOk=(-?\d)/);
-    data.push({ client: parts[0], profile: parts[1], diskSize: parseInt(dsMatch[1]), lastAccess: parseInt(laMatch[1]), encrypted: encMatch ? encMatch[1] === '1' : false, lastRunOk: runMatch ? parseInt(runMatch[1]) : -1 });
+    const errMatch = parts[6]?.match(/errFiles=(.*)/);
+    const errFiles = errMatch && errMatch[1] ? decodeURIComponent(errMatch[1]).split('\n') : null;
+    data.push({ client: parts[0], profile: parts[1], diskSize: parseInt(dsMatch[1]), lastAccess: parseInt(laMatch[1]), encrypted: encMatch ? encMatch[1] === '1' : false, lastRunOk: runMatch ? parseInt(runMatch[1]) : -1, errFiles });
   }
   return data;
 }
