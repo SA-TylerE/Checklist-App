@@ -3286,6 +3286,7 @@ const BK_ROLES=[
 let _backupLiveData=null; // null=not fetched; obj keyed by syncrifyId → {usedBytes, profiles:[]}
 let _backupActivityData=null; // null=not fetched; array of currently-active sessions {profile,bytes,status,clientIp,user}
 let _bkActivityLastUpdated=null; // mtimeMs from server
+let _backupDriveData=null; // null=not fetched; {totalBytes,freeBytes} for the backup storage volume
 let _bkLastUpdated=null; // mtimeMs from server
 let _bkActiveClient='all';
 let _bkTab='overview';
@@ -3568,6 +3569,8 @@ function bkRowStatus(c,live){
   if(live&&live.profiles.length){
     const anyNonCompliant=live.profiles.some(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))===false);
     if(anyNonCompliant)return'error';
+    const anyRunError=live.profiles.some(p=>p.lastRunOk===0&&bkEffectiveFreq(c,p.profile)!=='Disabled');
+    if(anyRunError)return'error';
   }
   const usedGB=live?live.usedBytes/1e9:0;
   if(c.allottedGB!==-1){if(c.allottedGB===0?usedGB>0:usedGB>c.allottedGB)return'warn';}
@@ -3594,7 +3597,7 @@ async function bkFetchLive(){
       _backupLiveData[e.client].profiles.push(e);
     }
   }catch(err){_bkFetchError=err.message;_backupLiveData={};bkLogAction('bk_fetch_error',{note:err.message});}finally{_bkFetching=false;bkUpdateNavBadge();}
-  await bkFetchActivity();
+  await Promise.all([bkFetchActivity(),bkFetchDrive()]);
 }
 async function bkFetchActivity(){
   try{
@@ -3603,6 +3606,13 @@ async function bkFetchActivity(){
     _backupActivityData=(!d.error&&Array.isArray(d.data))?d.data:[];
     _bkActivityLastUpdated=d.lastUpdated||null;
   }catch(err){_backupActivityData=[];}
+}
+async function bkFetchDrive(){
+  try{
+    const r=await fetch('/api/backup-drive');
+    const d=await r.json();
+    _backupDriveData=(!d.error&&d.data)?d.data:null;
+  }catch(err){_backupDriveData=null;}
 }
 function bkGetActiveJobs(){
   return _backupActivityData||[];
@@ -3736,7 +3746,14 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
     const oldest=live&&monP.length?Math.min(...monP.map(p=>p.lastAccess)):null;
     const compColor=compP===null?'var(--text3)':compP===totalP?'#22c55e':compP===0?'#ef4444':'#f59e0b';
     let issueNote='';
-    if(st==='error'&&live){const nc=live.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))===false);issueNote=`<div class="bk-card-issue" style="color:#f87171;">${nc.length} profile${nc.length!==1?'s':''} non-compliant</div>`;}
+    if(st==='error'&&live){
+      const nc=live.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))===false);
+      const re=live.profiles.filter(p=>p.lastRunOk===0&&bkEffectiveFreq(c,p.profile)!=='Disabled');
+      const parts=[];
+      if(nc.length)parts.push(`${nc.length} profile${nc.length!==1?'s':''} non-compliant`);
+      if(re.length)parts.push(`${re.length} run error${re.length!==1?'s':''}`);
+      issueNote=`<div class="bk-card-issue" style="color:#f87171;">${parts.join(' · ')}</div>`;
+    }
     else if(st==='warn'&&live){const ug=live.usedBytes/1e9;const storageOver=c.allottedGB!==-1&&(c.allottedGB===0?ug>0:ug>c.allottedGB);const calc=bkCalcCost(ug,live.profiles.length);const costOver=c.charged>0&&calc>c.charged;issueNote=`<div class="bk-card-issue" style="color:#fbbf24;">${storageOver?`Storage: ${bkFmt(ug)} / ${c.allottedGB>0?bkFmt(c.allottedGB):'—'}`:costOver?`Cost overrun: +${bkFmtCur(calc-(c.charged||0))}`:''}</div>`;}
     else if(!live&&c.syncrifyId){issueNote=`<div class="bk-card-issue" style="color:var(--text3);">ID: ${escHtml(c.syncrifyId)}</div>`;}
     else if(st==='inactive'){issueNote=`<div class="bk-card-issue" style="color:var(--text3);">Both services inactive</div>`;}
@@ -3763,12 +3780,27 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
     </div>`;
   };
   const cardGrid=arr=>`<div class="bk-card-grid">${arr.map(clientCard).join('')}</div>`;
+  const driveHtml=(()=>{
+    if(!_backupDriveData)return'';
+    const totalGB=_backupDriveData.totalBytes/1e9,freeGB=_backupDriveData.freeBytes/1e9;
+    const usedGB=totalGB-freeGB;
+    const pct=Math.min(100,usedGB/totalGB*100);
+    const barColor=pct>=90?'#ef4444':pct>=75?'#f59e0b':'#22c55e';
+    return`<div style="min-width:170px;flex-shrink:0;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+        <span style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;">Drive Usage</span>
+        <span style="font-size:11px;color:${barColor};font-weight:600;">${bkFmt(usedGB)} / ${bkFmt(totalGB)}</span>
+      </div>
+      <div class="bk-storage-bar"><div class="bk-storage-fill" style="width:${pct.toFixed(1)}%;background:${barColor};"></div></div>
+    </div>`;
+  })();
   return`<div class="bk-dash">
     <div class="checklist-header" style="margin-bottom:18px;">
       <div>
         <h2 style="font-size:18px;font-weight:700;margin-bottom:2px;">Backup Monitoring</h2>
         <div class="meta">${visible.length} client${visible.length!==1?'s':''} monitored${sumAllotted>0?' · '+bkFmt(sumUsed)+' used of '+bkFmt(sumAllotted)+' allotted':sumUsed>0?' · '+bkFmt(sumUsed)+' used':''}${subtitle?' · '+subtitle:''}</div>
       </div>
+      ${driveHtml}
       <div class="header-actions">${menuHtml}</div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:24px;">
@@ -4231,8 +4263,8 @@ function bkRenderProfiles(){
     `# backup_profiles.txt${_bkLastUpdated?' | data from '+new Date(_bkLastUpdated).toLocaleString('en-US',{month:'numeric',day:'numeric',year:'2-digit',hour:'numeric',minute:'2-digit'}):''}`,
     `# ${clients.length} client(s)`,
     '',
-    pad('CLIENT',22)+pad('PROFILE',38)+pad('SIZE',10)+pad('LAST ACCESS',14)+'FREQ',
-    '─'.repeat(100),
+    pad('CLIENT',22)+pad('PROFILE',38)+pad('SIZE',10)+pad('LAST ACCESS',14)+pad('FREQ',10)+pad('ENC',5)+'RUN',
+    '─'.repeat(106),
   ];
   clients.forEach(c=>{
     const live=_backupLiveData[c.syncrifyId];
@@ -4243,7 +4275,9 @@ function bkRenderProfiles(){
       const flag=comp===null?'  ':comp===false?' ✗':comp==='grace'?' ~':' ✓';
       const size=p.diskSize>0?bkFmt(p.diskSize/1e9):'—';
       const date=p.lastAccess?new Date(p.lastAccess).toLocaleDateString('en-US',{year:'2-digit',month:'numeric',day:'numeric'}):'—';
-      lines.push(flag+' '+pad(c.syncrifyId||c.name,20)+pad(p.profile,38)+pad(size,10)+pad(date,14)+freq);
+      const enc=p.encrypted?'Yes':'No';
+      const run=p.lastRunOk===1?'OK':p.lastRunOk===0?'ERR':'—';
+      lines.push(flag+' '+pad(c.syncrifyId||c.name,20)+pad(p.profile,38)+pad(size,10)+pad(date,14)+pad(freq,10)+pad(enc,5)+run);
     });
   });
   const preBlock=`<pre style="font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.65;white-space:pre;overflow:auto;margin:0;padding:2px 0;">${escHtml(lines.join('\n'))}</pre>`;
@@ -4278,17 +4312,19 @@ function bkRenderProfiles(){
 async function saveBkSettings(){
   const url=(document.getElementById('setting-backup-url')?.value||'').trim();
   const activityUrl=(document.getElementById('setting-backup-activity-url')?.value||'').trim();
+  const driveUrl=(document.getElementById('setting-backup-drive-url')?.value||'').trim();
   const key=(document.getElementById('setting-backup-key')?.value||'').trim();
   if(key&&key.length!==32){showToast('Encryption key must be exactly 32 characters','error');return;}
   appSettings.backupDataUrl=url||undefined;
   appSettings.backupActivityUrl=activityUrl||undefined;
+  appSettings.backupDriveUrl=driveUrl||undefined;
   appSettings.backupEncryptionKey=key||undefined;
   const bs=parseFloat(document.getElementById('setting-bk-block-size')?.value||'')||500;
   const cb=parseFloat(document.getElementById('setting-bk-cost-per-block')?.value||'')||40;
   const cd=parseFloat(document.getElementById('setting-bk-cost-per-device')?.value||'')||25;
   appSettings.bkBlockSizeGB=bs;appSettings.bkCostPerBlock=cb;appSettings.bkCostPerDevice=cd;
   const r=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
-  if(r.ok){showToast('Backup settings saved');_backupLiveData=null;_backupActivityData=null;_bkFetching=false;}
+  if(r.ok){showToast('Backup settings saved');_backupLiveData=null;_backupActivityData=null;_backupDriveData=null;_bkFetching=false;}
   else showToast('Save failed','error');
 }
 function bkGenKey(){
@@ -4472,6 +4508,11 @@ function renderSettingsView(){
               <label>Active Jobs URL <span style="font-weight:400;color:var(--text3);">(optional)</span></label>
               <input id="setting-backup-activity-url" value="${escHtml(appSettings.backupActivityUrl||'')}" placeholder="https://gist.githubusercontent.com/…/raw/activity_data.enc" style="font-size:11px;">
               <div class="field-hint">Raw URL to the encrypted Active Sessions report (<code style="font-size:10px;background:var(--bg3);padding:1px 3px;border-radius:2px;">activity_data.enc</code>), pulled live from Syncrify's <code style="font-size:10px;background:var(--bg3);padding:1px 3px;border-radius:2px;">app?operation=activity</code> dashboard. Same encryption key as above. Used to show currently-running backups.</div>
+            </div>
+            <div class="field-group" style="margin:0;grid-column:1/-1;">
+              <label>Drive Capacity URL <span style="font-weight:400;color:var(--text3);">(optional)</span></label>
+              <input id="setting-backup-drive-url" value="${escHtml(appSettings.backupDriveUrl||'')}" placeholder="https://gist.githubusercontent.com/…/raw/drive_data.enc" style="font-size:11px;">
+              <div class="field-hint">Raw URL to the encrypted total/free space of the backup storage volume (<code style="font-size:10px;background:var(--bg3);padding:1px 3px;border-radius:2px;">drive_data.enc</code>). Same encryption key as above. Shown as overall storage usage on the dashboard header.</div>
             </div>
           </div>
           <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">

@@ -148,7 +148,9 @@ function parseBkTxt(text) {
     const dsMatch = parts[2]?.match(/diskSize=(\d+)/);
     const laMatch = parts[3]?.match(/lastAccess=(\d+)/);
     if (!dsMatch || !laMatch) continue;
-    data.push({ client: parts[0], profile: parts[1], diskSize: parseInt(dsMatch[1]), lastAccess: parseInt(laMatch[1]) });
+    const encMatch = parts[4]?.match(/encrypted=(\d)/);
+    const runMatch = parts[5]?.match(/lastRunOk=(-?\d)/);
+    data.push({ client: parts[0], profile: parts[1], diskSize: parseInt(dsMatch[1]), lastAccess: parseInt(laMatch[1]), encrypted: encMatch ? encMatch[1] === '1' : false, lastRunOk: runMatch ? parseInt(runMatch[1]) : -1 });
   }
   return data;
 }
@@ -285,6 +287,46 @@ app.get('/api/backup-activity', async (req, res) => {
 
     const lastUpdated = fs.existsSync(ACTIVITY_DATA_FILE) ? fs.statSync(ACTIVITY_DATA_FILE).mtimeMs : null;
     res.json({ data: parseActivityCsv(text), lastUpdated });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Drive data — total/free space of the backup storage volume (e.g. D:\)
+const DRIVE_DATA_FILE = path.join(__dirname, 'data', 'backup-drive.csv');
+
+function parseDriveCsv(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length < 2) return null;
+  const f = lines[1].split(',');
+  if (f.length < 2) return null;
+  const totalBytes = parseInt(f[0]);
+  const freeBytes  = parseInt(f[1]);
+  if (!Number.isFinite(totalBytes) || !Number.isFinite(freeBytes)) return null;
+  return { totalBytes, freeBytes };
+}
+
+app.get('/api/backup-drive', async (req, res) => {
+  try {
+    const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+    const rawUrl   = (settings.backupDriveUrl      || '').trim();
+    const encKey   = (settings.backupEncryptionKey || '').trim();
+
+    let text;
+    if (rawUrl) {
+      try {
+        text = await fetchAndDecryptDataset(rawUrl, encKey);
+      } catch (e) {
+        return res.status(500).json({ error: e.message });
+      }
+      const existing = fs.existsSync(DRIVE_DATA_FILE) ? fs.readFileSync(DRIVE_DATA_FILE, 'utf8') : null;
+      if (existing !== text) atomicWrite(DRIVE_DATA_FILE, text);
+    } else if (fs.existsSync(DRIVE_DATA_FILE)) {
+      text = fs.readFileSync(DRIVE_DATA_FILE, 'utf8');
+    } else {
+      return res.json({ data: null, lastUpdated: null });
+    }
+
+    const lastUpdated = fs.existsSync(DRIVE_DATA_FILE) ? fs.statSync(DRIVE_DATA_FILE).mtimeMs : null;
+    res.json({ data: parseDriveCsv(text), lastUpdated });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
