@@ -256,11 +256,16 @@ function parseActivityCsv(text) {
     const f = lines[i].split(',');
     if (f.length < 5) continue;
     data.push({
-      profile:  f[0],
-      bytes:    f[1],
-      status:   f[2],
-      clientIp: f[3],
-      user:     f[4],
+      profile:        f[0],
+      bytes:          f[1],
+      status:         f[2],
+      clientIp:       f[3],
+      user:           f[4],
+      jobId:          f[5] || null,
+      startedOn:      f[6] || null,
+      filesCompleted: f[7] !== undefined && f[7] !== '' ? parseInt(f[7]) : null,
+      filesQueue:     f[8] !== undefined && f[8] !== '' ? parseInt(f[8]) : null,
+      message:        f[9] ? decodeURIComponent(f[9]) : null,
     });
   }
   return data;

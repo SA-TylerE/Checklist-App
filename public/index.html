@@ -3795,12 +3795,16 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
       const rows=jobs.map(j=>{
         const c=bkFindClientByProfile(j.profile);
         const name=c?c.name:j.profile;
-        const detail=[j.bytes,j.status].filter(Boolean).join(' · ');
-        return`<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:11px;">
-          <span class="bk-live-dot"></span>
-          <span style="font-weight:600;color:var(--text);">${escHtml(name)}</span>
-          <span style="color:var(--text3);">${escHtml(j.profile)}</span>
-          ${detail?`<span style="margin-left:auto;color:var(--text3);">${escHtml(detail)}</span>`:''}
+        const progress=(j.filesCompleted!=null&&j.filesQueue!=null)?`${j.filesCompleted}/${j.filesCompleted+j.filesQueue} files`:'';
+        const detail=[j.bytes,j.status,progress].filter(Boolean).join(' · ');
+        return`<div style="padding:3px 0;font-size:11px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="bk-live-dot"></span>
+            <span style="font-weight:600;color:var(--text);">${escHtml(name)}</span>
+            <span style="color:var(--text3);">${escHtml(j.profile)}</span>
+            ${detail?`<span style="margin-left:auto;color:var(--text3);">${escHtml(detail)}</span>`:''}
+          </div>
+          ${j.message?`<div style="padding-left:15px;color:var(--text3);font-size:10px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(j.message)}">${escHtml(j.message)}</div>`:''}
         </div>`;
       }).join('');
       return`<div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.25);border-radius:7px;padding:10px 14px;margin-bottom:16px;">
