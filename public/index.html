@@ -3408,6 +3408,7 @@ function bkDrawMonitor(){
         ${stalest?`<div style="display:flex;flex-direction:column;gap:1px;padding:4px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;min-width:0;flex-shrink:1;overflow:hidden;"><span style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;">Most Stale</span><span style="font-size:12px;font-weight:600;color:${stalestAge.color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(stalest.profile)} — ${escHtml(stalest.clientName)}">${stalestAge.text} · ${escHtml(stalest.clientName)}</span></div>`:''}
       </div>
       <div class="bk-mh-right">
+        ${bkDriveUsageHtml(true)}
         ${issues.length?`<span style="background:rgba(239,68,68,0.15);color:#f87171;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid rgba(239,68,68,0.3);white-space:nowrap;">⚠ ${issues.length} issue${issues.length!==1?'s':''}</span>`:''}
         <span style="background:rgba(34,197,94,0.1);color:#4ade80;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid rgba(34,197,94,0.2);white-space:nowrap;">${clearCnt} clear</span>
         <span id="bk-monitor-cd" style="font-size:11px;color:var(--text3);white-space:nowrap;"></span>
@@ -3780,29 +3781,15 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
     </div>`;
   };
   const cardGrid=arr=>`<div class="bk-card-grid">${arr.map(clientCard).join('')}</div>`;
-  const driveHtml=(()=>{
-    if(!_backupDriveData)return'';
-    const totalGB=_backupDriveData.totalBytes/1e9,freeGB=_backupDriveData.freeBytes/1e9;
-    const usedGB=totalGB-freeGB;
-    const pct=Math.min(100,usedGB/totalGB*100);
-    const barColor=pct>=90?'#ef4444':pct>=75?'#f59e0b':'#22c55e';
-    return`<div style="min-width:170px;flex-shrink:0;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
-        <span style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;">Drive Usage</span>
-        <span style="font-size:11px;color:${barColor};font-weight:600;">${bkFmt(usedGB)} / ${bkFmt(totalGB)}</span>
-      </div>
-      <div class="bk-storage-bar"><div class="bk-storage-fill" style="width:${pct.toFixed(1)}%;background:${barColor};"></div></div>
-    </div>`;
-  })();
   return`<div class="bk-dash">
     <div class="checklist-header" style="margin-bottom:18px;">
       <div>
         <h2 style="font-size:18px;font-weight:700;margin-bottom:2px;">Backup Monitoring</h2>
         <div class="meta">${visible.length} client${visible.length!==1?'s':''} monitored${sumAllotted>0?' · '+bkFmt(sumUsed)+' used of '+bkFmt(sumAllotted)+' allotted':sumUsed>0?' · '+bkFmt(sumUsed)+' used':''}${subtitle?' · '+subtitle:''}</div>
       </div>
-      ${driveHtml}
       <div class="header-actions">${menuHtml}</div>
     </div>
+    ${bkDriveUsageHtml()}
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:24px;">
       <div class="dash-stat">${statVal(issueList.length,'var(--danger)')}<div class="dash-stat-label">${issueList.length===1?'Issue':'Issues'}</div></div>
       <div class="dash-stat">${statVal(good.length,'var(--success)')}<div class="dash-stat-label">All Clear</div></div>
@@ -3838,6 +3825,21 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
   </div>`;
 }
 function bkFmt(usedGB){return usedGB>=1000?(usedGB/1000).toFixed(1)+' TB':usedGB.toFixed(0)+' GB';}
+function bkFmtBytes(bytes){if(bytes==null)return'—';const tb=bytes/1024**4,gb=bytes/1024**3;return tb>=1?tb.toFixed(1)+' TB':gb.toFixed(0)+' GB';}
+function bkDriveUsageHtml(compact){
+  if(!_backupDriveData)return'';
+  const{totalBytes,freeBytes}=_backupDriveData;
+  const usedBytes=totalBytes-freeBytes;
+  const pct=Math.min(100,usedBytes/totalBytes*100);
+  const barColor=pct>=90?'#ef4444':pct>=75?'#f59e0b':'#22c55e';
+  return`<div style="${compact?'min-width:160px;':'width:100%;margin-bottom:14px;'}">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+      <span style="font-size:${compact?9:10}px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;">Drive Usage</span>
+      <span style="font-size:${compact?11:12}px;color:${barColor};font-weight:600;">${bkFmtBytes(usedBytes)} / ${bkFmtBytes(totalBytes)} (${pct.toFixed(0)}%)</span>
+    </div>
+    <div class="bk-storage-bar"><div class="bk-storage-fill" style="width:${pct.toFixed(1)}%;background:${barColor};"></div></div>
+  </div>`;
+}
 function bkFmtDate(ms){if(!ms)return'—';return new Date(ms).toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'2-digit'});}
 function bkFmtAge(ms,threshDays,grace=false){if(!ms)return{text:'—',color:'var(--text3)',date:''};const d=Math.floor((Date.now()-ms)/86400000);let text;if(d===0)text='today';else if(d===1)text='1d ago';else if(d<30)text=`${d}d ago`;else if(d<365)text=`${Math.floor(d/30)}mo ago`;else{const yrs=Math.floor(d/365);const mos=Math.floor((d%365)/30);text=mos>0?`${yrs}yr, ${mos}mo ago`:`${yrs}yr ago`;}const color=grace?'#f59e0b':d>threshDays?'#ef4444':d>threshDays*0.75?'#f59e0b':'#22c55e';return{text,color,date:bkFmtDate(ms)};}
 function bkFmtCur(n){return'$'+(n||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});}
@@ -4157,6 +4159,8 @@ function bkRenderOverview(){
                 <th style="text-align:right;">Used</th>
                 <th style="text-align:right;">Last Backup</th>
                 <th class="bk-exp-freq">Freq.</th>
+                <th style="text-align:center;" title="Encrypted">Enc</th>
+                <th style="text-align:center;" title="Last run status">Run</th>
                 <th style="text-align:center;">&#9998;</th>
                 <th style="text-align:center;padding-right:0;">✓</th>
               </tr></thead>
@@ -4192,17 +4196,19 @@ function bkRenderOverview(){
                       <option value="Disabled"${pEffectiveFreq==='Disabled'?' selected':''}>Disabled</option>
                     </select>
                   </td>
+                  <td style="text-align:center;vertical-align:top;padding-top:8px;" title="${p.encrypted?'Encrypted':'Not encrypted'}">${p.encrypted?'<span class="bk-pos">🔒</span>':'<span class="bk-dim">—</span>'}</td>
+                  <td style="text-align:center;vertical-align:top;padding-top:8px;" title="${p.lastRunOk===1?'Last run completed without errors':p.lastRunOk===0?'Last run reported errors':'No run history'}">${p.lastRunOk===1?'<span class="bk-pos">✓</span>':p.lastRunOk===0?'<span class="bk-neg">✗</span>':'<span class="bk-dim">—</span>'}</td>
                   <td style="text-align:center;vertical-align:top;padding-top:6px;">
                     <button class="quote-note-btn${hasNote?' has-note':''}" onclick="bkToggleProfileNote('${c.id}','${escHtml(p.profile)}')" title="${hasNote?escHtml(ps.note||''):'Add note'}">&#9998;</button>
                   </td>
                   <td style="text-align:center;padding-right:0;vertical-align:top;padding-top:8px;">${pOk===null?'—':pOk===false?'<span class="bk-neg">✗</span>':pOk==='grace'?'<span style="color:#f59e0b;font-weight:600;" title="Weekend grace — assumed good">~</span>':'<span class="bk-pos">✓</span>'}</td>
                 </tr>`;
                 const noteRow=noteOpen?`<tr>
-                  <td colspan="6" style="padding:2px 0 8px 0;border-top:none;">
+                  <td colspan="8" style="padding:2px 0 8px 0;border-top:none;">
                     <textarea style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text);font-size:11px;font-family:var(--sans);resize:vertical;min-height:36px;outline:none;box-sizing:border-box;display:block;" placeholder="Profile note…" onblur="bkSaveProfileNote('${c.id}','${escHtml(p.profile)}',this.value)" onkeydown="if(event.key==='Escape')bkToggleProfileNote('${c.id}','${escHtml(p.profile)}')">${escHtml(ps.note||'')}</textarea>
                   </td>
                 </tr>`:'';
-                const sep=pi>0?'<tr class="bk-expand-sep"><td colspan="6"></td></tr>':'';
+                const sep=pi>0?'<tr class="bk-expand-sep"><td colspan="8"></td></tr>':'';
                 return sep+profileRow+noteRow;
               }).join('')}</tbody>
             </table>
