@@ -266,6 +266,7 @@ function parseActivityCsv(text) {
       filesCompleted: f[7] !== undefined && f[7] !== '' ? parseInt(f[7]) : null,
       filesQueue:     f[8] !== undefined && f[8] !== '' ? parseInt(f[8]) : null,
       message:        f[9] ? decodeURIComponent(f[9]) : null,
+      percentDone:    f[10] !== undefined && f[10] !== '' ? parseInt(f[10]) : null,
     });
   }
   return data;

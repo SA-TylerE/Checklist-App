@@ -3415,7 +3415,24 @@ function bkDrawMonitor(){
         <button onclick="bkExitMonitor()" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);font-size:12px;padding:5px 12px;border-radius:6px;cursor:pointer;flex-shrink:0;">✕ Exit</button>
       </div>
     </div>
+    ${bkBuildMonitorRunningBar()}
     <div class="bk-monitor-grid" id="bk-monitor-grid">${bkBuildMonitorCards()}</div>`;
+}
+function bkBuildMonitorRunningBar(){
+  const jobs=bkGetActiveJobs();
+  if(!jobs.length)return'';
+  const chips=jobs.map(j=>{
+    const c=bkFindClientByProfile(j.profile);
+    const name=c?c.name:j.profile;
+    const pct=j.percentDone!=null?`${j.percentDone}%`:'';
+    return`<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:14px;padding:4px 12px;font-size:12px;white-space:nowrap;flex-shrink:0;">
+      <span class="bk-live-dot"></span>
+      <span style="font-weight:700;color:var(--text);">${escHtml(name)}</span>
+      <span style="color:var(--text3);">${escHtml(j.profile)}</span>
+      ${pct?`<span style="color:#4ade80;font-weight:700;">${pct}</span>`:''}
+    </span>`;
+  }).join('');
+  return`<div style="display:flex;gap:8px;padding:8px 16px;overflow-x:auto;flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--border);">${chips}</div>`;
 }
 
 function bkBuildMonitorCards(){
