@@ -3823,7 +3823,7 @@ function bkDriveUsageHtml(compact){
   const usedBytes=totalBytes-freeBytes;
   const pct=Math.min(100,usedBytes/totalBytes*100);
   const barColor=pct>=90?'#ef4444':pct>=75?'#f59e0b':'#22c55e';
-  return`<div style="${compact?'min-width:160px;':'width:100%;margin-bottom:14px;'}">
+  return`<div style="${compact?'min-width:230px;':'width:100%;margin-bottom:14px;'}">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
       <span style="font-size:${compact?9:10}px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;">Drive Usage</span>
       <span style="font-size:${compact?11:12}px;color:${barColor};font-weight:600;">${bkFmtBytes(usedBytes)} / ${bkFmtBytes(totalBytes)} (${pct.toFixed(0)}%)</span>
@@ -4187,7 +4187,7 @@ function bkRenderOverview(){
                     </select>
                   </td>
                   <td style="text-align:center;vertical-align:top;padding-top:8px;" title="${p.encrypted?'Encrypted':'Not encrypted'}">${p.encrypted?'<span class="bk-pos">🔒</span>':'<span class="bk-dim">—</span>'}</td>
-                  <td style="text-align:center;vertical-align:top;padding-top:8px;" title="${escHtml(p.lastRunOk===1?'Last run completed without errors':p.lastRunOk===0?(p.errFiles&&p.errFiles.length?'Failed files:\n'+p.errFiles.join('\n'):'Last run reported errors'):'No run history')}">${p.lastRunOk===1?'<span class="bk-pos">✓</span>':p.lastRunOk===0?`<span class="bk-neg"${p.errFiles&&p.errFiles.length?' style="cursor:help;border-bottom:1px dotted currentColor;"':''}>✗</span>`:'<span class="bk-dim">—</span>'}</td>
+                  <td style="text-align:center;vertical-align:top;padding-top:8px;" title="${escHtml(p.lastRunOk===1?'Last run completed without errors':p.lastRunOk===0?(p.errFiles&&p.errFiles.length?'Failed files:\n'+p.errFiles.join('\n'):'Last run reported errors, but Syncrify did not disclose a reason.'):'No run history')}">${p.lastRunOk===1?'<span class="bk-pos">✓</span>':p.lastRunOk===0?'<span class="bk-neg" style="cursor:help;border-bottom:1px dotted currentColor;">✗</span>':'<span class="bk-dim">—</span>'}</td>
                   <td style="text-align:center;padding-right:0;vertical-align:top;padding-top:6px;">
                     <button class="quote-note-btn${hasNote?' has-note':''}" onclick="bkToggleProfileNote('${c.id}','${escHtml(p.profile)}')" title="${hasNote?escHtml(ps.note||''):'Add note'}">&#9998;</button>
                   </td>
