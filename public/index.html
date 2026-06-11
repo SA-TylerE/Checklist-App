@@ -3286,6 +3286,7 @@ const BK_ROLES=[
 let _backupLiveData=null; // null=not fetched; obj keyed by syncrifyId → {usedBytes, profiles:[]}
 let _backupActivityData=null; // null=not fetched; array of currently-active sessions {profile,bytes,status,clientIp,user}
 let _bkActivityLastUpdated=null; // mtimeMs from server
+let _bkActivitySource=null; // 'direct' | 'direct-pending' | 'gist' | 'none'
 let _backupDriveData=null; // null=not fetched; {totalBytes,freeBytes} for the backup storage volume
 let _bkLastUpdated=null; // mtimeMs from server
 let _bkActiveClient='all';
@@ -3621,6 +3622,7 @@ async function bkFetchActivity(){
     const d=await r.json();
     _backupActivityData=(!d.error&&Array.isArray(d.data))?d.data:[];
     _bkActivityLastUpdated=d.lastUpdated||null;
+    _bkActivitySource=d.source||null;
   }catch(err){_backupActivityData=[];}
 }
 async function bkFetchDrive(){
@@ -3699,6 +3701,8 @@ function bkRenderMain(){
     const upd=_bkLastUpdated?'data from '+new Date(_bkLastUpdated).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
     subtitle=`${np} profiles${upd?' · '+upd:''}${isStale?` <span style="color:var(--warn);">⚠ stale</span>`:''}`;
   }
+  if(_bkActivitySource==='direct')subtitle+=` · <span style="color:var(--success);" title="Live activity is polled directly from Syncrify">● Live polling</span>`;
+  else if(_bkActivitySource==='direct-pending')subtitle+=` · <span style="color:var(--warn);" title="Direct Syncrify polling is configured but hasn't connected yet — check Settings">● Direct polling pending</span>`;
   // Title
   let titleHtml='';
   if(isAll){
@@ -4573,6 +4577,12 @@ function renderSettingsView(){
                   <div class="field-hint">How often this server polls Syncrify for the live activity feed. Minimum 5 seconds.</div>
                 </div>`;
               })()}
+              <div class="field-group" style="margin:0;grid-column:1/-1;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <button class="btn-secondary" onclick="testSyncrifyConnection()">Test Connection</button>
+                  <span id="syncrify-status" style="font-size:12px;color:var(--text3);"></span>
+                </div>
+              </div>
             </div>
           </div>
           <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
@@ -4625,6 +4635,48 @@ function renderSettingsView(){
       </div>
     </div>`;
   renderConfigSection();
+  refreshSyncrifyStatus();
+}
+
+async function refreshSyncrifyStatus(){
+  const el=document.getElementById('syncrify-status');
+  if(!el)return;
+  const host=(appSettings.syncrifyHost||'').trim();
+  if(!host){el.textContent='Not configured — using Active Jobs URL fallback.';el.style.color='var(--text3)';return;}
+  el.textContent='Checking…';el.style.color='var(--text3)';
+  try{
+    const r=await fetch('/api/backup-activity');
+    const d=await r.json();
+    if(d.source==='direct'){
+      const age=d.lastUpdated?Math.round((Date.now()-d.lastUpdated)/1000):null;
+      el.textContent=`✓ Connected — last poll ${age!=null?age+'s ago':'just now'}${d.error?` (last attempt: ${d.error})`:''}`;
+      el.style.color=d.error?'var(--warn)':'var(--success)';
+    }else if(d.source==='direct-pending'){
+      el.textContent=`⚠ Configured but not yet connected${d.error?`: ${d.error}`:' — waiting for first poll'}`;
+      el.style.color='var(--warn)';
+    }else{
+      el.textContent='Not connected.';
+      el.style.color='var(--text3)';
+    }
+  }catch(err){el.textContent=`Status check failed: ${err.message}`;el.style.color='var(--warn)';}
+}
+
+async function testSyncrifyConnection(){
+  const el=document.getElementById('syncrify-status');
+  if(el){el.textContent='Testing…';el.style.color='var(--text3)';}
+  await saveBkSettings();
+  try{
+    const r=await fetch('/api/syncrify-test',{method:'POST'});
+    const d=await r.json();
+    if(d.ok){
+      if(el){el.textContent=`✓ Connected — found ${d.jobCount} active session${d.jobCount===1?'':'s'}`;el.style.color='var(--success)';}
+      _backupActivityData=null;_bkActivityLastUpdated=null;
+    }else{
+      if(el){el.textContent=`✗ ${d.error}`;el.style.color='var(--danger)';}
+    }
+  }catch(err){
+    if(el){el.textContent=`✗ ${err.message}`;el.style.color='var(--danger)';}
+  }
 }
 
 function renderConfigSection(){
@@ -6876,6 +6928,7 @@ function connectSSE(){
     if(!Array.isArray(payload.data))return;
     _backupActivityData=payload.data;
     _bkActivityLastUpdated=payload.lastUpdated||_bkActivityLastUpdated;
+    _bkActivitySource='direct';
     if(_bkMonitorMode){bkDrawMonitor();return;}
     const el=document.getElementById('backups-content');
     if(el&&el.offsetParent!==null){renderBackupsSidebar();bkRenderMain();}

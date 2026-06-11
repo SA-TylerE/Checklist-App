@@ -412,11 +412,13 @@ function parseActivityCsv(text) {
 
 app.get('/api/backup-activity', async (req, res) => {
   try {
+    const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+    const syncrifyConfigured = !!((settings.syncrifyHost || '').trim() && (settings.syncrifyUser || '').trim() && settings.syncrifyPass);
+
     if (_liveActivity.lastUpdated) {
-      return res.json({ data: _liveActivity.data, lastUpdated: _liveActivity.lastUpdated, error: _liveActivity.error || undefined });
+      return res.json({ data: _liveActivity.data, lastUpdated: _liveActivity.lastUpdated, error: _liveActivity.error || undefined, source: 'direct' });
     }
 
-    const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
     const rawUrl   = (settings.backupActivityUrl   || '').trim();
     const encKey   = (settings.backupEncryptionKey || '').trim();
 
@@ -432,12 +434,34 @@ app.get('/api/backup-activity', async (req, res) => {
     } else if (fs.existsSync(ACTIVITY_DATA_FILE)) {
       text = fs.readFileSync(ACTIVITY_DATA_FILE, 'utf8');
     } else {
-      return res.json({ data: [], lastUpdated: null });
+      return res.json({ data: [], lastUpdated: null, source: syncrifyConfigured ? 'direct-pending' : 'none', error: _liveActivity.error || undefined });
     }
 
     const lastUpdated = fs.existsSync(ACTIVITY_DATA_FILE) ? fs.statSync(ACTIVITY_DATA_FILE).mtimeMs : null;
-    res.json({ data: parseActivityCsv(text), lastUpdated });
+    res.json({ data: parseActivityCsv(text), lastUpdated, source: syncrifyConfigured ? 'direct-pending' : 'gist', error: syncrifyConfigured ? (_liveActivity.error || undefined) : undefined });
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Immediately attempts a Syncrify login + activity fetch using the currently-saved
+// settings, bypassing the poll interval. Used by the Settings UI "Test Connection"
+// button so users get instant feedback after saving credentials.
+app.post('/api/syncrify-test', async (req, res) => {
+  try {
+    const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+    const host = (settings.syncrifyHost || '').trim().replace(/\/+$/, '');
+    const user = (settings.syncrifyUser || '').trim();
+    const pass = settings.syncrifyPass || '';
+    if (!host || !user || !pass) return res.status(400).json({ ok: false, error: 'Syncrify host, username, and password must be configured first.' });
+
+    _syncrifySession.cookie = null;
+    const data = await fetchSyncrifyActivity(host, user, pass);
+    _liveActivity = { data, lastUpdated: Date.now(), error: null };
+    pushEvent('backup-activity-updated', { data: _liveActivity.data, lastUpdated: _liveActivity.lastUpdated });
+    res.json({ ok: true, jobCount: data.length });
+  } catch (e) {
+    _liveActivity = { ..._liveActivity, error: e.message };
+    res.json({ ok: false, error: e.message });
+  }
 });
 
 // Drive data — total/free space of the backup storage volume (e.g. D:\)
