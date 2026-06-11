@@ -464,6 +464,25 @@ app.post('/api/syncrify-test', async (req, res) => {
   }
 });
 
+// Returns the raw HTML of Syncrify's app?operation=activity page using the
+// configured credentials. For diagnosing why fetchSyncrifyActivity() parses 0 rows.
+app.get('/api/syncrify-debug', async (req, res) => {
+  try {
+    const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+    const host = (settings.syncrifyHost || '').trim().replace(/\/+$/, '');
+    const user = (settings.syncrifyUser || '').trim();
+    const pass = settings.syncrifyPass || '';
+    if (!host || !user || !pass) return res.status(400).send('Syncrify host, username, and password must be configured first.');
+
+    const cookie = await ensureSyncrifySession(host, user, pass, true);
+    const r = await syncrifyHttpRequest(host, '/app?operation=activity', { cookie });
+    res.set('Content-Type', 'text/plain; charset=utf-8');
+    res.send(r.text);
+  } catch (e) {
+    res.status(500).send('Error: ' + e.message);
+  }
+});
+
 // Drive data — total/free space of the backup storage volume (e.g. D:\)
 const DRIVE_DATA_FILE = path.join(__dirname, 'data', 'backup-drive.csv');
 
