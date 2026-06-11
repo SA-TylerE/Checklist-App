@@ -4,7 +4,6 @@ const path     = require('path');
 const os       = require('os');
 const https    = require('https');
 const http     = require('http');
-const crypto   = require('crypto');
 const { exec } = require('child_process');
 
 const app        = express();
@@ -17,7 +16,6 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const MAX_LOGS   = 5000;
 
 app.use(express.json({ limit: '5mb' }));
-app.use('/api/backup-data', express.text({ limit: '10mb' }));
 app.get(['/', '/index.html'], (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
@@ -137,92 +135,10 @@ app.get('/api/syncro/search', (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// Backup data — fetch from URL (with redirect following), optionally AES-256-CBC decrypt
-const BACKUP_DATA_FILE = path.join(__dirname, 'data', 'backup-data.txt');
-
-function parseBkTxt(text) {
-  const data = [];
-  for (const line of text.split('\n')) {
-    const parts = line.trim().split(',');
-    if (parts.length < 4) continue;
-    const dsMatch = parts[2]?.match(/diskSize=(\d+)/);
-    const laMatch = parts[3]?.match(/lastAccess=(\d+)/);
-    if (!dsMatch || !laMatch) continue;
-    const encMatch = parts[4]?.match(/encrypted=(\d)/);
-    const runMatch = parts[5]?.match(/lastRunOk=(-?\d)/);
-    const errMatch = parts[6]?.match(/errFiles=(.*)/);
-    const errFiles = errMatch && errMatch[1] ? decodeURIComponent(errMatch[1]).split('\n') : null;
-    data.push({ client: parts[0], profile: parts[1], diskSize: parseInt(dsMatch[1]), lastAccess: parseInt(laMatch[1]), encrypted: encMatch ? encMatch[1] === '1' : false, lastRunOk: runMatch ? parseInt(runMatch[1]) : -1, errFiles });
-  }
-  return data;
-}
-
-function decryptBkContent(b64, keyStr) {
-  const buf       = Buffer.from(b64.trim(), 'base64');
-  const iv        = buf.slice(0, 16);
-  const encrypted = buf.slice(16);
-  const key       = Buffer.alloc(32);
-  Buffer.from(keyStr, 'utf8').copy(key);       // pad/truncate to 32 bytes
-  const decipher  = crypto.createDecipheriv('aes-256-cbc', key, iv);
-  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
-}
-
-// Fetch a URL and optionally AES-256-CBC decrypt it. Throws an Error with a
-// user-facing message on any failure (HTTP error, empty body, bad key, etc).
-async function fetchAndDecryptDataset(url, encKey) {
-  const { status, text: content } = await fetchUrl(url);
-  const trimmed = content.trim();
-
-  if (status !== 200) {
-    throw new Error(`URL returned HTTP ${status}. Check the URL is correct and the file is publicly accessible.`);
-  }
-  if (!trimmed) {
-    throw new Error('URL returned empty content. The script may not have run yet or the file may be empty.');
-  }
-  if (trimmed.startsWith('<') || (trimmed.startsWith('{') && trimmed.includes('"error"'))) {
-    const preview = trimmed.slice(0, 200).replace(/\n/g, ' ');
-    throw new Error(`URL returned a web page instead of file content. Make sure the URL points directly to the raw file (not a web page). Preview: ${preview}`);
-  }
-
-  if (!encKey) return trimmed;
-
-  const buf = Buffer.from(trimmed, 'base64');
-  if (buf.length < 17) {
-    throw new Error(`URL returned content that is too short to be encrypted data (${buf.length} decoded bytes). The file may be empty or the URL may be wrong. Content starts with: "${trimmed.slice(0, 100)}"`);
-  }
-  try {
-    return decryptBkContent(trimmed, encKey);
-  } catch (decErr) {
-    const msg = decErr.message || '';
-    if (msg.includes('initialization vector') || msg.includes('wrong final block') || msg.includes('bad decrypt')) {
-      throw new Error('Decryption failed. The encryption key in Settings does not match the key used in the PowerShell script, or the file content is corrupted. Verify both keys are identical (32 characters).');
-    }
-    throw new Error(`Decryption error: ${msg}`);
-  }
-}
-
-function fetchUrl(url, hops = 6) {
-  return new Promise((resolve, reject) => {
-    const mod    = url.startsWith('https') ? https : http;
-    const parsed = new URL(url);
-    const opts   = { hostname: parsed.hostname, port: parsed.port || undefined, path: parsed.pathname + parsed.search, headers: { 'User-Agent': 'Mozilla/5.0' } };
-    mod.get(opts, res => {
-      if ([301,302,303,307,308].includes(res.statusCode) && res.headers.location && hops > 0) {
-        const next = res.headers.location.startsWith('http') ? res.headers.location : `${parsed.protocol}//${parsed.host}${res.headers.location}`;
-        res.resume();
-        return resolve(fetchUrl(next, hops - 1));
-      }
-      let text = '';
-      res.on('data', c => text += c);
-      res.on('end', () => resolve({ status: res.statusCode, text }));
-    }).on('error', reject);
-  });
-}
-
 // ── Direct Syncrify polling (live activity) ───────────────────────────────────
-// Replaces the Gist relay for backup-activity when syncrifyHost/syncrifyUser/
-// syncrifyPass are configured in Settings: server.js logs into Syncrify itself
-// (e.g. over Tailscale) and polls app?operation=activity on a timer.
+// server.js logs into Syncrify itself (e.g. over Tailscale) using
+// syncrifyHost/syncrifyUser/syncrifyPass configured in Settings, and polls
+// app?operation=activity on a timer.
 
 function syncrifyHttpRequest(baseUrl, pathAndQuery, { method = 'GET', body = null, cookie = null } = {}) {
   return new Promise((resolve, reject) => {
@@ -452,6 +368,28 @@ async function fetchSyncrifyBackupData(host, user, pass) {
   return rows;
 }
 
+// Matches the "Disk Status for D:\" panel on the main app dashboard, e.g.:
+//   <th>Total Disk Space:</th><td>139724.95 GB</td> ... <th>Free Space:</th><td>40140.79 GB</td>
+const SYNC_DRIVE_PATTERN = /<legend>Disk Status for [^<]*<\/legend>[\s\S]*?<th>Total Disk Space:<\/th>\s*<td>([^<]+)<\/td>[\s\S]*?<th>Free Space:<\/th>\s*<td>([^<]+)<\/td>/;
+
+// Fetches total/free space of the backup storage volume from the main Syncrify
+// dashboard (app?operation=home). Returns { totalBytes, freeBytes } or null if
+// the page doesn't contain a recognizable Disk Status panel.
+async function fetchSyncrifyDriveData(host, user, pass) {
+  let cookie = await ensureSyncrifySession(host, user, pass);
+  let r = await syncrifyHttpRequest(host, '/app?operation=home', { cookie });
+  if (looksLikeSyncrifyLoginPage(r.text)) {
+    cookie = await ensureSyncrifySession(host, user, pass, true);
+    r = await syncrifyHttpRequest(host, '/app?operation=home', { cookie });
+  }
+  const m = r.text.match(SYNC_DRIVE_PATTERN);
+  if (!m) return null;
+  const totalBytes = convertSizeToBytes(m[1].trim());
+  const freeBytes  = convertSizeToBytes(m[2].trim());
+  if (!totalBytes || !freeBytes) return null;
+  return { totalBytes, freeBytes };
+}
+
 let _liveActivity = { data: [], lastUpdated: null, error: null };
 
 async function pollSyncrifyActivityLoop() {
@@ -477,6 +415,7 @@ async function pollSyncrifyActivityLoop() {
 }
 
 let _liveBackupData = { data: [], lastUpdated: null, error: null };
+let _liveDriveData  = { data: null, lastUpdated: null, error: null };
 
 async function pollSyncrifyDataLoop() {
   const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
@@ -500,98 +439,48 @@ async function pollSyncrifyDataLoop() {
       _syncrifySession.cookie = null; // force re-login next attempt
       _liveBackupData = { ..._liveBackupData, error: e.message };
     }
+
+    try {
+      const drive = await fetchSyncrifyDriveData(host, user, pass);
+      if (drive) {
+        _liveDriveData = { data: drive, lastUpdated: Date.now(), error: null };
+        pushEvent('backup-drive-updated', { data: _liveDriveData.data, lastUpdated: _liveDriveData.lastUpdated });
+      } else {
+        console.log('[backup-drive] Poll did not find a Disk Status panel - keeping previous data.');
+        _liveDriveData = { ..._liveDriveData, error: 'Could not find disk status on Syncrify dashboard' };
+      }
+    } catch (e) {
+      console.log(`[backup-drive] Poll failed: ${e.message}`);
+      _syncrifySession.cookie = null; // force re-login next attempt
+      _liveDriveData = { ..._liveDriveData, error: e.message };
+    }
   }
   setTimeout(pollSyncrifyDataLoop, intervalSec * 1000);
 }
 
+// Per-client backup data (disk usage, last-run status, error files), polled
+// directly from Syncrify by pollSyncrifyDataLoop().
 app.get('/api/backup-data', async (req, res) => {
   try {
-    const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
-    const syncrifyConfigured = !!((settings.syncrifyHost || '').trim() && (settings.syncrifyUser || '').trim() && settings.syncrifyPass);
-
     if (_liveBackupData.lastUpdated) {
       return res.json({ data: _liveBackupData.data, lastUpdated: _liveBackupData.lastUpdated, error: _liveBackupData.error || undefined, source: 'direct' });
     }
-
-    const rawUrl   = (settings.backupDataUrl       || '').trim();
-    const encKey   = (settings.backupEncryptionKey || '').trim();
-
-    let text;
-    if (rawUrl) {
-      try {
-        text = await fetchAndDecryptDataset(rawUrl, encKey);
-      } catch (e) {
-        return res.status(500).json({ error: e.message });
-      }
-      const existing = fs.existsSync(BACKUP_DATA_FILE) ? fs.readFileSync(BACKUP_DATA_FILE, 'utf8') : null;
-      if (existing !== text) atomicWrite(BACKUP_DATA_FILE, text);
-    } else if (fs.existsSync(BACKUP_DATA_FILE)) {
-      text = fs.readFileSync(BACKUP_DATA_FILE, 'utf8');
-    } else {
-      return res.json({ data: [], lastUpdated: null, source: syncrifyConfigured ? 'direct-pending' : 'none', error: _liveBackupData.error || undefined });
-    }
-
-    const lastUpdated = fs.existsSync(BACKUP_DATA_FILE) ? fs.statSync(BACKUP_DATA_FILE).mtimeMs : null;
-    res.json({ data: parseBkTxt(text), lastUpdated, source: syncrifyConfigured ? 'direct-pending' : 'gist', error: syncrifyConfigured ? (_liveBackupData.error || undefined) : undefined });
+    const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+    const syncrifyConfigured = !!((settings.syncrifyHost || '').trim() && (settings.syncrifyUser || '').trim() && settings.syncrifyPass);
+    res.json({ data: [], lastUpdated: null, source: syncrifyConfigured ? 'direct-pending' : 'none', error: _liveBackupData.error || undefined });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// Activity data — currently-active Syncrify sessions (from the authenticated
-// app?operation=activity dashboard widget)
-const ACTIVITY_DATA_FILE = path.join(__dirname, 'data', 'backup-activity.csv');
-
-function parseActivityCsv(text) {
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  const data = [];
-  for (let i = 1; i < lines.length; i++) { // skip header row
-    const f = lines[i].split(',');
-    if (f.length < 5) continue;
-    data.push({
-      profile:        f[0],
-      bytes:          f[1],
-      status:         f[2],
-      clientIp:       f[3],
-      user:           f[4],
-      jobId:          f[5] || null,
-      startedOn:      f[6] || null,
-      filesCompleted: f[7] !== undefined && f[7] !== '' ? parseInt(f[7]) : null,
-      filesQueue:     f[8] !== undefined && f[8] !== '' ? parseInt(f[8]) : null,
-      message:        f[9] ? decodeURIComponent(f[9]) : null,
-      percentDone:    f[10] !== undefined && f[10] !== '' ? parseInt(f[10]) : null,
-    });
-  }
-  return data;
-}
-
+// Currently-active Syncrify sessions, polled directly from Syncrify by
+// pollSyncrifyActivityLoop().
 app.get('/api/backup-activity', async (req, res) => {
   try {
-    const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
-    const syncrifyConfigured = !!((settings.syncrifyHost || '').trim() && (settings.syncrifyUser || '').trim() && settings.syncrifyPass);
-
     if (_liveActivity.lastUpdated) {
       return res.json({ data: _liveActivity.data, lastUpdated: _liveActivity.lastUpdated, error: _liveActivity.error || undefined, source: 'direct' });
     }
-
-    const rawUrl   = (settings.backupActivityUrl   || '').trim();
-    const encKey   = (settings.backupEncryptionKey || '').trim();
-
-    let text;
-    if (rawUrl) {
-      try {
-        text = await fetchAndDecryptDataset(rawUrl, encKey);
-      } catch (e) {
-        return res.status(500).json({ error: e.message });
-      }
-      const existing = fs.existsSync(ACTIVITY_DATA_FILE) ? fs.readFileSync(ACTIVITY_DATA_FILE, 'utf8') : null;
-      if (existing !== text) atomicWrite(ACTIVITY_DATA_FILE, text);
-    } else if (fs.existsSync(ACTIVITY_DATA_FILE)) {
-      text = fs.readFileSync(ACTIVITY_DATA_FILE, 'utf8');
-    } else {
-      return res.json({ data: [], lastUpdated: null, source: syncrifyConfigured ? 'direct-pending' : 'none', error: _liveActivity.error || undefined });
-    }
-
-    const lastUpdated = fs.existsSync(ACTIVITY_DATA_FILE) ? fs.statSync(ACTIVITY_DATA_FILE).mtimeMs : null;
-    res.json({ data: parseActivityCsv(text), lastUpdated, source: syncrifyConfigured ? 'direct-pending' : 'gist', error: syncrifyConfigured ? (_liveActivity.error || undefined) : undefined });
+    const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+    const syncrifyConfigured = !!((settings.syncrifyHost || '').trim() && (settings.syncrifyUser || '').trim() && settings.syncrifyPass);
+    res.json({ data: [], lastUpdated: null, source: syncrifyConfigured ? 'direct-pending' : 'none', error: _liveActivity.error || undefined });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -716,43 +605,16 @@ app.get('/api/syncrify-debug', async (req, res) => {
   }
 });
 
-// Drive data — total/free space of the backup storage volume (e.g. D:\)
-const DRIVE_DATA_FILE = path.join(__dirname, 'data', 'backup-drive.csv');
-
-function parseDriveCsv(text) {
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  if (lines.length < 2) return null;
-  const f = lines[1].split(',');
-  if (f.length < 2) return null;
-  const totalBytes = parseInt(f[0]);
-  const freeBytes  = parseInt(f[1]);
-  if (!Number.isFinite(totalBytes) || !Number.isFinite(freeBytes)) return null;
-  return { totalBytes, freeBytes };
-}
-
+// Total/free space of the backup storage volume (e.g. D:\), polled directly
+// from Syncrify's main dashboard by pollSyncrifyDataLoop().
 app.get('/api/backup-drive', async (req, res) => {
   try {
-    const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
-    const rawUrl   = (settings.backupDriveUrl      || '').trim();
-    const encKey   = (settings.backupEncryptionKey || '').trim();
-
-    let text;
-    if (rawUrl) {
-      try {
-        text = await fetchAndDecryptDataset(rawUrl, encKey);
-      } catch (e) {
-        return res.status(500).json({ error: e.message });
-      }
-      const existing = fs.existsSync(DRIVE_DATA_FILE) ? fs.readFileSync(DRIVE_DATA_FILE, 'utf8') : null;
-      if (existing !== text) atomicWrite(DRIVE_DATA_FILE, text);
-    } else if (fs.existsSync(DRIVE_DATA_FILE)) {
-      text = fs.readFileSync(DRIVE_DATA_FILE, 'utf8');
-    } else {
-      return res.json({ data: null, lastUpdated: null });
+    if (_liveDriveData.lastUpdated) {
+      return res.json({ data: _liveDriveData.data, lastUpdated: _liveDriveData.lastUpdated, error: _liveDriveData.error || undefined, source: 'direct' });
     }
-
-    const lastUpdated = fs.existsSync(DRIVE_DATA_FILE) ? fs.statSync(DRIVE_DATA_FILE).mtimeMs : null;
-    res.json({ data: parseDriveCsv(text), lastUpdated });
+    const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+    const syncrifyConfigured = !!((settings.syncrifyHost || '').trim() && (settings.syncrifyUser || '').trim() && settings.syncrifyPass);
+    res.json({ data: null, lastUpdated: null, source: syncrifyConfigured ? 'direct-pending' : 'none', error: _liveDriveData.error || undefined });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

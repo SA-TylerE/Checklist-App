@@ -3286,10 +3286,11 @@ const BK_ROLES=[
 let _backupLiveData=null; // null=not fetched; obj keyed by syncrifyId → {usedBytes, profiles:[]}
 let _backupActivityData=null; // null=not fetched; array of currently-active sessions {profile,bytes,status,clientIp,user}
 let _bkActivityLastUpdated=null; // mtimeMs from server
-let _bkActivitySource=null; // 'direct' | 'direct-pending' | 'gist' | 'none'
+let _bkActivitySource=null; // 'direct' | 'direct-pending' | 'none'
 let _backupDriveData=null; // null=not fetched; {totalBytes,freeBytes} for the backup storage volume
+let _bkDriveSource=null; // 'direct' | 'direct-pending' | 'none'
 let _bkLastUpdated=null; // mtimeMs from server
-let _bkDataSource=null; // 'direct' | 'direct-pending' | 'gist' | 'none'
+let _bkDataSource=null; // 'direct' | 'direct-pending' | 'none'
 let _bkActiveClient='all';
 let _bkTab='overview';
 let _bkFetching=false;
@@ -3637,6 +3638,7 @@ async function bkFetchDrive(){
     const r=await fetch('/api/backup-drive');
     const d=await r.json();
     _backupDriveData=(!d.error&&d.data)?d.data:null;
+    _bkDriveSource=d.source||null;
   }catch(err){_backupDriveData=null;}
 }
 function bkGetActiveJobs(){
@@ -3715,11 +3717,11 @@ function bkRenderMain(){
   const el=document.getElementById('backups-content');
   if(!el)return;
   const isAll=_bkActiveClient==='all';
-  const hasUrl=!!(appSettings.backupDataUrl||'').trim();
+  const hasHost=!!(appSettings.syncrifyHost||'').trim();
   const isStale=_bkLastUpdated&&(Date.now()-new Date(_bkLastUpdated).getTime())>86400000;
   // Subtitle line
   let subtitle='';
-  if(_backupLiveData===null){subtitle=hasUrl?'Loading live data…':'<a style="color:var(--accent);cursor:pointer;" onclick="openSettings()">Configure backup data URL in Settings ↗</a>';}
+  if(_backupLiveData===null){subtitle=hasHost?'Loading live data…':'<a style="color:var(--accent);cursor:pointer;" onclick="openSettings()">Configure Syncrify connection in Settings ↗</a>';}
   else if(_bkFetchError){subtitle=`<span style="color:var(--danger);">⚠ Fetch error — use ⋯ menu to retry</span>`;}
   else{
     const np=Object.values(_backupLiveData).reduce((s,v)=>s+v.profiles.length,0);
@@ -4309,7 +4311,7 @@ function bkRenderOverview(){
 function bkRenderProfiles(){
   let clients=bkGetClients();
   if(_bkActiveClient!=='all')clients=clients.filter(c=>c.id===_bkActiveClient);
-  if(!_backupLiveData)return`<div style="color:var(--text3);font-size:12px;padding:20px 0;">${_backupLiveData===null?'Loading backup data…':'No backup data URL configured — add one in Settings.'}</div>`;
+  if(!_backupLiveData)return`<div style="color:var(--text3);font-size:12px;padding:20px 0;">${_backupLiveData===null?'Loading backup data…':'Syncrify connection not configured — add one in Settings.'}</div>`;
   const pad=(s,n)=>String(s??'').substring(0,n).padEnd(n);
   const lines=[
     `# backup_profiles.txt${_bkLastUpdated?' | data from '+new Date(_bkLastUpdated).toLocaleString('en-US',{month:'numeric',day:'numeric',year:'2-digit',hour:'numeric',minute:'2-digit'}):''}`,
@@ -4362,15 +4364,6 @@ function bkRenderProfiles(){
 }
 
 async function saveBkSettings(){
-  const url=(document.getElementById('setting-backup-url')?.value||'').trim();
-  const activityUrl=(document.getElementById('setting-backup-activity-url')?.value||'').trim();
-  const driveUrl=(document.getElementById('setting-backup-drive-url')?.value||'').trim();
-  const key=(document.getElementById('setting-backup-key')?.value||'').trim();
-  if(key&&key.length!==32){showToast('Encryption key must be exactly 32 characters','error');return;}
-  appSettings.backupDataUrl=url||undefined;
-  appSettings.backupActivityUrl=activityUrl||undefined;
-  appSettings.backupDriveUrl=driveUrl||undefined;
-  appSettings.backupEncryptionKey=key||undefined;
   const bs=parseFloat(document.getElementById('setting-bk-block-size')?.value||'')||500;
   const cb=parseFloat(document.getElementById('setting-bk-cost-per-block')?.value||'')||40;
   const cd=parseFloat(document.getElementById('setting-bk-cost-per-device')?.value||'')||25;
@@ -4388,13 +4381,6 @@ async function saveBkSettings(){
   if(r.ok){showToast('Backup settings saved');_backupLiveData=null;_backupActivityData=null;_backupDriveData=null;_bkFetching=false;}
   else showToast('Save failed','error');
 }
-function bkGenKey(){
-  const chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-  const key=Array.from({length:32},()=>chars[Math.floor(Math.random()*chars.length)]).join('');
-  const el=document.getElementById('setting-backup-key');
-  if(el){el.value=key;el.type='text';}
-}
-
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 function renderHomeView(){
   const el=document.getElementById('view-home');
@@ -4550,49 +4536,26 @@ function renderSettingsView(){
       <div class="settings-block">
         <div class="settings-block-header">Backups</div>
         <div class="settings-block-body">
-          <p style="font-size:12px;color:var(--text2);margin-bottom:14px;">The Syncrify script AES-encrypts <code style="font-size:11px;background:var(--bg3);padding:1px 4px;border-radius:3px;">backup_data.txt</code> and uploads it to a public URL (e.g. a GitHub Gist). This app fetches and decrypts it server-side — the encrypted blob is safe to host publicly.</p>
+          <p style="font-size:12px;color:var(--text2);margin-bottom:14px;">This server connects directly to Syncrify (e.g. over Tailscale) to poll currently-running backups, per-client disk usage/last-run status, and overall storage capacity.</p>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
             <div class="field-group" style="margin:0;grid-column:1/-1;">
-              <label>Public Data URL</label>
-              <input id="setting-backup-url" value="${escHtml(appSettings.backupDataUrl||'')}" placeholder="https://gist.githubusercontent.com/…/raw/backup_data.enc" style="font-size:11px;">
-              <div class="field-hint">Raw URL to the encrypted file. For GitHub Gist: <code style="font-size:10px;background:var(--bg3);padding:1px 3px;border-radius:2px;">https://gist.githubusercontent.com/{user}/{id}/raw/backup_data.enc</code></div>
+              <label>Syncrify Host</label>
+              <input id="setting-syncrify-host" value="${escHtml(appSettings.syncrifyHost||'')}" placeholder="http://100.x.y.z" style="font-size:11px;">
+              <div class="field-hint">Base URL of Syncrify's web UI, reachable from this server.</div>
             </div>
-            <div class="field-group" style="margin:0;grid-column:1/-1;">
-              <label>Encryption Key <span style="font-weight:400;color:var(--text3);">(must match script)</span></label>
-              <div style="display:flex;gap:6px;align-items:center;">
-                <input id="setting-backup-key" type="password" value="${escHtml(appSettings.backupEncryptionKey||'')}" placeholder="32-character secret key" style="font-size:11px;flex:1;font-family:var(--mono);">
-                <button class="btn-secondary" style="flex-shrink:0;white-space:nowrap;" onclick="bkGenKey()">Generate Key</button>
-              </div>
-              <div class="field-hint">AES-256 requires exactly 32 characters. Keep this secret — it never leaves your server.</div>
+            <div class="field-group" style="margin:0;">
+              <label>Username</label>
+              <input id="setting-syncrify-user" value="${escHtml(appSettings.syncrifyUser||'')}" placeholder="webapp" style="font-size:11px;">
             </div>
-            <div class="field-group" style="margin:0;grid-column:1/-1;">
-              <label>Active Jobs URL <span style="font-weight:400;color:var(--text3);">(optional)</span></label>
-              <input id="setting-backup-activity-url" value="${escHtml(appSettings.backupActivityUrl||'')}" placeholder="https://gist.githubusercontent.com/…/raw/activity_data.enc" style="font-size:11px;">
-              <div class="field-hint">Raw URL to the encrypted Active Sessions report (<code style="font-size:10px;background:var(--bg3);padding:1px 3px;border-radius:2px;">activity_data.enc</code>), pulled live from Syncrify's <code style="font-size:10px;background:var(--bg3);padding:1px 3px;border-radius:2px;">app?operation=activity</code> dashboard. Same encryption key as above. Used to show currently-running backups.</div>
-            </div>
-            <div class="field-group" style="margin:0;grid-column:1/-1;">
-              <label>Drive Capacity URL <span style="font-weight:400;color:var(--text3);">(optional)</span></label>
-              <input id="setting-backup-drive-url" value="${escHtml(appSettings.backupDriveUrl||'')}" placeholder="https://gist.githubusercontent.com/…/raw/drive_data.enc" style="font-size:11px;">
-              <div class="field-hint">Raw URL to the encrypted total/free space of the backup storage volume (<code style="font-size:10px;background:var(--bg3);padding:1px 3px;border-radius:2px;">drive_data.enc</code>). Same encryption key as above. Shown as overall storage usage on the dashboard header.</div>
+            <div class="field-group" style="margin:0;">
+              <label>Password</label>
+              <input id="setting-syncrify-pass" type="password" value="${escHtml(appSettings.syncrifyPass||'')}" placeholder="••••••••" style="font-size:11px;">
             </div>
           </div>
           <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
-            <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;">Live Activity — Direct Polling</div>
-            <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">When configured, this server logs into Syncrify directly (e.g. over Tailscale) and polls for currently-running backups, instead of relying on the Active Jobs URL above.</div>
+            <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;">Live Activity Polling</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">How often this server checks Syncrify for currently-running backups.</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-              <div class="field-group" style="margin:0;grid-column:1/-1;">
-                <label>Syncrify Host <span style="font-weight:400;color:var(--text3);">(optional)</span></label>
-                <input id="setting-syncrify-host" value="${escHtml(appSettings.syncrifyHost||'')}" placeholder="http://100.x.y.z" style="font-size:11px;">
-                <div class="field-hint">Base URL of Syncrify's web UI, reachable from this server.</div>
-              </div>
-              <div class="field-group" style="margin:0;">
-                <label>Username</label>
-                <input id="setting-syncrify-user" value="${escHtml(appSettings.syncrifyUser||'')}" placeholder="webapp" style="font-size:11px;">
-              </div>
-              <div class="field-group" style="margin:0;">
-                <label>Password</label>
-                <input id="setting-syncrify-pass" type="password" value="${escHtml(appSettings.syncrifyPass||'')}" placeholder="••••••••" style="font-size:11px;">
-              </div>
               ${(()=>{
                 const pollSec=appSettings.syncrifyActivityPollSec||30;
                 const presets=[10,30,60,300];
@@ -4621,8 +4584,8 @@ function renderSettingsView(){
             </div>
           </div>
           <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
-            <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;">Backup Data — Direct Polling</div>
-            <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">When configured, this server also pulls per-client disk usage and last-run status directly from Syncrify, instead of the Backup Data URL above. This is a heavier scrape (one request per client/profile) so it polls less often.</div>
+            <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;">Backup Data Polling</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">How often this server pulls per-client disk usage, last-run status, and overall storage capacity from Syncrify. This is a heavier scrape (one request per client/profile) so it polls less often.</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
               ${(()=>{
                 const pollSec=appSettings.syncrifyDataPollSec||1800;
@@ -7055,6 +7018,15 @@ function connectSSE(){
       _backupLiveData[ent.client].usedBytes+=ent.diskSize;
       _backupLiveData[ent.client].profiles.push(ent);
     }
+    if(_bkMonitorMode){bkDrawMonitor();return;}
+    const el=document.getElementById('backups-content');
+    if(el&&el.offsetParent!==null){renderBackupsSidebar();bkRenderMain();}
+  });
+  sseSource.addEventListener('backup-drive-updated',e=>{
+    const payload=JSON.parse(e.data);
+    if(!payload.data)return;
+    _backupDriveData=payload.data;
+    _bkDriveSource='direct';
     if(_bkMonitorMode){bkDrawMonitor();return;}
     const el=document.getElementById('backups-content');
     if(el&&el.offsetParent!==null){renderBackupsSidebar();bkRenderMain();}
