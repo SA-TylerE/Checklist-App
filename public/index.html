@@ -740,6 +740,8 @@ span.bk-expand-toggle{opacity:0;pointer-events:none;}
 .settings-block{border:1px solid var(--border);border-radius:8px;margin-bottom:16px;overflow:hidden;}
 .settings-block-header{padding:11px 16px;background:var(--bg3);font-size:13px;font-weight:600;border-bottom:1px solid var(--border);}
 .settings-block-body{padding:16px;}
+.settings-section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin:24px 0 10px;}
+.settings-section-label:first-of-type{margin-top:0;}
 /* Content editor modal — full-screen split pane */
 #editor-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:400;align-items:stretch;justify-content:stretch;}
 #editor-modal.show{display:flex;}
@@ -4505,6 +4507,7 @@ function renderSettingsView(){
   document.getElementById('settings-content').innerHTML=`
     <div style="max-width:760px;">
       <h2 style="font-size:18px;font-weight:700;margin-bottom:18px;">Settings</h2>
+      <div class="settings-section-label">General</div>
       <div class="settings-block">
         <div class="settings-block-header">Appearance</div>
         <div class="settings-block-body">
@@ -4523,9 +4526,42 @@ function renderSettingsView(){
         </div>
       </div>
       <div class="settings-block">
-        <div class="settings-block-header">Configuration</div>
+        <div class="settings-block-header">Organisation</div>
+        <div class="settings-block-body">
+          <div class="field-group" style="margin:0;">
+            <label>Organisation Name</label>
+            <input id="cfg-org" value="${(config?.orgName||'System Alternatives').replace(/"/g,'&quot;')}" placeholder="e.g. System Alternatives">
+            <div class="field-hint">Displayed in the sidebar and mobile header.</div>
+          </div>
+          <div style="margin-top:12px;">
+            <button class="btn-primary" onclick="saveOrgName()">Save</button>
+          </div>
+        </div>
+      </div>
+      <div class="settings-block">
+        <div class="settings-block-header">Updates <span id="update-section-badge" style="display:${updateAvailable?'inline-block':'none'};margin-left:8px;font-size:10px;font-weight:600;background:var(--warn);color:#000;padding:1px 7px;border-radius:10px;vertical-align:middle;">Available</span></div>
+        <div class="settings-block-body" id="update-section-body">
+          <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Check for and apply updates from GitHub. The server will restart automatically when an update is applied.</p>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <button class="btn-secondary" onclick="checkForUpdates()">Check Now</button>
+            <button class="btn-primary" id="apply-update-btn" onclick="applyUpdate()" style="display:${updateAvailable?'':'none'};">Apply Update &amp; Restart</button>
+          </div>
+          <div id="update-status" style="margin-top:12px;font-size:12px;color:var(--text2);">${updateAvailable?'<span style="color:var(--warn);">&#9679; Update available</span>':''}</div>
+        </div>
+      </div>
+      <div class="settings-block">
+        <div class="settings-block-header">Activity Log</div>
+        <div class="settings-block-body">
+          <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">View a full history of checklist activity across all clients.</p>
+          <button class="btn-secondary" onclick="openGlobalLogModal()">View Activity Log</button>
+        </div>
+      </div>
+      <div class="settings-section-label">Onboarding</div>
+      <div class="settings-block">
+        <div class="settings-block-header">Onboarding</div>
         <div class="settings-block-body" id="cfg-section-body"></div>
       </div>
+      <div class="settings-section-label">Sales</div>
       <div class="settings-block">
         <div class="settings-block-header">Products</div>
         <div class="settings-block-body">
@@ -4542,6 +4578,7 @@ function renderSettingsView(){
           <button class="btn-secondary" onclick="openProductsModal()">Manage Products</button>
         </div>
       </div>
+      <div class="settings-section-label">Backups</div>
       <div class="settings-block">
         <div class="settings-block-header">Backups</div>
         <div class="settings-block-body">
@@ -4647,6 +4684,7 @@ function renderSettingsView(){
           </div>
         </div>
       </div>
+      <div class="settings-section-label">Reference</div>
       <div class="settings-block">
         <div class="settings-block-header">Content Editors</div>
         <div class="settings-block-body">
@@ -4654,26 +4692,8 @@ function renderSettingsView(){
           <button class="btn-secondary" onclick="openEditorModal('procedures')">Open Editor</button>
         </div>
       </div>
-      <div class="settings-block">
-        <div class="settings-block-header">Updates <span id="update-section-badge" style="display:${updateAvailable?'inline-block':'none'};margin-left:8px;font-size:10px;font-weight:600;background:var(--warn);color:#000;padding:1px 7px;border-radius:10px;vertical-align:middle;">Available</span></div>
-        <div class="settings-block-body" id="update-section-body">
-          <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Check for and apply updates from GitHub. The server will restart automatically when an update is applied.</p>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-            <button class="btn-secondary" onclick="checkForUpdates()">Check Now</button>
-            <button class="btn-primary" id="apply-update-btn" onclick="applyUpdate()" style="display:${updateAvailable?'':'none'};">Apply Update &amp; Restart</button>
-          </div>
-          <div id="update-status" style="margin-top:12px;font-size:12px;color:var(--text2);">${updateAvailable?'<span style="color:var(--warn);">&#9679; Update available</span>':''}</div>
-        </div>
-      </div>
-      <div class="settings-block">
-        <div class="settings-block-header">Activity Log</div>
-        <div class="settings-block-body">
-          <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">View a full history of checklist activity across all clients.</p>
-          <button class="btn-secondary" onclick="openGlobalLogModal()">View Activity Log</button>
-        </div>
-      </div>
     </div>`;
-  renderConfigSection();
+  renderOnboardingSection();
   refreshSyncrifyStatus();
 }
 
@@ -4762,16 +4782,12 @@ async function testSyncrifyDataFetch(){
   }
 }
 
-function renderConfigSection(){
+function renderOnboardingSection(){
   const body=document.getElementById('cfg-section-body');
   if(!body) return;
   const t=appSettings.urlTemplates||{};
   body.innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
-      <div class="field-group" style="margin:0;grid-column:1/-1;"><label>Organisation Name</label>
-        <input id="cfg-org" value="${(config?.orgName||'System Alternatives').replace(/"/g,'&quot;')}" placeholder="e.g. System Alternatives">
-        <div class="field-hint">Displayed in the sidebar and mobile header.</div>
-      </div>
       <div class="field-group" style="margin:0;"><label>Syncro Subdomain</label>
         <input id="cfg-subdomain" value="${(config?.syncroSubdomain||'').replace(/"/g,'&quot;')}" placeholder="yourcompany">
       </div>
@@ -4807,7 +4823,7 @@ function renderConfigSection(){
           </div>`).join('')}
       </div>
     </div>
-    <button class="btn-primary" onclick="saveAllConfig()">Save Configuration</button>`;
+    <button class="btn-primary" onclick="saveOnboardingConfig()">Save</button>`;
 }
 
 async function renderSettingsLog(){
@@ -4850,8 +4866,21 @@ function applyLogFilter(){
   renderLogTimeline(document.getElementById('settings-log-timeline'),filterLogEntries(logs,cf,af).slice(0,200));
 }
 
-async function saveAllConfig(){
+async function saveOrgName(){
   const orgName=document.getElementById('cfg-org').value.trim();
+  const r=await fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({orgName})});
+  if(r.ok){
+    config={...config,orgName};
+    document.querySelectorAll('.ah-brand').forEach(el=>el.textContent=orgName||'System Alternatives');
+    renderSidebar();
+    logAction('config_saved',{clientId:null,clientName:null,details:`org: ${orgName}`});
+    showToast('Saved');
+  }else{
+    showToast('Save failed','error');
+  }
+}
+
+async function saveOnboardingConfig(){
   const subdomain=document.getElementById('cfg-subdomain').value.trim();
   const token=document.getElementById('cfg-token').value.trim();
   if(!subdomain){showToast('Syncro subdomain is required','error');return;}
@@ -4865,17 +4894,18 @@ async function saveAllConfig(){
     Mac:document.getElementById('cfg-url-mac').value.trim(),
     Linux:document.getElementById('cfg-url-linux').value.trim()
   };
+  appSettings.staleDays=staleDays;
+  appSettings.dueDays=dueDays;
+  appSettings.defaultDueOffset=defaultDueOffset;
+  appSettings.urlTemplates=urlTemplates;
   const [cfgR,setR]=await Promise.all([
-    fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({syncroSubdomain:subdomain,syncroToken:token,orgName})}),
-    fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({staleDays,dueDays,defaultDueOffset,urlTemplates})})
+    fetch('/api/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({syncroSubdomain:subdomain,syncroToken:token})}),
+    fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)})
   ]);
   if(cfgR.ok&&setR.ok){
-    config={...config,syncroTokenSet:!!(token||config?.syncroTokenSet),syncroTokenHint:token?(token.slice(0,5)+'•••••••••••'):config?.syncroTokenHint||'',syncroSubdomain:subdomain,orgName};
-    appSettings={staleDays,dueDays,defaultDueOffset,urlTemplates};
-    document.querySelectorAll('.ah-brand').forEach(el=>el.textContent=orgName||'System Alternatives');
-    renderSidebar();
-    logAction('config_saved',{clientId:null,clientName:null,details:`org: ${orgName}`});
-    showToast('Configuration saved');
+    config={...config,syncroTokenSet:!!(token||config?.syncroTokenSet),syncroTokenHint:token?(token.slice(0,5)+'•••••••••••'):config?.syncroTokenHint||'',syncroSubdomain:subdomain};
+    logAction('config_saved',{clientId:null,clientName:null,details:`subdomain: ${subdomain}`});
+    showToast('Onboarding settings saved');
   }else{
     showToast('Save failed','error');
   }
