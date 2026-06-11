@@ -3301,6 +3301,7 @@ let _bkShowCosts=localStorage.getItem('bkShowCosts')==='1';
 let _bkFilterNonCompliant=false;
 let _bkProfileNoteOpen=new Set(); // keys: "clientId:profileName"
 let _bkSort={col:null,dir:1}; // col: 'name'|'used'|'oldest'|'compliant'|'allotted'
+let _bkCardSort=localStorage.getItem('bkCardSort')||'status'; // 'status'|'name'|'used'|'oldest'|'compliant' — dashboard/monitor card order
 let _bkMonitorMode=false;
 let _bkMonitorClockInterval=null;
 
@@ -3380,6 +3381,7 @@ function bkDrawMonitor(){
         ${issues.length?`<span style="background:rgba(239,68,68,0.15);color:#f87171;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid rgba(239,68,68,0.3);white-space:nowrap;">⚠ ${issues.length} issue${issues.length!==1?'s':''}</span>`:''}
         <span style="background:rgba(34,197,94,0.1);color:#4ade80;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid rgba(34,197,94,0.2);white-space:nowrap;">${clearCnt} clear</span>
         <span id="bk-monitor-live" style="font-size:11px;white-space:nowrap;">${bkLivePollingBadge()}</span>
+        <select class="bk-cell-select" style="border:1px solid var(--border);" title="Sort cards by" onchange="bkSetCardSort(this.value)">${bkCardSortOptionsHtml(_bkCardSort)}</select>
         <button onclick="bkExitMonitor()" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);font-size:12px;padding:5px 12px;border-radius:6px;cursor:pointer;flex-shrink:0;">✕ Exit</button>
       </div>
     </div>
@@ -3412,9 +3414,9 @@ function bkBuildMonitorCards(){
   const allClients=bkGetClients();
   const clients=_bkHideInactive?allClients.filter(c=>c.syncrify==='Active'||c.wasabi==='Active'):allClients;
   const stColor={error:'#ef4444',warn:'#f59e0b',good:'#22c55e',inactive:'#4b5563'};
-  return clients.map(c=>{
-    const live=_backupLiveData?.[c.syncrifyId];
-    const st=bkRowStatus(c,live);
+  let cats=clients.map(c=>{const live=_backupLiveData?.[c.syncrifyId];return{c,live,st:bkRowStatus(c,live)};});
+  cats=bkSortClientCats(cats,_bkCardSort);
+  return cats.map(({c,live,st})=>{
     const active=c.syncrify==='Active'||c.wasabi==='Active';
     const borderColor=live||st==='inactive'?stColor[st]||'#6b7280':'#6b7280';
     const monP=live?live.profiles.filter(p=>bkEffectiveFreq(c,p.profile)!=='Disabled'):[];
@@ -3568,6 +3570,42 @@ function bkRowStatus(c,live){
   return'good';
 }
 
+// Oldest monitored-profile timestamp for a client, or Infinity if unknown (sorts last).
+function bkOldestProfileMs({c,live}){
+  if(!live)return Infinity;
+  const monP=live.profiles.filter(p=>bkEffectiveFreq(c,p.profile)!=='Disabled'&&p.lastAccess);
+  return monP.length?Math.min(...monP.map(p=>p.lastAccess)):Infinity;
+}
+// Fraction of monitored profiles that are compliant, or 2 if unknown/inactive (sorts last).
+function bkComplianceRatio({c,live,st}){
+  if(!live||st==='inactive')return 2;
+  const monP=live.profiles.filter(p=>bkEffectiveFreq(c,p.profile)!=='Disabled');
+  if(!monP.length)return 2;
+  const comp=monP.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))).length;
+  return comp/monP.length;
+}
+// Reorders {c,live,st} entries for the dashboard/monitor cards per _bkCardSort.
+// 'status' is handled by the caller (dashboard groups into sections; monitor sorts by severity).
+function bkSortClientCats(cats,mode){
+  const arr=[...cats];
+  if(mode==='name')return arr.sort((a,b)=>a.c.name.toLowerCase()<b.c.name.toLowerCase()?-1:a.c.name.toLowerCase()>b.c.name.toLowerCase()?1:0);
+  if(mode==='used')return arr.sort((a,b)=>(b.live?b.live.usedBytes:-1)-(a.live?a.live.usedBytes:-1));
+  if(mode==='oldest')return arr.sort((a,b)=>bkOldestProfileMs(a)-bkOldestProfileMs(b));
+  if(mode==='compliant')return arr.sort((a,b)=>bkComplianceRatio(a)-bkComplianceRatio(b));
+  if(mode==='status'){const o={error:0,warn:1,good:2,inactive:3};return arr.sort((a,b)=>(o[a.st]??2)-(o[b.st]??2));}
+  return arr;
+}
+function bkSetCardSort(mode){
+  _bkCardSort=mode;
+  localStorage.setItem('bkCardSort',mode);
+  bkRenderMain();
+  if(_bkMonitorMode)bkDrawMonitor();
+}
+const BK_CARD_SORT_LABELS={status:'Status',name:'Name (A–Z)',used:'Storage Used',oldest:'Oldest Backup',compliant:'Least Compliant'};
+function bkCardSortOptionsHtml(selected){
+  return Object.entries(BK_CARD_SORT_LABELS).map(([v,label])=>`<option value="${v}"${selected===v?' selected':''}>${label}</option>`).join('');
+}
+
 let _bkFetchError=null;
 async function bkFetchLive(){
   if(_bkFetching)return;
@@ -3714,6 +3752,10 @@ function bkRenderMain(){
       <div class="client-menu-sep"></div>
       <button class="client-menu-item${_bkShowCosts?' checked':''}" onclick="_bkShowCosts=!_bkShowCosts;localStorage.setItem('bkShowCosts',_bkShowCosts?'1':'0');bkRenderMain()">Show Costs</button>
       <button class="client-menu-item${_bkHideInactive?' checked':''}" onclick="_bkHideInactive=!_bkHideInactive;localStorage.setItem('bkHideInactive',_bkHideInactive?'1':'0');bkRenderMain()">Hide Inactive</button>
+      ${isAll?`<div class="client-menu-item" style="display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:default;">
+        <span>Sort by</span>
+        <select class="bk-cell-select" onchange="bkSetCardSort(this.value)">${bkCardSortOptionsHtml(_bkCardSort)}</select>
+      </div>`:''}
       <div class="client-menu-sep"></div>
       <button class="client-menu-item" onclick="bkOpenProfiles()">View Profiles</button>
       <button class="client-menu-item" onclick="bkExportCsv()">Export CSV</button>
@@ -3832,10 +3874,12 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
         ${rows}
       </div>`;
     })()}
+    ${_bkCardSort==='status'?`
     ${issueList.length?`<div style="margin-bottom:20px;"><div class="dash-section-label" style="color:var(--danger);">Issues (${issueList.length})</div>${cardGrid(issueList)}</div>`:''}
     ${noData.length?`<div style="margin-bottom:20px;"><div class="dash-section-label" style="color:var(--warn);">No Live Data (${noData.length})</div>${cardGrid(noData)}</div>`:''}
     ${good.length?`<div style="margin-bottom:20px;"><div class="dash-section-label" style="color:var(--success);">All Clear (${good.length})</div>${cardGrid(good)}</div>`:''}
     ${!_bkHideInactive&&inactive.length?`<div style="margin-bottom:20px;"><div class="dash-section-label">Inactive (${inactive.length})</div>${cardGrid(inactive)}</div>`:''}
+    `:cardGrid(bkSortClientCats(cats,_bkCardSort))}
     ${loading?`<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;">Loading live data…</div>`:''}
   </div>`;
 }
