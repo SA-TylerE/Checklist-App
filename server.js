@@ -219,6 +219,144 @@ function fetchUrl(url, hops = 6) {
   });
 }
 
+// ── Direct Syncrify polling (live activity) ───────────────────────────────────
+// Replaces the Gist relay for backup-activity when syncrifyHost/syncrifyUser/
+// syncrifyPass are configured in Settings: server.js logs into Syncrify itself
+// (e.g. over Tailscale) and polls app?operation=activity on a timer.
+
+function syncrifyHttpRequest(baseUrl, pathAndQuery, { method = 'GET', body = null, cookie = null } = {}) {
+  return new Promise((resolve, reject) => {
+    const parsed  = new URL(pathAndQuery, baseUrl);
+    const mod     = parsed.protocol === 'https:' ? https : http;
+    const headers = { 'User-Agent': 'Mozilla/5.0' };
+    if (cookie) headers['Cookie'] = cookie;
+    if (body) {
+      headers['Content-Type']   = 'application/x-www-form-urlencoded';
+      headers['Content-Length'] = Buffer.byteLength(body);
+      headers['Referer']        = `${parsed.protocol}//${parsed.host}/app`;
+      headers['Origin']         = `${parsed.protocol}//${parsed.host}`;
+    }
+    const opts = { hostname: parsed.hostname, port: parsed.port || undefined, path: parsed.pathname + parsed.search, method, headers };
+    const req = mod.request(opts, res => {
+      let text = '';
+      res.on('data', c => text += c);
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, text }));
+    });
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+// Merge Set-Cookie response header(s) into an existing "k=v; k2=v2" cookie string.
+function mergeCookies(existingCookieStr, setCookieHeaders) {
+  const jar = {};
+  for (const part of (existingCookieStr || '').split(';')) {
+    const [k, ...rest] = part.trim().split('=');
+    if (k) jar[k] = rest.join('=');
+  }
+  const arr = Array.isArray(setCookieHeaders) ? setCookieHeaders : (setCookieHeaders ? [setCookieHeaders] : []);
+  for (const sc of arr) {
+    const [k, ...rest] = sc.split(';')[0].trim().split('=');
+    if (k) jar[k] = rest.join('=');
+  }
+  return Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; ');
+}
+
+function looksLikeSyncrifyLoginPage(html) {
+  return /name=["']pwd["']/i.test(html);
+}
+
+let _syncrifySession = { cookie: null };
+
+async function ensureSyncrifySession(host, user, pass, forceRelogin = false) {
+  if (_syncrifySession.cookie && !forceRelogin) return _syncrifySession.cookie;
+
+  const r1 = await syncrifyHttpRequest(host, '/app');
+  let cookie = mergeCookies(null, r1.headers['set-cookie']);
+
+  const body = [
+    `uid=${encodeURIComponent(user)}`,
+    `pwd=${encodeURIComponent(pass)}`,
+    'proceedButton=ok',
+    'operation=login',
+    'operation2=login',
+    `nl=${encodeURIComponent('app?operation=home')}`,
+  ].join('&');
+  const r2 = await syncrifyHttpRequest(host, '/app', { method: 'POST', body, cookie });
+  cookie = mergeCookies(cookie, r2.headers['set-cookie']);
+
+  _syncrifySession.cookie = cookie;
+  return cookie;
+}
+
+const SYNC_ACTIVITY_ROW_PATTERN = /<tr>\s*<td><a href="([^"]*)"[^>]*title="Connecting from ([\d.]+)[^"]*"[^>]*>[\s\S]*?<\/a>\s*([^<]+)<\/td>\s*<td>([^<]*)<\/td>\s*<td>([^<]*)<\/td>\s*<td><img[^>]*title="([^"]*)"/g;
+
+// Fetches Syncrify's "Active Sessions" table plus per-job detail (st=jdd) for
+// each running job. Returns rows shaped like parseActivityCsv()'s output.
+async function fetchSyncrifyActivity(host, user, pass) {
+  let cookie = await ensureSyncrifySession(host, user, pass);
+  let r = await syncrifyHttpRequest(host, '/app?operation=activity', { cookie });
+  if (looksLikeSyncrifyLoginPage(r.text)) {
+    cookie = await ensureSyncrifySession(host, user, pass, true);
+    r = await syncrifyHttpRequest(host, '/app?operation=activity', { cookie });
+  }
+
+  const rows = [];
+  let m;
+  SYNC_ACTIVITY_ROW_PATTERN.lastIndex = 0;
+  while ((m = SYNC_ACTIVITY_ROW_PATTERN.exec(r.text))) {
+    const href = m[1];
+    const row = {
+      profile: m[4].trim(), bytes: m[5].trim(), status: m[6].trim(),
+      clientIp: m[2].trim(), user: m[3].trim(),
+      jobId: null, startedOn: null, filesCompleted: null, filesQueue: null, message: null, percentDone: null,
+    };
+    const jiMatch = href.match(/ji=(\d+)/);
+    if (jiMatch) {
+      row.jobId = jiMatch[1];
+      try {
+        const jr = await syncrifyHttpRequest(host, `/app?operation=activity&st=jdd&ji=${row.jobId}`, { cookie });
+        const jh = jr.text;
+        let mm;
+        if ((mm = jh.match(/Started On:<\/th>\s*<td>([^<]+)<\/td>/)))    row.startedOn      = mm[1].trim();
+        if ((mm = jh.match(/Files in Queue:<\/th>\s*<td>(\d+)<\/td>/)))  row.filesQueue     = parseInt(mm[1]);
+        if ((mm = jh.match(/Files Completed:<\/th>\s*<td>(\d+)<\/td>/))) row.filesCompleted = parseInt(mm[1]);
+        if ((mm = jh.match(/Percent Done:<\/th>\s*<td>(\d+)<\/td>/)))    row.percentDone    = parseInt(mm[1]);
+        if ((mm = jh.match(/<h4>Message<\/h4>\s*([^\r\n]+)/)))           row.message        = mm[1].trim();
+      } catch (e) {
+        console.log(`[syncrify-activity] Failed to fetch job detail for job ${row.jobId}: ${e.message}`);
+      }
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+let _liveActivity = { data: [], lastUpdated: null, error: null };
+
+async function pollSyncrifyActivityLoop() {
+  const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+  const host = (settings.syncrifyHost || '').trim().replace(/\/+$/, '');
+  const user = (settings.syncrifyUser || '').trim();
+  const pass = settings.syncrifyPass || '';
+  const intervalSec = Math.max(5, parseInt(settings.syncrifyActivityPollSec) || 30);
+
+  if (host && user && pass) {
+    try {
+      const data = await fetchSyncrifyActivity(host, user, pass);
+      _liveActivity = { data, lastUpdated: Date.now(), error: null };
+      pushEvent('backup-activity-updated', { data: _liveActivity.data, lastUpdated: _liveActivity.lastUpdated });
+    } catch (e) {
+      console.log(`[syncrify-activity] Poll failed: ${e.message}`);
+      _syncrifySession.cookie = null; // force re-login next attempt
+      _liveActivity = { ..._liveActivity, error: e.message };
+      pushEvent('backup-activity-updated', { data: _liveActivity.data, lastUpdated: _liveActivity.lastUpdated, error: e.message });
+    }
+  }
+  setTimeout(pollSyncrifyActivityLoop, intervalSec * 1000);
+}
+
 app.get('/api/backup-data', async (req, res) => {
   try {
     const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
@@ -274,6 +412,10 @@ function parseActivityCsv(text) {
 
 app.get('/api/backup-activity', async (req, res) => {
   try {
+    if (_liveActivity.lastUpdated) {
+      return res.json({ data: _liveActivity.data, lastUpdated: _liveActivity.lastUpdated, error: _liveActivity.error || undefined });
+    }
+
     const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
     const rawUrl   = (settings.backupActivityUrl   || '').trim();
     const encKey   = (settings.backupEncryptionKey || '').trim();
@@ -405,16 +547,24 @@ app.put('/api/guides', (req, res) => {
 });
 
 // Settings
-const SETTINGS_FILE = path.join(__dirname, 'data', 'settings.json');
+const SETTINGS_FILE  = path.join(__dirname, 'data', 'settings.json');
+const SECRET_MASK    = '********';
 app.get('/api/settings', (req, res) => {
   try {
     if (!fs.existsSync(SETTINGS_FILE)) return res.json({ staleDays: 30, dueDays: 3 });
-    res.json(JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')));
+    const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+    if (settings.syncrifyPass) settings.syncrifyPass = SECRET_MASK;
+    res.json(settings);
   } catch(e) { res.json({ staleDays: 30, dueDays: 3 }); }
 });
 app.put('/api/settings', (req, res) => {
   try {
-    atomicWrite(SETTINGS_FILE, JSON.stringify(req.body, null, 2));
+    const incoming = req.body;
+    if (incoming.syncrifyPass === SECRET_MASK) {
+      const existing = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+      incoming.syncrifyPass = existing.syncrifyPass || '';
+    }
+    atomicWrite(SETTINGS_FILE, JSON.stringify(incoming, null, 2));
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -540,3 +690,5 @@ app.get('/api/health', (req, res) => {
 });
 
 app.listen(PORT, '127.0.0.1', () => console.log(`Checklist API on 127.0.0.1:${PORT}`));
+
+pollSyncrifyActivityLoop();

@@ -4339,6 +4339,12 @@ async function saveBkSettings(){
   const cb=parseFloat(document.getElementById('setting-bk-cost-per-block')?.value||'')||40;
   const cd=parseFloat(document.getElementById('setting-bk-cost-per-device')?.value||'')||25;
   appSettings.bkBlockSizeGB=bs;appSettings.bkCostPerBlock=cb;appSettings.bkCostPerDevice=cd;
+  appSettings.syncrifyHost=(document.getElementById('setting-syncrify-host')?.value||'').trim()||undefined;
+  appSettings.syncrifyUser=(document.getElementById('setting-syncrify-user')?.value||'').trim()||undefined;
+  appSettings.syncrifyPass=(document.getElementById('setting-syncrify-pass')?.value||'').trim()||undefined;
+  const pollSel=document.getElementById('setting-syncrify-poll')?.value;
+  const pollCustom=parseInt(document.getElementById('setting-syncrify-poll-custom')?.value||'');
+  appSettings.syncrifyActivityPollSec=Math.max(5,(pollSel==='custom'?pollCustom:parseInt(pollSel))||30);
   const r=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
   if(r.ok){showToast('Backup settings saved');_backupLiveData=null;_backupActivityData=null;_backupDriveData=null;_bkFetching=false;}
   else showToast('Save failed','error');
@@ -4529,6 +4535,44 @@ function renderSettingsView(){
               <label>Drive Capacity URL <span style="font-weight:400;color:var(--text3);">(optional)</span></label>
               <input id="setting-backup-drive-url" value="${escHtml(appSettings.backupDriveUrl||'')}" placeholder="https://gist.githubusercontent.com/…/raw/drive_data.enc" style="font-size:11px;">
               <div class="field-hint">Raw URL to the encrypted total/free space of the backup storage volume (<code style="font-size:10px;background:var(--bg3);padding:1px 3px;border-radius:2px;">drive_data.enc</code>). Same encryption key as above. Shown as overall storage usage on the dashboard header.</div>
+            </div>
+          </div>
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+            <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;">Live Activity — Direct Polling</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">When configured, this server logs into Syncrify directly (e.g. over Tailscale) and polls for currently-running backups, instead of relying on the Active Jobs URL above.</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div class="field-group" style="margin:0;grid-column:1/-1;">
+                <label>Syncrify Host <span style="font-weight:400;color:var(--text3);">(optional)</span></label>
+                <input id="setting-syncrify-host" value="${escHtml(appSettings.syncrifyHost||'')}" placeholder="http://100.x.y.z" style="font-size:11px;">
+                <div class="field-hint">Base URL of Syncrify's web UI, reachable from this server.</div>
+              </div>
+              <div class="field-group" style="margin:0;">
+                <label>Username</label>
+                <input id="setting-syncrify-user" value="${escHtml(appSettings.syncrifyUser||'')}" placeholder="webapp" style="font-size:11px;">
+              </div>
+              <div class="field-group" style="margin:0;">
+                <label>Password</label>
+                <input id="setting-syncrify-pass" type="password" value="${escHtml(appSettings.syncrifyPass||'')}" placeholder="••••••••" style="font-size:11px;">
+              </div>
+              ${(()=>{
+                const pollSec=appSettings.syncrifyActivityPollSec||30;
+                const presets=[10,30,60,300];
+                const isCustom=!presets.includes(pollSec);
+                return`<div class="field-group" style="margin:0;grid-column:1/-1;">
+                  <label>Activity Poll Interval</label>
+                  <div style="display:flex;gap:6px;align-items:center;">
+                    <select id="setting-syncrify-poll" onchange="document.getElementById('setting-syncrify-poll-custom').style.display=this.value==='custom'?'':'none';" style="background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:12px;outline:none;font-family:var(--sans);">
+                      <option value="10"${pollSec===10?' selected':''}>Realtime (10s)</option>
+                      <option value="30"${pollSec===30?' selected':''}>30 seconds</option>
+                      <option value="60"${pollSec===60?' selected':''}>1 minute</option>
+                      <option value="300"${pollSec===300?' selected':''}>5 minutes</option>
+                      <option value="custom"${isCustom?' selected':''}>Custom…</option>
+                    </select>
+                    <input id="setting-syncrify-poll-custom" type="number" min="5" step="1" value="${isCustom?pollSec:''}" placeholder="seconds" style="display:${isCustom?'':'none'};width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:12px;outline:none;font-family:var(--sans);">
+                  </div>
+                  <div class="field-hint">How often this server polls Syncrify for the live activity feed. Minimum 5 seconds.</div>
+                </div>`;
+              })()}
             </div>
           </div>
           <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
@@ -6826,6 +6870,15 @@ function connectSSE(){
   sseSource.addEventListener('config-updated',e=>{
     const cfg=JSON.parse(e.data);
     if(cfg.syncroSubdomain) config.syncroSubdomain=cfg.syncroSubdomain;
+  });
+  sseSource.addEventListener('backup-activity-updated',e=>{
+    const payload=JSON.parse(e.data);
+    if(!Array.isArray(payload.data))return;
+    _backupActivityData=payload.data;
+    _bkActivityLastUpdated=payload.lastUpdated||_bkActivityLastUpdated;
+    if(_bkMonitorMode){bkDrawMonitor();return;}
+    const el=document.getElementById('backups-content');
+    if(el&&el.offsetParent!==null){renderBackupsSidebar();bkRenderMain();}
   });
   sseSource.addEventListener('app-updated',()=>{
     const banner=document.getElementById('update-banner');
