@@ -3296,89 +3296,54 @@ let _bkTab='overview';
 let _bkFetching=false;
 let _bkExpanded=new Set();
 let _bkNoteOpen=new Set();
-let _bkHideInactive=false;
-let _bkShowCosts=false;
+let _bkHideInactive=localStorage.getItem('bkHideInactive')==='1';
+let _bkShowCosts=localStorage.getItem('bkShowCosts')==='1';
 let _bkFilterNonCompliant=false;
 let _bkProfileNoteOpen=new Set(); // keys: "clientId:profileName"
 let _bkSort={col:null,dir:1}; // col: 'name'|'used'|'oldest'|'compliant'|'allotted'
 let _bkMonitorMode=false;
-let _bkMonitorInterval=null;
-let _bkMonitorCountdownInterval=null;
-let _bkMonitorCountdown=300;
-let _bkMonitorChecking=false;
-let _bkMonitorLastChecked=null;
+let _bkMonitorClockInterval=null;
 
 function bkGetClients(){return appSettings.backupClients||DEFAULT_BACKUP_CLIENTS;}
 
+// Shared "● Live polling" indicator for the dashboard subtitle and Monitor Mode —
+// color reflects whether the activity feed has updated recently, not just whether
+// direct polling is configured.
+function bkLivePollingBadge(){
+  if(_bkActivitySource==='direct-pending')return`<span style="color:var(--warn);" title="Direct Syncrify polling is configured but hasn't connected yet — check Settings">● Polling pending</span>`;
+  if(_bkActivitySource!=='direct')return'';
+  const pollMs=Math.max(5,parseInt(appSettings.syncrifyActivityPollSec)||30)*1000;
+  const ageMs=_bkActivityLastUpdated?Date.now()-_bkActivityLastUpdated:Infinity;
+  const fresh=ageMs<pollMs*3;
+  return fresh
+    ?`<span style="color:var(--success);" title="Live activity is polled directly from Syncrify">● Live polling</span>`
+    :`<span style="color:var(--warn);" title="Live activity hasn't updated recently — check Settings">● Live polling (stale)</span>`;
+}
+
 function bkEnterMonitor(){
   _bkMonitorMode=true;
-  _bkMonitorCountdown=300;
-  _bkMonitorChecking=false;
   const el=document.createElement('div');
   el.id='bk-monitor-overlay';
   el.className='bk-monitor-overlay';
   document.body.appendChild(el);
   bkDrawMonitor();
   document.addEventListener('keydown',bkMonitorKey);
-  _bkMonitorInterval=setInterval(bkMonitorPoll,300000);
-  _bkMonitorCountdownInterval=setInterval(bkMonitorTick,1000);
+  _bkMonitorClockInterval=setInterval(bkMonitorTick,1000);
 }
 function bkExitMonitor(){
   _bkMonitorMode=false;
-  clearInterval(_bkMonitorInterval);
-  clearInterval(_bkMonitorCountdownInterval);
-  _bkMonitorInterval=null;
-  _bkMonitorCountdownInterval=null;
+  clearInterval(_bkMonitorClockInterval);
+  _bkMonitorClockInterval=null;
   document.removeEventListener('keydown',bkMonitorKey);
   const el=document.getElementById('bk-monitor-overlay');
   if(el)el.remove();
 }
 function bkMonitorKey(e){if(e.key==='Escape')bkExitMonitor();}
 function bkMonitorTick(){
-  _bkMonitorCountdown=Math.max(0,_bkMonitorCountdown-1);
-  const cd=document.getElementById('bk-monitor-cd');
   const clk=document.getElementById('bk-monitor-clk');
   if(clk)clk.textContent=new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-  if(cd){
-    if(_bkMonitorChecking){cd.textContent='Checking…';}
-    else{
-      const m=Math.floor(_bkMonitorCountdown/60),s=_bkMonitorCountdown%60;
-      const lc=_bkMonitorLastChecked?'Checked '+new Date(_bkMonitorLastChecked).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',second:'2-digit'})+' · ':'';
-      cd.textContent=`${lc}Refresh in: ${m}:${String(s).padStart(2,'0')}`;
-    }
-  }
-}
-async function bkMonitorPoll(){
-  _bkMonitorChecking=true;
-  _bkMonitorCountdown=300;
-  try{
-    const [dataRes,settingsRes,actRes]=await Promise.all([fetch('/api/backup-data'),fetch('/api/settings'),fetch('/api/backup-activity')]);
-    const d=await dataRes.json();
-    const s=await settingsRes.json();
-    const act=await actRes.json();
-    _bkMonitorLastChecked=Date.now();
-    let changed=false;
-    if(!d.error&&d.lastUpdated&&d.lastUpdated!==_bkLastUpdated){
-      _bkLastUpdated=d.lastUpdated;
-      _backupLiveData={};
-      for(const e of d.data){
-        if(!_backupLiveData[e.client])_backupLiveData[e.client]={usedBytes:0,profiles:[]};
-        _backupLiveData[e.client].usedBytes+=e.diskSize;
-        _backupLiveData[e.client].profiles.push(e);
-      }
-      changed=true;
-    }
-    if(!act.error&&Array.isArray(act.data)&&act.lastUpdated!==_bkActivityLastUpdated){
-      _bkActivityLastUpdated=act.lastUpdated;
-      _backupActivityData=act.data;
-      changed=true;
-    }
-    if(s&&!s.error&&JSON.stringify(s.backupClients)!==JSON.stringify(appSettings.backupClients)){
-      appSettings={...appSettings,...s};
-      changed=true;
-    }
-    if(changed)bkDrawMonitor();
-  }catch(e){}finally{_bkMonitorChecking=false;}
+  const live=document.getElementById('bk-monitor-live');
+  if(live)live.innerHTML=bkLivePollingBadge();
 }
 function bkDrawMonitor(){
   const overlay=document.getElementById('bk-monitor-overlay');
@@ -3414,7 +3379,7 @@ function bkDrawMonitor(){
         ${bkDriveUsageHtml(true)}
         ${issues.length?`<span style="background:rgba(239,68,68,0.15);color:#f87171;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid rgba(239,68,68,0.3);white-space:nowrap;">⚠ ${issues.length} issue${issues.length!==1?'s':''}</span>`:''}
         <span style="background:rgba(34,197,94,0.1);color:#4ade80;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid rgba(34,197,94,0.2);white-space:nowrap;">${clearCnt} clear</span>
-        <span id="bk-monitor-cd" style="font-size:11px;color:var(--text3);white-space:nowrap;"></span>
+        <span id="bk-monitor-live" style="font-size:11px;white-space:nowrap;">${bkLivePollingBadge()}</span>
         <button onclick="bkExitMonitor()" style="background:var(--bg3);border:1px solid var(--border);color:var(--text2);font-size:12px;padding:5px 12px;border-radius:6px;cursor:pointer;flex-shrink:0;">✕ Exit</button>
       </div>
     </div>
@@ -3728,8 +3693,8 @@ function bkRenderMain(){
     const upd=_bkLastUpdated?'data from '+new Date(_bkLastUpdated).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
     subtitle=`${np} profiles${upd?' · '+upd:''}${isStale?` <span style="color:var(--warn);">⚠ stale</span>`:''}`;
   }
-  if(_bkActivitySource==='direct')subtitle+=` · <span style="color:var(--success);" title="Live activity is polled directly from Syncrify">● Live polling</span>`;
-  else if(_bkActivitySource==='direct-pending')subtitle+=` · <span style="color:var(--warn);" title="Direct Syncrify polling is configured but hasn't connected yet — check Settings">● Direct polling pending</span>`;
+  const liveBadge=bkLivePollingBadge();
+  if(liveBadge)subtitle+=` · ${liveBadge}`;
   if(_bkDataSource==='direct')subtitle+=` · <span style="color:var(--success);" title="Backup data (usage, last-run status) is polled directly from Syncrify">● Direct data</span>`;
   else if(_bkDataSource==='direct-pending')subtitle+=` · <span style="color:var(--warn);" title="Direct Syncrify data polling is configured but hasn't connected yet — check Settings">● Data polling pending</span>`;
   // Title
@@ -3747,8 +3712,8 @@ function bkRenderMain(){
     <div class="client-menu-dropdown" id="bk-main-menu">
       <button class="client-menu-item" onclick="closeBkMenu();_backupLiveData=null;_bkFetchError=null;_bkFetching=false;renderBackupsView()">↻ Refresh</button>
       <div class="client-menu-sep"></div>
-      <button class="client-menu-item${_bkShowCosts?' checked':''}" onclick="_bkShowCosts=!_bkShowCosts;bkRenderMain()">Show Costs</button>
-      <button class="client-menu-item${_bkHideInactive?' checked':''}" onclick="_bkHideInactive=!_bkHideInactive;bkRenderMain()">Hide Inactive</button>
+      <button class="client-menu-item${_bkShowCosts?' checked':''}" onclick="_bkShowCosts=!_bkShowCosts;localStorage.setItem('bkShowCosts',_bkShowCosts?'1':'0');bkRenderMain()">Show Costs</button>
+      <button class="client-menu-item${_bkHideInactive?' checked':''}" onclick="_bkHideInactive=!_bkHideInactive;localStorage.setItem('bkHideInactive',_bkHideInactive?'1':'0');bkRenderMain()">Hide Inactive</button>
       <div class="client-menu-sep"></div>
       <button class="client-menu-item" onclick="bkOpenProfiles()">View Profiles</button>
       <button class="client-menu-item" onclick="bkExportCsv()">Export CSV</button>

@@ -12,6 +12,7 @@ const DATA_FILE  = path.join(__dirname, 'data', 'clients.json');
 const CFG_FILE   = path.join(__dirname, 'data', 'config.json');
 const LOG_FILE   = path.join(__dirname, 'data', 'logs.json');
 const BACKUP_DIR = path.join(__dirname, 'data', 'backups');
+const LIVE_CACHE_FILE = path.join(__dirname, 'data', 'live-backup-cache.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MAX_LOGS   = 5000;
 
@@ -417,6 +418,25 @@ async function pollSyncrifyActivityLoop() {
 let _liveBackupData = { data: [], lastUpdated: null, error: null };
 let _liveDriveData  = { data: null, lastUpdated: null, error: null };
 
+// Persists _liveBackupData/_liveDriveData to disk so they survive a server
+// restart instead of sitting empty until the next poll completes.
+function loadLiveCache() {
+  try {
+    const cached = JSON.parse(fs.readFileSync(LIVE_CACHE_FILE, 'utf8'));
+    if (cached.backupData?.lastUpdated) _liveBackupData = { data: cached.backupData.data || [], lastUpdated: cached.backupData.lastUpdated, error: null };
+    if (cached.driveData?.lastUpdated)  _liveDriveData  = { data: cached.driveData.data || null, lastUpdated: cached.driveData.lastUpdated, error: null };
+  } catch (_) {}
+}
+
+function saveLiveCache() {
+  try {
+    atomicWrite(LIVE_CACHE_FILE, JSON.stringify({
+      backupData: { data: _liveBackupData.data, lastUpdated: _liveBackupData.lastUpdated },
+      driveData:  { data: _liveDriveData.data, lastUpdated: _liveDriveData.lastUpdated },
+    }, null, 2));
+  } catch (_) {}
+}
+
 async function pollSyncrifyDataLoop() {
   const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
   const host = (settings.syncrifyHost || '').trim().replace(/\/+$/, '');
@@ -454,6 +474,8 @@ async function pollSyncrifyDataLoop() {
       _syncrifySession.cookie = null; // force re-login next attempt
       _liveDriveData = { ..._liveDriveData, error: e.message };
     }
+
+    saveLiveCache();
   }
   setTimeout(pollSyncrifyDataLoop, intervalSec * 1000);
 }
@@ -504,6 +526,7 @@ app.post('/api/syncrify-test', async (req, res) => {
       if (data.length > 0) {
         _liveBackupData = { data, lastUpdated: Date.now(), error: null };
         pushEvent('backup-data-updated', { data: _liveBackupData.data, lastUpdated: _liveBackupData.lastUpdated });
+        saveLiveCache();
       } else {
         _liveBackupData = { ..._liveBackupData, error: 'Fetch succeeded but returned no rows' };
       }
@@ -829,5 +852,6 @@ app.get('/api/health', (req, res) => {
 
 app.listen(PORT, '127.0.0.1', () => console.log(`Checklist API on 127.0.0.1:${PORT}`));
 
+loadLiveCache();
 pollSyncrifyActivityLoop();
 pollSyncrifyDataLoop();
