@@ -638,7 +638,6 @@ span.bk-expand-toggle{opacity:0;pointer-events:none;}
 .bk-card-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;}
 .bk-card-meta{font-size:10px;color:var(--text3);margin-top:5px;display:flex;flex-wrap:wrap;gap:6px;}
 .bk-card-meta span{white-space:nowrap;}
-.bk-card-issue{font-size:10px;margin-top:4px;font-style:italic;}
 .bk-storage-bar{height:7px;background:var(--bg4);border-radius:2px;margin-top:7px;overflow:hidden;}
 .bk-storage-fill{height:100%;border-radius:2px;transition:width 0.3s;}
 /* Monitor mode */

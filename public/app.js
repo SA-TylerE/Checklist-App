@@ -1877,7 +1877,7 @@ let _bkFetching=false;
 let _bkExpanded=new Set();
 let _bkNoteOpen=new Set();
 let _bkHideInactive=localStorage.getItem('bkHideInactive')==='1';
-let _bkShowCosts=localStorage.getItem('bkShowCosts')==='1';
+let _bkShowCosts=false; // costs columns disabled for now — toggle removed from the menu
 let _bkFilterNonCompliant=false;
 let _bkProfileNoteOpen=new Set(); // keys: "clientId:profileName"
 let _bkSort={col:null,dir:1}; // col: 'name'|'used'|'oldest'|'compliant'|'allotted'
@@ -2342,7 +2342,6 @@ function bkRenderMain(){
     <div class="client-menu-dropdown" id="bk-main-menu">
       <button class="client-menu-item" onclick="closeBkMenu();_backupLiveData=null;_bkFetchError=null;_bkFetching=false;renderBackupsView()">↻ Refresh</button>
       <div class="client-menu-sep"></div>
-      <button class="client-menu-item${_bkShowCosts?' checked':''}" onclick="_bkShowCosts=!_bkShowCosts;localStorage.setItem('bkShowCosts',_bkShowCosts?'1':'0');bkRenderMain()">Show Costs</button>
       <button class="client-menu-item${_bkHideInactive?' checked':''}" onclick="_bkHideInactive=!_bkHideInactive;localStorage.setItem('bkHideInactive',_bkHideInactive?'1':'0');bkRenderMain()">Hide Inactive</button>
       ${isAll?`<div class="client-menu-item" style="display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:default;">
         <span>Sort by</span>
@@ -2393,11 +2392,6 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
     const compP=live&&(c.syncrify==='Active'||c.wasabi==='Active')?monP.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))).length:null;
     const oldest=live&&monP.length?Math.min(...monP.map(p=>p.lastAccess)):null;
     const compColor=compP===null?'var(--text3)':compP===totalP?'#22c55e':compP===0?'#ef4444':'#f59e0b';
-    let issueNote='';
-    if(st==='error'&&live){const nc=live.profiles.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))===false);issueNote=`<div class="bk-card-issue" style="color:#f87171;">${nc.length} profile${nc.length!==1?'s':''} non-compliant</div>`;}
-    else if(st==='warn'&&live){const ug=live.usedBytes/1e9;const storageOver=c.allottedGB!==-1&&(c.allottedGB===0?ug>0:ug>c.allottedGB);const calc=bkCalcCost(ug,live.profiles.length);const costOver=c.charged>0&&calc>c.charged;issueNote=`<div class="bk-card-issue" style="color:#fbbf24;">${storageOver?`Storage: ${bkFmt(ug)} / ${c.allottedGB>0?bkFmt(c.allottedGB):'—'}`:costOver?`Cost overrun: +${bkFmtCur(calc-(c.charged||0))}`:''}</div>`;}
-    else if(!live&&c.syncrifyId){issueNote=`<div class="bk-card-issue" style="color:var(--text3);">ID: ${escHtml(c.syncrifyId)}</div>`;}
-    else if(st==='inactive'){issueNote=`<div class="bk-card-issue" style="color:var(--text3);">Both services inactive</div>`;}
     const running=live&&live.profiles.some(p=>bkGetActiveJobs().some(j=>j.profile===p.profile));
     return`<div class="bk-client-card" style="border-left-color:${live||st==='inactive'?stColor[st]||'#4b5563':'#6b7280'};" onclick="bkSwitchClient('${c.id}')">
       <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;">
@@ -2408,7 +2402,6 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
         ${!live?'<span>No profile data</span>':''}
         ${!live&&!c.syncrifyId?`<span style="color:var(--danger);">No Syncrify ID</span>`:''}
       </div>
-      ${st==='warn'?issueNote:''}
       ${(()=>{if(!live||!monP.length)return'';const active=c.syncrify==='Active'||c.wasabi==='Active';const gap=monP.length>15?1:2;const segHtml=monP.map(p=>{const freq=bkEffectiveFreq(c,p.profile);const comp=bkIsCompliant(p.lastAccess,freq);const col=!active?'#4b5563':comp===false?'#ef4444':comp==='grace'?'#f59e0b':'#22c55e';const tip=p.lastAccess?`${escHtml(p.profile)} · ${freq} · ${bkFmtDate(p.lastAccess)}${comp==='grace'?' · weekend grace':''}`:escHtml(p.profile);return`<div title="${tip}" style="flex:1;background:${col};border-radius:2px;min-width:3px;"></div>`;}).join('');const rightLabel=active?`${compP}/${totalP}`:`${totalP}`;const rightColor=active?compColor:'var(--text3)';return`<div style="margin-top:7px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;"><span style="font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;">Profiles</span><span style="font-size:9px;color:${rightColor};font-weight:600;">${rightLabel}</span></div><div style="display:flex;gap:${gap}px;height:7px;">${segHtml}</div></div>`;})()}
       ${(()=>{
         if(usedGB===null)return'';
