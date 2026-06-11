@@ -3289,6 +3289,7 @@ let _bkActivityLastUpdated=null; // mtimeMs from server
 let _bkActivitySource=null; // 'direct' | 'direct-pending' | 'gist' | 'none'
 let _backupDriveData=null; // null=not fetched; {totalBytes,freeBytes} for the backup storage volume
 let _bkLastUpdated=null; // mtimeMs from server
+let _bkDataSource=null; // 'direct' | 'direct-pending' | 'gist' | 'none'
 let _bkActiveClient='all';
 let _bkTab='overview';
 let _bkFetching=false;
@@ -3426,11 +3427,16 @@ function bkBuildMonitorRunningBar(){
     const c=bkFindClientByProfile(j.profile);
     const name=c?c.name:j.profile;
     const pct=j.percentDone!=null?`${j.percentDone}%`:'';
+    const started=bkParseSyncrifyDate(j.startedOn);
+    const elapsedMs=started?Date.now()-started.getTime():null;
+    const elapsed=bkFormatElapsed(elapsedMs);
+    const stuck=elapsedMs!=null&&elapsedMs>3*3600000;
     return`<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:14px;padding:4px 12px;font-size:12px;white-space:nowrap;flex-shrink:0;">
       <span class="bk-live-dot"></span>
       <span style="font-weight:700;color:var(--text);">${escHtml(name)}</span>
       <span style="color:var(--text3);">${escHtml(j.profile)}</span>
       ${pct?`<span style="color:#4ade80;font-weight:700;">${pct}</span>`:''}
+      ${elapsed?`<span title="Started ${escHtml(j.startedOn)}"${stuck?' style="color:var(--warn);font-weight:700;"':' style="color:var(--text3);"'}>${stuck?'⚠ ':''}${elapsed}</span>`:''}
     </span>`;
   }).join('');
   return`<div style="display:flex;gap:8px;padding:8px 16px;overflow-x:auto;flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--border);">${chips}</div>`;
@@ -3607,6 +3613,7 @@ async function bkFetchLive(){
     if(d.error){_bkFetchError=d.error;_backupLiveData={};return;}
     if(!Array.isArray(d.data)){_bkFetchError='Unexpected response from server';_backupLiveData={};return;}
     _bkLastUpdated=d.lastUpdated||null;
+    _bkDataSource=d.source||null;
     _backupLiveData={};
     for(const e of d.data){
       if(!_backupLiveData[e.client])_backupLiveData[e.client]={usedBytes:0,profiles:[]};
@@ -3634,6 +3641,24 @@ async function bkFetchDrive(){
 }
 function bkGetActiveJobs(){
   return _backupActivityData||[];
+}
+// Parses Syncrify's "Started On" format (e.g. "6/11/26 1:00 AM") into a Date.
+function bkParseSyncrifyDate(str){
+  if(!str)return null;
+  const m=str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if(!m)return null;
+  let[,mo,da,yr,hh,mi,ap]=m;
+  yr=parseInt(yr);if(yr<100)yr+=2000;
+  hh=parseInt(hh);
+  if(ap){ap=ap.toUpperCase();if(ap==='PM'&&hh!==12)hh+=12;if(ap==='AM'&&hh===12)hh=0;}
+  return new Date(yr,parseInt(mo)-1,parseInt(da),hh,parseInt(mi));
+}
+// Formats a duration in ms as e.g. "1h 23m" or "45m".
+function bkFormatElapsed(ms){
+  if(ms==null||ms<0)return null;
+  const mins=Math.floor(ms/60000);
+  if(mins<60)return`${mins}m`;
+  return`${Math.floor(mins/60)}h ${mins%60}m`;
 }
 function bkFindClientByProfile(profileName){
   if(!_backupLiveData)return null;
@@ -3703,6 +3728,8 @@ function bkRenderMain(){
   }
   if(_bkActivitySource==='direct')subtitle+=` · <span style="color:var(--success);" title="Live activity is polled directly from Syncrify">● Live polling</span>`;
   else if(_bkActivitySource==='direct-pending')subtitle+=` · <span style="color:var(--warn);" title="Direct Syncrify polling is configured but hasn't connected yet — check Settings">● Direct polling pending</span>`;
+  if(_bkDataSource==='direct')subtitle+=` · <span style="color:var(--success);" title="Backup data (usage, last-run status) is polled directly from Syncrify">● Direct data</span>`;
+  else if(_bkDataSource==='direct-pending')subtitle+=` · <span style="color:var(--warn);" title="Direct Syncrify data polling is configured but hasn't connected yet — check Settings">● Data polling pending</span>`;
   // Title
   let titleHtml='';
   if(isAll){
@@ -3817,13 +3844,18 @@ function bkRenderDashboard(menuHtml='',subtitle=''){
         const c=bkFindClientByProfile(j.profile);
         const name=c?c.name:j.profile;
         const progress=(j.filesCompleted!=null&&j.filesQueue!=null)?`${j.filesCompleted}/${j.filesCompleted+j.filesQueue} files`:'';
-        const detail=[j.bytes,j.status,progress].filter(Boolean).join(' · ');
+        const started=bkParseSyncrifyDate(j.startedOn);
+        const elapsedMs=started?Date.now()-started.getTime():null;
+        const elapsed=bkFormatElapsed(elapsedMs);
+        const stuck=elapsedMs!=null&&elapsedMs>3*3600000;
+        const startedHtml=started?`<span title="Started ${escHtml(j.startedOn)}"${stuck?' style="color:var(--warn);font-weight:600;"':''}>${stuck?'⚠ ':''}running ${elapsed}</span>`:'';
+        const detail=[j.bytes,j.status,progress].filter(Boolean).map(escHtml).concat(startedHtml?[startedHtml]:[]).join(' · ');
         return`<div style="padding:3px 0;font-size:11px;">
           <div style="display:flex;align-items:center;gap:8px;">
             <span class="bk-live-dot"></span>
             <span style="font-weight:600;color:var(--text);">${escHtml(name)}</span>
             <span style="color:var(--text3);">${escHtml(j.profile)}</span>
-            ${detail?`<span style="margin-left:auto;color:var(--text3);">${escHtml(detail)}</span>`:''}
+            ${detail?`<span style="margin-left:auto;color:var(--text3);">${detail}</span>`:''}
           </div>
           ${j.message?`<div style="padding-left:15px;color:var(--text3);font-size:10px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(j.message)}">${escHtml(j.message)}</div>`:''}
         </div>`;
@@ -4349,6 +4381,9 @@ async function saveBkSettings(){
   const pollSel=document.getElementById('setting-syncrify-poll')?.value;
   const pollCustom=parseInt(document.getElementById('setting-syncrify-poll-custom')?.value||'');
   appSettings.syncrifyActivityPollSec=Math.max(5,(pollSel==='custom'?pollCustom:parseInt(pollSel))||30);
+  const dataPollSel=document.getElementById('setting-syncrify-data-poll')?.value;
+  const dataPollCustom=parseInt(document.getElementById('setting-syncrify-data-poll-custom')?.value||'');
+  appSettings.syncrifyDataPollSec=Math.max(300,(dataPollSel==='custom'?dataPollCustom:parseInt(dataPollSel))||1800);
   const r=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(appSettings)});
   if(r.ok){showToast('Backup settings saved');_backupLiveData=null;_backupActivityData=null;_backupDriveData=null;_bkFetching=false;}
   else showToast('Save failed','error');
@@ -4586,6 +4621,38 @@ function renderSettingsView(){
             </div>
           </div>
           <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+            <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;">Backup Data — Direct Polling</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">When configured, this server also pulls per-client disk usage and last-run status directly from Syncrify, instead of the Backup Data URL above. This is a heavier scrape (one request per client/profile) so it polls less often.</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              ${(()=>{
+                const pollSec=appSettings.syncrifyDataPollSec||1800;
+                const presets=[300,900,1800,3600];
+                const isCustom=!presets.includes(pollSec);
+                return`<div class="field-group" style="margin:0;grid-column:1/-1;">
+                  <label>Data Poll Interval</label>
+                  <div style="display:flex;gap:6px;align-items:center;">
+                    <select id="setting-syncrify-data-poll" onchange="document.getElementById('setting-syncrify-data-poll-custom').style.display=this.value==='custom'?'':'none';" style="background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:12px;outline:none;font-family:var(--sans);">
+                      <option value="300"${pollSec===300?' selected':''}>5 minutes</option>
+                      <option value="900"${pollSec===900?' selected':''}>15 minutes</option>
+                      <option value="1800"${pollSec===1800?' selected':''}>30 minutes</option>
+                      <option value="3600"${pollSec===3600?' selected':''}>1 hour</option>
+                      <option value="custom"${isCustom?' selected':''}>Custom…</option>
+                    </select>
+                    <input id="setting-syncrify-data-poll-custom" type="number" min="300" step="1" value="${isCustom?pollSec:''}" placeholder="seconds" style="display:${isCustom?'':'none'};width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:12px;outline:none;font-family:var(--sans);">
+                  </div>
+                  <div class="field-hint">How often this server scrapes Syncrify for per-client disk usage and last-run status. Minimum 5 minutes.</div>
+                </div>`;
+              })()}
+              <div class="field-group" style="margin:0;grid-column:1/-1;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <button class="btn-secondary" onclick="testSyncrifyDataFetch()">Test Data Fetch</button>
+                  <span id="syncrify-data-status" style="font-size:12px;color:var(--text3);"></span>
+                </div>
+                <div class="field-hint">May take a while — fetches a profile and report history page per client.</div>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
             <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:8px;">Cost Formula</div>
             <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Cost = ⌈ Used GB ÷ Block Size ⌉ × $/Block + Devices × $/Device</div>
             <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
@@ -4640,25 +4707,51 @@ function renderSettingsView(){
 
 async function refreshSyncrifyStatus(){
   const el=document.getElementById('syncrify-status');
-  if(!el)return;
+  const dataEl=document.getElementById('syncrify-data-status');
   const host=(appSettings.syncrifyHost||'').trim();
-  if(!host){el.textContent='Not configured — using Active Jobs URL fallback.';el.style.color='var(--text3)';return;}
-  el.textContent='Checking…';el.style.color='var(--text3)';
-  try{
-    const r=await fetch('/api/backup-activity');
-    const d=await r.json();
-    if(d.source==='direct'){
-      const age=d.lastUpdated?Math.round((Date.now()-d.lastUpdated)/1000):null;
-      el.textContent=`✓ Connected — last poll ${age!=null?age+'s ago':'just now'}${d.error?` (last attempt: ${d.error})`:''}`;
-      el.style.color=d.error?'var(--warn)':'var(--success)';
-    }else if(d.source==='direct-pending'){
-      el.textContent=`⚠ Configured but not yet connected${d.error?`: ${d.error}`:' — waiting for first poll'}`;
-      el.style.color='var(--warn)';
-    }else{
-      el.textContent='Not connected.';
-      el.style.color='var(--text3)';
+  if(el){
+    if(!host){el.textContent='Not configured — using Active Jobs URL fallback.';el.style.color='var(--text3)';}
+    else{
+      el.textContent='Checking…';el.style.color='var(--text3)';
+      try{
+        const r=await fetch('/api/backup-activity');
+        const d=await r.json();
+        if(d.source==='direct'){
+          const age=d.lastUpdated?Math.round((Date.now()-d.lastUpdated)/1000):null;
+          el.textContent=`✓ Connected — last poll ${age!=null?age+'s ago':'just now'}${d.error?` (last attempt: ${d.error})`:''}`;
+          el.style.color=d.error?'var(--warn)':'var(--success)';
+        }else if(d.source==='direct-pending'){
+          el.textContent=`⚠ Configured but not yet connected${d.error?`: ${d.error}`:' — waiting for first poll'}`;
+          el.style.color='var(--warn)';
+        }else{
+          el.textContent='Not connected.';
+          el.style.color='var(--text3)';
+        }
+      }catch(err){el.textContent=`Status check failed: ${err.message}`;el.style.color='var(--warn)';}
     }
-  }catch(err){el.textContent=`Status check failed: ${err.message}`;el.style.color='var(--warn)';}
+  }
+  if(dataEl){
+    if(!host){dataEl.textContent='Not configured — using Backup Data URL fallback.';dataEl.style.color='var(--text3)';}
+    else{
+      dataEl.textContent='Checking…';dataEl.style.color='var(--text3)';
+      try{
+        const r=await fetch('/api/backup-data');
+        const d=await r.json();
+        if(d.source==='direct'){
+          const age=d.lastUpdated?Math.round((Date.now()-d.lastUpdated)/1000):null;
+          const ageStr=age!=null?(age<3600?`${Math.round(age/60)}m ago`:`${Math.round(age/3600)}h ago`):'just now';
+          dataEl.textContent=`✓ Connected — last poll ${ageStr}${d.error?` (last attempt: ${d.error})`:''}`;
+          dataEl.style.color=d.error?'var(--warn)':'var(--success)';
+        }else if(d.source==='direct-pending'){
+          dataEl.textContent=`⚠ Configured but not yet connected${d.error?`: ${d.error}`:' — waiting for first poll'}`;
+          dataEl.style.color='var(--warn)';
+        }else{
+          dataEl.textContent='Not connected.';
+          dataEl.style.color='var(--text3)';
+        }
+      }catch(err){dataEl.textContent=`Status check failed: ${err.message}`;dataEl.style.color='var(--warn)';}
+    }
+  }
 }
 
 async function testSyncrifyConnection(){
@@ -4673,6 +4766,24 @@ async function testSyncrifyConnection(){
       _backupActivityData=null;_bkActivityLastUpdated=null;
     }else{
       if(el){el.textContent=`✗ ${d.error}`;el.style.color='var(--danger)';}
+    }
+  }catch(err){
+    if(el){el.textContent=`✗ ${err.message}`;el.style.color='var(--danger)';}
+  }
+}
+
+async function testSyncrifyDataFetch(){
+  const el=document.getElementById('syncrify-data-status');
+  if(el){el.textContent='Fetching… this can take a minute';el.style.color='var(--text3)';}
+  await saveBkSettings();
+  try{
+    const r=await fetch('/api/syncrify-test?type=data',{method:'POST'});
+    const d=await r.json();
+    if(d.ok){
+      if(el){el.textContent=`✓ Fetched ${d.rowCount} profile${d.rowCount===1?'':'s'}`;el.style.color='var(--success)';}
+      _backupLiveData=null;_bkLastUpdated=null;_bkDataSource=null;
+    }else{
+      if(el){el.textContent=`✗ ${d.error||'No data returned'}`;el.style.color='var(--danger)';}
     }
   }catch(err){
     if(el){el.textContent=`✗ ${err.message}`;el.style.color='var(--danger)';}
@@ -6929,6 +7040,21 @@ function connectSSE(){
     _backupActivityData=payload.data;
     _bkActivityLastUpdated=payload.lastUpdated||_bkActivityLastUpdated;
     _bkActivitySource='direct';
+    if(_bkMonitorMode){bkDrawMonitor();return;}
+    const el=document.getElementById('backups-content');
+    if(el&&el.offsetParent!==null){renderBackupsSidebar();bkRenderMain();}
+  });
+  sseSource.addEventListener('backup-data-updated',e=>{
+    const payload=JSON.parse(e.data);
+    if(!Array.isArray(payload.data))return;
+    _bkLastUpdated=payload.lastUpdated||_bkLastUpdated;
+    _bkDataSource='direct';
+    _backupLiveData={};
+    for(const ent of payload.data){
+      if(!_backupLiveData[ent.client])_backupLiveData[ent.client]={usedBytes:0,profiles:[]};
+      _backupLiveData[ent.client].usedBytes+=ent.diskSize;
+      _backupLiveData[ent.client].profiles.push(ent);
+    }
     if(_bkMonitorMode){bkDrawMonitor();return;}
     const el=document.getElementById('backups-content');
     if(el&&el.offsetParent!==null){renderBackupsSidebar();bkRenderMain();}

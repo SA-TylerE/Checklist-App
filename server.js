@@ -267,6 +267,25 @@ function looksLikeSyncrifyLoginPage(html) {
   return /name=["']pwd["']/i.test(html);
 }
 
+// Converts a Syncrify size string (e.g. "1.5 GB", "500 MB") to a byte count.
+function convertSizeToBytes(str) {
+  const m = (str || '').trim().match(/^([\d.]+)\s*(B|KB|MB|GB|TB|PB)$/i);
+  if (!m) return 0;
+  const mult = { B: 1, KB: 1024, MB: 1024 ** 2, GB: 1024 ** 3, TB: 1024 ** 4, PB: 1024 ** 5 }[m[2].toUpperCase()] || 1;
+  return Math.round(parseFloat(m[1]) * mult);
+}
+
+// Parses Syncrify's "M/d/yy h:mm tt" date format (e.g. "6/11/26 1:00 AM") to epoch ms.
+function parseSyncrifyDateToMs(str) {
+  const m = (str || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!m) return 0;
+  let [, mo, da, yr, hh, mi, ap] = m;
+  yr = parseInt(yr); if (yr < 100) yr += 2000;
+  hh = parseInt(hh);
+  if (ap) { ap = ap.toUpperCase(); if (ap === 'PM' && hh !== 12) hh += 12; if (ap === 'AM' && hh === 12) hh = 0; }
+  return new Date(yr, parseInt(mo) - 1, parseInt(da), hh, parseInt(mi)).getTime();
+}
+
 let _syncrifySession = { cookie: null };
 
 async function ensureSyncrifySession(host, user, pass, forceRelogin = false) {
@@ -333,6 +352,106 @@ async function fetchSyncrifyActivity(host, user, pass) {
   return rows;
 }
 
+const SYNC_PROFILE_ROW_PATTERN  = /<tr>\s*<td>([^<]+)<\/td>\s*<td>\s*<a[^>]*data-content="[\s\S]*?"[^>]*>([\d.]+\s*\w+)<\/a>[\s\S]*?<\/td>\s*<td>([^<]+)<\/td>\s*<td>(Yes|No)<\/td>/g;
+const SYNC_REPORT_ROW_PATTERN   = /<tr>\s*<td><img[^>]*itle="Host:[^"]*"[^>]*>\s*([^<]+)<\/td>\s*<td>([^<]+)<\/td>\s*<td>([^<]+)<\/td>\s*<!--\s*Author @Blake Start\s*-->([\s\S]*?)<!--\s*@Blake End\s*-->\s*<td>(\d+)<\/td>\s*<\/tr>/g;
+const SYNC_ERR_FILES_PATTERN    = /<h3>[^<]*<\/h3>([\s\S]*?)<\/div>/;
+const SYNC_EMAIL_PATTERN        = /<abbr title='Name:[^']*'>([^<]+)<\/abbr>/g;
+const SYNC_REPO_PATTERN         = /st=mrp[^"]*"[^>]*>(?:<i[^>]*>[^<]*<\/i>\s*)?<\/a>\s*(D:\\[^<]+)/g;
+
+// Fetches per-client backup data from Syncrify's manageUsers pages: disk usage,
+// encryption flag, and last-access time per profile (from each user's profile
+// page), plus the most recent run status and any failed-files list (from the
+// "Report By User" job history). Returns rows shaped like parseBkTxt()'s output.
+async function fetchSyncrifyBackupData(host, user, pass) {
+  let cookie = await ensureSyncrifySession(host, user, pass);
+  let r = await syncrifyHttpRequest(host, '/app?operation=manageUsers', { cookie });
+  if (looksLikeSyncrifyLoginPage(r.text)) {
+    cookie = await ensureSyncrifySession(host, user, pass, true);
+    r = await syncrifyHttpRequest(host, '/app?operation=manageUsers', { cookie });
+  }
+  const html = r.text;
+
+  const emailMatches = [...html.matchAll(SYNC_EMAIL_PATTERN)];
+  const repoMatches  = [...html.matchAll(SYNC_REPO_PATTERN)];
+
+  const rows = [];
+  for (let i = 0; i < emailMatches.length; i++) {
+    const email = emailMatches[i][1].trim();
+    if (!repoMatches[i]) {
+      console.log(`[backup-data] No repo path for email #${i} (${email}) - skipping.`);
+      continue;
+    }
+    const clientId = repoMatches[i][1].trim().replace(/^D:\\/, '');
+
+    try {
+      const profileR = await syncrifyHttpRequest(host, `/app?operation=manageUsers&st=viewProfile&email=${encodeURIComponent(email)}`, { cookie });
+      const profileMatches = [...profileR.text.matchAll(SYNC_PROFILE_ROW_PATTERN)];
+
+      // "Report By User" job history (newest-first) -> last run status + error-file ref per profile
+      const lastRunStatus = {};
+      const lastRunErrf = {};
+      try {
+        const reportBody = `operation=reports&drbu=1&uid=${encodeURIComponent(email)}`;
+        const reportR = await syncrifyHttpRequest(host, '/app', { method: 'POST', body: reportBody, cookie });
+        for (const rm of reportR.text.matchAll(SYNC_REPORT_ROW_PATTERN)) {
+          const rProfile = rm[1].trim();
+          if (Object.prototype.hasOwnProperty.call(lastRunStatus, rProfile)) continue; // first hit = most recent
+          const statusCell = rm[4];
+          if (/fa-check/.test(statusCell)) {
+            lastRunStatus[rProfile] = 1;
+          } else if (/fa-times/.test(statusCell)) {
+            lastRunStatus[rProfile] = 0;
+            const errfMatch = statusCell.match(/errf=([^&"]+)/);
+            if (errfMatch) lastRunErrf[rProfile] = errfMatch[1];
+          }
+        }
+      } catch (e) {
+        console.log(`[backup-data] Failed to fetch report history for ${clientId}: ${e.message}`);
+      }
+
+      // Failed-files list for any profile whose last run errored
+      const lastRunErrFiles = {};
+      for (const [pName, errf] of Object.entries(lastRunErrf)) {
+        try {
+          const errUrl = `/app?operation=reports&errf=${encodeURIComponent(errf)}&profile=${encodeURIComponent(pName)}&uid=${encodeURIComponent(email)}`;
+          const errR = await syncrifyHttpRequest(host, errUrl, { cookie });
+          const errMatch = errR.text.match(SYNC_ERR_FILES_PATTERN);
+          if (errMatch) {
+            let lines = errMatch[1].split('<br>').map(s => s.trim()).filter(Boolean);
+            if (lines.length > 0) {
+              const maxLines = 25;
+              if (lines.length > maxLines) {
+                const total = lines.length;
+                lines = lines.slice(0, maxLines);
+                lines.push(`...and ${total - maxLines} more`);
+              }
+              lastRunErrFiles[pName] = lines;
+            }
+          }
+        } catch (e) {
+          console.log(`[backup-data] Failed to fetch error report for ${clientId}/${pName}: ${e.message}`);
+        }
+      }
+
+      for (const m of profileMatches) {
+        const profileName = m[1].trim();
+        rows.push({
+          client: clientId,
+          profile: profileName,
+          diskSize: convertSizeToBytes(m[2].trim()),
+          lastAccess: parseSyncrifyDateToMs(m[3].trim()),
+          encrypted: m[4].trim() === 'Yes',
+          lastRunOk: Object.prototype.hasOwnProperty.call(lastRunStatus, profileName) ? lastRunStatus[profileName] : -1,
+          errFiles: lastRunErrFiles[profileName] || null,
+        });
+      }
+    } catch (e) {
+      console.log(`[backup-data] Failed to fetch profile for ${clientId} (${email}): ${e.message}`);
+    }
+  }
+  return rows;
+}
+
 let _liveActivity = { data: [], lastUpdated: null, error: null };
 
 async function pollSyncrifyActivityLoop() {
@@ -357,9 +476,43 @@ async function pollSyncrifyActivityLoop() {
   setTimeout(pollSyncrifyActivityLoop, intervalSec * 1000);
 }
 
+let _liveBackupData = { data: [], lastUpdated: null, error: null };
+
+async function pollSyncrifyDataLoop() {
+  const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+  const host = (settings.syncrifyHost || '').trim().replace(/\/+$/, '');
+  const user = (settings.syncrifyUser || '').trim();
+  const pass = settings.syncrifyPass || '';
+  const intervalSec = Math.max(300, parseInt(settings.syncrifyDataPollSec) || 1800);
+
+  if (host && user && pass) {
+    try {
+      const data = await fetchSyncrifyBackupData(host, user, pass);
+      if (data.length > 0) {
+        _liveBackupData = { data, lastUpdated: Date.now(), error: null };
+        pushEvent('backup-data-updated', { data: _liveBackupData.data, lastUpdated: _liveBackupData.lastUpdated });
+      } else {
+        console.log('[backup-data] Poll returned no rows - keeping previous data.');
+        _liveBackupData = { ..._liveBackupData, error: 'Last poll returned no rows' };
+      }
+    } catch (e) {
+      console.log(`[backup-data] Poll failed: ${e.message}`);
+      _syncrifySession.cookie = null; // force re-login next attempt
+      _liveBackupData = { ..._liveBackupData, error: e.message };
+    }
+  }
+  setTimeout(pollSyncrifyDataLoop, intervalSec * 1000);
+}
+
 app.get('/api/backup-data', async (req, res) => {
   try {
     const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+    const syncrifyConfigured = !!((settings.syncrifyHost || '').trim() && (settings.syncrifyUser || '').trim() && settings.syncrifyPass);
+
+    if (_liveBackupData.lastUpdated) {
+      return res.json({ data: _liveBackupData.data, lastUpdated: _liveBackupData.lastUpdated, error: _liveBackupData.error || undefined, source: 'direct' });
+    }
+
     const rawUrl   = (settings.backupDataUrl       || '').trim();
     const encKey   = (settings.backupEncryptionKey || '').trim();
 
@@ -375,11 +528,11 @@ app.get('/api/backup-data', async (req, res) => {
     } else if (fs.existsSync(BACKUP_DATA_FILE)) {
       text = fs.readFileSync(BACKUP_DATA_FILE, 'utf8');
     } else {
-      return res.json({ data: [], lastUpdated: null });
+      return res.json({ data: [], lastUpdated: null, source: syncrifyConfigured ? 'direct-pending' : 'none', error: _liveBackupData.error || undefined });
     }
 
     const lastUpdated = fs.existsSync(BACKUP_DATA_FILE) ? fs.statSync(BACKUP_DATA_FILE).mtimeMs : null;
-    res.json({ data: parseBkTxt(text), lastUpdated });
+    res.json({ data: parseBkTxt(text), lastUpdated, source: syncrifyConfigured ? 'direct-pending' : 'gist', error: syncrifyConfigured ? (_liveBackupData.error || undefined) : undefined });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -445,6 +598,8 @@ app.get('/api/backup-activity', async (req, res) => {
 // Immediately attempts a Syncrify login + activity fetch using the currently-saved
 // settings, bypassing the poll interval. Used by the Settings UI "Test Connection"
 // button so users get instant feedback after saving credentials.
+// ?type=data instead fetches per-client backup data (manageUsers scrape) - this is
+// slower (one request per client/profile) so it's used by a separate "Test Data Fetch" button.
 app.post('/api/syncrify-test', async (req, res) => {
   try {
     const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
@@ -454,18 +609,38 @@ app.post('/api/syncrify-test', async (req, res) => {
     if (!host || !user || !pass) return res.status(400).json({ ok: false, error: 'Syncrify host, username, and password must be configured first.' });
 
     _syncrifySession.cookie = null;
+
+    if (req.query.type === 'data') {
+      const data = await fetchSyncrifyBackupData(host, user, pass);
+      if (data.length > 0) {
+        _liveBackupData = { data, lastUpdated: Date.now(), error: null };
+        pushEvent('backup-data-updated', { data: _liveBackupData.data, lastUpdated: _liveBackupData.lastUpdated });
+      } else {
+        _liveBackupData = { ..._liveBackupData, error: 'Fetch succeeded but returned no rows' };
+      }
+      return res.json({ ok: data.length > 0, rowCount: data.length });
+    }
+
     const data = await fetchSyncrifyActivity(host, user, pass);
     _liveActivity = { data, lastUpdated: Date.now(), error: null };
     pushEvent('backup-activity-updated', { data: _liveActivity.data, lastUpdated: _liveActivity.lastUpdated });
     res.json({ ok: true, jobCount: data.length });
   } catch (e) {
-    _liveActivity = { ..._liveActivity, error: e.message };
+    if (req.query.type === 'data') _liveBackupData = { ..._liveBackupData, error: e.message };
+    else _liveActivity = { ..._liveActivity, error: e.message };
     res.json({ ok: false, error: e.message });
   }
 });
 
-// Returns the raw HTML of Syncrify's app?operation=activity page using the
-// configured credentials. For diagnosing why fetchSyncrifyActivity() parses 0 rows.
+// General-purpose Syncrify diagnostics. Three modes:
+//  - (no params)   : status summary — config, live-poll state, session state.
+//  - ?login=1      : step-by-step login-flow diagnostic (status/cookies/page-type
+//                    at each step), for diagnosing auth failures.
+//                    ?raw=initial|login|activity returns the raw HTML of that step.
+//  - ?path=<page>  : fetch any authenticated Syncrify page (e.g.
+//                    "app?operation=manageUsers") and return its raw HTML, using
+//                    the cached session (re-logging in if needed). Handy for
+//                    inspecting page structure when porting new scrapers.
 app.get('/api/syncrify-debug', async (req, res) => {
   try {
     const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
@@ -474,12 +649,70 @@ app.get('/api/syncrify-debug', async (req, res) => {
     const pass = settings.syncrifyPass || '';
     if (!host || !user || !pass) return res.status(400).send('Syncrify host, username, and password must be configured first.');
 
-    const cookie = await ensureSyncrifySession(host, user, pass, true);
-    const r = await syncrifyHttpRequest(host, '/app?operation=activity', { cookie });
-    res.set('Content-Type', 'text/plain; charset=utf-8');
-    res.send(r.text);
+    if (req.query.path) {
+      const p = '/' + String(req.query.path).replace(/^\/+/, '');
+      let cookie = await ensureSyncrifySession(host, user, pass);
+      let r = await syncrifyHttpRequest(host, p, { cookie });
+      if (looksLikeSyncrifyLoginPage(r.text)) {
+        cookie = await ensureSyncrifySession(host, user, pass, true);
+        r = await syncrifyHttpRequest(host, p, { cookie });
+      }
+      res.set('Content-Type', 'text/plain; charset=utf-8');
+      return res.send(r.text);
+    }
+
+    if (req.query.login) {
+      const r1 = await syncrifyHttpRequest(host, '/app');
+      let cookie = mergeCookies(null, r1.headers['set-cookie']);
+
+      const body = [
+        `uid=${encodeURIComponent(user)}`,
+        `pwd=${encodeURIComponent(pass)}`,
+        'proceedButton=ok',
+        'operation=login',
+        'operation2=login',
+        `nl=${encodeURIComponent('app?operation=activity')}`,
+      ].join('&');
+      const r2 = await syncrifyHttpRequest(host, '/app', { method: 'POST', body, cookie });
+      cookie = mergeCookies(cookie, r2.headers['set-cookie']);
+
+      const r3 = await syncrifyHttpRequest(host, '/app?operation=activity', { cookie });
+
+      if (req.query.raw === 'initial')  { res.set('Content-Type', 'text/plain; charset=utf-8'); return res.send(r1.text); }
+      if (req.query.raw === 'login')    { res.set('Content-Type', 'text/plain; charset=utf-8'); return res.send(r2.text); }
+      if (req.query.raw === 'activity') { res.set('Content-Type', 'text/plain; charset=utf-8'); return res.send(r3.text); }
+
+      _syncrifySession.cookie = cookie;
+      return res.json({
+        step1_initial:  { status: r1.status, setCookie: r1.headers['set-cookie'] || null, isLoginPage: looksLikeSyncrifyLoginPage(r1.text), bodyLength: r1.text.length },
+        step2_login:    { status: r2.status, setCookie: r2.headers['set-cookie'] || null, location: r2.headers['location'] || null, isLoginPage: looksLikeSyncrifyLoginPage(r2.text), bodyLength: r2.text.length },
+        step3_activity: { status: r3.status, isLoginPage: looksLikeSyncrifyLoginPage(r3.text), hasActiveSessionsTable: /Active Sessions/i.test(r3.text), bodyLength: r3.text.length },
+        cookieSent: cookie,
+      });
+    }
+
+    res.json({
+      syncrifyHost: host,
+      syncrifyUser: user,
+      activityPollSec: Math.max(5, parseInt(settings.syncrifyActivityPollSec) || 30),
+      dataPollSec: Math.max(300, parseInt(settings.syncrifyDataPollSec) || 1800),
+      sessionActive: !!_syncrifySession.cookie,
+      liveActivity: {
+        lastUpdated: _liveActivity.lastUpdated,
+        lastUpdatedAgoSec: _liveActivity.lastUpdated ? Math.round((Date.now() - _liveActivity.lastUpdated) / 1000) : null,
+        jobCount: _liveActivity.data.length,
+        error: _liveActivity.error || null,
+      },
+      liveBackupData: {
+        lastUpdated: _liveBackupData.lastUpdated,
+        lastUpdatedAgoSec: _liveBackupData.lastUpdated ? Math.round((Date.now() - _liveBackupData.lastUpdated) / 1000) : null,
+        rowCount: _liveBackupData.data.length,
+        error: _liveBackupData.error || null,
+      },
+      hint: 'Use ?login=1 for a step-by-step login diagnostic (add &raw=initial|login|activity for raw HTML), or ?path=app%3Foperation%3DmanageUsers to fetch any authenticated page raw.',
+    });
   } catch (e) {
-    res.status(500).send('Error: ' + e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -735,3 +968,4 @@ app.get('/api/health', (req, res) => {
 app.listen(PORT, '127.0.0.1', () => console.log(`Checklist API on 127.0.0.1:${PORT}`));
 
 pollSyncrifyActivityLoop();
+pollSyncrifyDataLoop();
