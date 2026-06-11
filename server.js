@@ -17,9 +17,10 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const MAX_LOGS   = 5000;
 
 app.use(express.json({ limit: '5mb' }));
-app.get(['/', '/index.html'], (req, res) => {
+app.get(['/', '/index.html', '/app.js', '/styles.css'], (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+  const file = req.path === '/' ? 'index.html' : req.path.slice(1);
+  res.sendFile(path.join(PUBLIC_DIR, file));
 });
 app.use(express.static(PUBLIC_DIR));
 
