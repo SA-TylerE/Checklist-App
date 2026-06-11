@@ -7,12 +7,13 @@ const http     = require('http');
 const { exec } = require('child_process');
 
 const app        = express();
-const PORT       = 3001;
-const DATA_FILE  = path.join(__dirname, 'data', 'clients.json');
-const CFG_FILE   = path.join(__dirname, 'data', 'config.json');
-const LOG_FILE   = path.join(__dirname, 'data', 'logs.json');
-const BACKUP_DIR = path.join(__dirname, 'data', 'backups');
-const LIVE_CACHE_FILE = path.join(__dirname, 'data', 'live-backup-cache.json');
+const PORT       = process.env.PORT || 3001;
+const DATA_DIR   = process.env.DATA_DIR || path.join(__dirname, 'data');
+const DATA_FILE  = path.join(DATA_DIR, 'clients.json');
+const CFG_FILE   = path.join(DATA_DIR, 'config.json');
+const LOG_FILE   = path.join(DATA_DIR, 'logs.json');
+const BACKUP_DIR = path.join(DATA_DIR, 'backups');
+const LIVE_CACHE_FILE = path.join(DATA_DIR, 'live-backup-cache.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MAX_LOGS   = 5000;
 
@@ -37,7 +38,7 @@ function pushEvent(type, payload, sourceId) {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 function ensureDirs() {
-  [path.join(__dirname,'data'), BACKUP_DIR].forEach(d => {
+  [DATA_DIR, BACKUP_DIR].forEach(d => {
     if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
   });
   if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, '{}');
@@ -659,7 +660,7 @@ app.get('/api/shorten', (req, res) => {
 });
 
 // Sales quotes
-const SALES_QUOTES_FILE = path.join(__dirname, 'data', 'sales-quotes.json');
+const SALES_QUOTES_FILE = path.join(DATA_DIR, 'sales-quotes.json');
 app.get('/api/sales-quotes', (req, res) => {
   try {
     if (!fs.existsSync(SALES_QUOTES_FILE)) return res.json({});
@@ -709,7 +710,7 @@ app.put('/api/guides', (req, res) => {
 });
 
 // Settings
-const SETTINGS_FILE  = path.join(__dirname, 'data', 'settings.json');
+const SETTINGS_FILE  = path.join(DATA_DIR, 'settings.json');
 const SECRET_MASK    = '********';
 app.get('/api/settings', (req, res) => {
   try {
@@ -851,8 +852,12 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-app.listen(PORT, '127.0.0.1', () => console.log(`Checklist API on 127.0.0.1:${PORT}`));
+if (require.main === module) {
+  app.listen(PORT, '127.0.0.1', () => console.log(`Checklist API on 127.0.0.1:${PORT}`));
+  pollSyncrifyActivityLoop();
+  pollSyncrifyDataLoop();
+}
 
 loadLiveCache();
-pollSyncrifyActivityLoop();
-pollSyncrifyDataLoop();
+
+module.exports = app;

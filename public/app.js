@@ -312,6 +312,7 @@ function newClientFromSidebar(){
 let activeSection=null;
 
 function switchSection(name){
+  if(!confirmLeaveSettings())return;
   if(isMobile()) closeOverlays();
   activeSection=name;
   document.getElementById('sidebar').classList.remove('hidden','collapsed');
@@ -355,6 +356,32 @@ function switchSidebarNav(tab){
 }
 
 let _preSettingsClientId=null;
+let settingsDirty=false;
+
+function markSettingsDirty(){
+  settingsDirty=true;
+  const el=document.getElementById('settings-save-status');
+  if(el){el.textContent='Unsaved changes';el.style.color='var(--warn)';}
+}
+
+// Returns true if it's OK to navigate away from Settings (not dirty, or user confirmed).
+function confirmLeaveSettings(){
+  if(!settingsDirty) return true;
+  if(confirm('You have unsaved settings changes. Leave without saving?')){
+    settingsDirty=false;
+    return true;
+  }
+  return false;
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  const settingsEl=document.getElementById('view-settings');
+  settingsEl?.addEventListener('input',e=>{if(e.target.matches('input,select,textarea'))markSettingsDirty();});
+  settingsEl?.addEventListener('change',e=>{if(e.target.matches('input,select,textarea'))markSettingsDirty();});
+  window.addEventListener('beforeunload',e=>{
+    if(settingsDirty){e.preventDefault();e.returnValue='';}
+  });
+});
 
 function openSettings(){
   if(isMobile()) closeOverlays();
@@ -370,6 +397,7 @@ function openSettings(){
   renderSalesSidebar();
 }
 function goToDashboard(){
+  if(!confirmLeaveSettings())return;
   document.getElementById('settings-btn')?.classList.remove('active');
   activeClientId=null;
   activeSalesQuoteId=null;
@@ -385,6 +413,7 @@ function goToDashboard(){
 function toggleSettings(){
   const btn=document.getElementById('settings-btn');
   if(btn?.classList.contains('active')){
+    if(!confirmLeaveSettings())return;
     btn.classList.remove('active');
     _preSettingsClientId=null;
     if(!activeSection){
@@ -2121,6 +2150,18 @@ function bkRowStatus(c,live){
   return'good';
 }
 
+// Clients with at least one non-compliant (stale) backup profile, for dashboard alerting.
+function bkGetIssueClients(){
+  if(!_backupLiveData)return[];
+  return bkGetClients().map(c=>{
+    const live=_backupLiveData[c.syncrifyId];
+    if(bkRowStatus(c,live)!=='error')return null;
+    const monP=live.profiles.filter(p=>bkEffectiveFreq(c,p.profile)!=='Disabled');
+    const nonCompliant=monP.filter(p=>bkIsCompliant(p.lastAccess,bkEffectiveFreq(c,p.profile))===false).length;
+    return{c,nonCompliant};
+  }).filter(Boolean);
+}
+
 // Oldest monitored-profile timestamp for a client, or Infinity if unknown (sorts last).
 function bkOldestProfileMs({c,live}){
   if(!live)return Infinity;
@@ -2990,6 +3031,7 @@ async function saveAllSettings(){
     logAction('config_saved',{clientId:null,clientName:null,details:`org: ${orgName}, subdomain: ${subdomain}`});
     _backupLiveData=null;_backupActivityData=null;_backupDriveData=null;_bkFetching=false;
     showToast('Settings saved');
+    settingsDirty=false;
     setStatus(`Saved at ${new Date().toLocaleTimeString()}`,'var(--success)');
     refreshSyncrifyStatus();
     return true;
@@ -3005,11 +3047,25 @@ function renderHomeView(){
   if(!el) return;
   const myName=localStorage.getItem('myName')||'';
   const orgName=config?.orgName||'System Alternatives';
+  const hasHost=!!(appSettings.syncrifyHost||'').trim();
+  if(hasHost&&_backupLiveData===null&&!_bkFetching){
+    bkFetchLive().then(()=>renderHomeView());
+  }
+  const issues=bkGetIssueClients();
   el.innerHTML=`<div style="max-width:580px;width:100%;">
     <div style="margin-bottom:32px;text-align:center;">
       <h2 style="font-size:22px;font-weight:700;margin-bottom:4px;">${myName?'Hey, '+escHtml(myName):'Welcome'}</h2>
       <p style="color:var(--text2);font-size:13px;">${escHtml(orgName)}</p>
     </div>
+    ${issues.length?`<div style="margin-bottom:20px;">
+      <div class="dash-section-label">Backup issues</div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        ${issues.map(({c,nonCompliant})=>`<div class="dash-row" onclick="switchSection('backups');bkSwitchClient('${c.id}')">
+          <span style="flex:1;font-size:12px;font-weight:500;">${escHtml(c.name)}</span>
+          <span class="due-badge overdue">${nonCompliant} non-compliant</span>
+        </div>`).join('')}
+      </div>
+    </div>`:''}
     <div style="display:flex;flex-direction:column;gap:8px;">
       <div class="dash-row" style="padding:16px 20px;cursor:pointer;gap:16px;" onclick="switchSection('onboarding')">
         <span style="font-size:22px;width:28px;text-align:center;flex-shrink:0;">📋</span>
@@ -3111,6 +3167,7 @@ function renderDashboard(){
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 function renderSettingsView(){
+  settingsDirty=false;
   document.getElementById('settings-content').innerHTML=`
     <div style="max-width:760px;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;">
