@@ -1874,6 +1874,7 @@ let _bkDataSource=null; // 'direct' | 'direct-pending' | 'none'
 let _bkActiveClient='all';
 let _bkTab='overview';
 let _bkFetching=false;
+let _bkDataFetchTesting=false; // true while Test Data Fetch is running — blocks refreshSyncrifyStatus from overwriting the spinner
 let _bkExpanded=new Set();
 let _bkNoteOpen=new Set();
 let _bkHideInactive=localStorage.getItem('bkHideInactive')==='1';
@@ -3353,6 +3354,15 @@ function renderSettingsView(){
   refreshSyncrifyStatus();
 }
 
+function fmtAge(ms){
+  const s=Math.round(ms/1000);
+  if(s<60)return`${s}s ago`;
+  const m=Math.floor(s/60),rs=s%60;
+  if(m<60)return rs>0?`${m}m ${rs}s ago`:`${m}m ago`;
+  const h=Math.floor(m/60),rm=m%60;
+  return rm>0?`${h}h ${rm}m ago`:`${h}h ago`;
+}
+
 async function refreshSyncrifyStatus(){
   const el=document.getElementById('syncrify-status');
   const dataEl=document.getElementById('syncrify-data-status');
@@ -3378,26 +3388,32 @@ async function refreshSyncrifyStatus(){
       }catch(err){el.textContent=`Status check failed: ${err.message}`;el.style.color='var(--warn)';}
     }
   }
-  if(dataEl){
-    if(!host){dataEl.textContent='Not configured — using Backup Data URL fallback.';dataEl.style.color='var(--text3)';}
+  if(dataEl&&!_bkDataFetchTesting){
+    if(!host){dataEl.textContent='Not configured — using Backup Data URL fallback.';dataEl.style.color='var(--text3)';dataEl.title='';}
     else{
-      dataEl.textContent='Checking…';dataEl.style.color='var(--text3)';
+      dataEl.textContent='Checking…';dataEl.style.color='var(--text3)';dataEl.title='';
       try{
         const r=await fetch('/api/backup-data');
         const d=await r.json();
         if(d.source==='direct'){
-          const age=d.lastUpdated?Math.round((Date.now()-d.lastUpdated)/1000):null;
-          const ageStr=age!=null?(age<3600?`${Math.round(age/60)}m ago`:`${Math.round(age/3600)}h ago`):'just now';
-          dataEl.textContent=`✓ Connected — last poll ${ageStr}${d.error?` (last attempt: ${d.error})`:''}`;
-          dataEl.style.color=d.error?'var(--warn)':'var(--success)';
+          const ageMs=d.lastUpdated?Date.now()-d.lastUpdated:null;
+          const pollMs=(appSettings.syncrifyDataPollSec||1800)*1000;
+          const isStale=ageMs!=null&&ageMs>pollMs*1.5;
+          const ageStr=ageMs!=null?fmtAge(ageMs):'just now';
+          const pollMin=Math.round((appSettings.syncrifyDataPollSec||1800)/60);
+          const staleSpan=isStale?` <span style="color:var(--warn);"> ⚠ stale (poll every ${pollMin}m)</span>`:'';
+          const errSpan=d.error?` <span style="color:var(--warn);">(last error: ${escHtml(d.error)})</span>`:'';
+          dataEl.innerHTML=`✓ Connected — last polled ${ageStr}${staleSpan}${errSpan}`;
+          dataEl.title=d.lastUpdated?`Last refreshed: ${new Date(d.lastUpdated).toLocaleString()}`:'';
+          dataEl.style.color=isStale||d.error?'var(--warn)':'var(--success)';
         }else if(d.source==='direct-pending'){
           dataEl.textContent=`⚠ Configured but not yet connected${d.error?`: ${d.error}`:' — waiting for first poll'}`;
-          dataEl.style.color='var(--warn)';
+          dataEl.style.color='var(--warn)';dataEl.title='';
         }else{
           dataEl.textContent='Not connected.';
-          dataEl.style.color='var(--text3)';
+          dataEl.style.color='var(--text3)';dataEl.title='';
         }
-      }catch(err){dataEl.textContent=`Status check failed: ${err.message}`;dataEl.style.color='var(--warn)';}
+      }catch(err){dataEl.textContent=`Status check failed: ${err.message}`;dataEl.style.color='var(--warn)';dataEl.title='';}
     }
   }
 }
@@ -3422,19 +3438,36 @@ async function testSyncrifyConnection(){
 
 async function testSyncrifyDataFetch(){
   const el=document.getElementById('syncrify-data-status');
-  if(el){el.textContent='Fetching… this can take a minute';el.style.color='var(--text3)';}
-  if(!await saveAllSettings())return;
+  _bkDataFetchTesting=true;
+  let elapsed=0;
+  let ticker=null;
+  const setSpinner=()=>{
+    if(el){el.innerHTML=`<span class="spinner" style="width:10px;height:10px;border-width:2px;"></span> Fetching… ${elapsed}s elapsed`;el.style.color='var(--text3)';}
+  };
+  setSpinner();
+  ticker=setInterval(()=>{elapsed++;setSpinner();},1000);
+  const finish=(html,color)=>{
+    clearInterval(ticker);
+    _bkDataFetchTesting=false;
+    if(el){el.innerHTML=html;el.style.color=color;el.title='';}
+  };
+  if(!await saveAllSettings()){
+    clearInterval(ticker);
+    _bkDataFetchTesting=false;
+    refreshSyncrifyStatus();
+    return;
+  }
   try{
     const r=await fetch('/api/syncrify-test?type=data',{method:'POST'});
     const d=await r.json();
     if(d.ok){
-      if(el){el.textContent=`✓ Fetched ${d.rowCount} profile${d.rowCount===1?'':'s'}`;el.style.color='var(--success)';}
+      finish(`✓ Fetched ${d.rowCount} profile${d.rowCount===1?'':'s'} in ${elapsed}s`,'var(--success)');
       _backupLiveData=null;_bkLastUpdated=null;_bkDataSource=null;
     }else{
-      if(el){el.textContent=`✗ ${d.error||'No data returned'}`;el.style.color='var(--danger)';}
+      finish(`✗ ${d.error||'No data returned'}`,'var(--danger)');
     }
   }catch(err){
-    if(el){el.textContent=`✗ ${err.message}`;el.style.color='var(--danger)';}
+    finish(`✗ ${err.message}`,'var(--danger)');
   }
 }
 
