@@ -143,7 +143,7 @@ app.get('/api/syncro/search', (req, res) => {
 // syncrifyHost/syncrifyUser/syncrifyPass configured in Settings, and polls
 // app?operation=activity on a timer.
 
-function syncrifyHttpRequest(baseUrl, pathAndQuery, { method = 'GET', body = null, cookie = null } = {}) {
+function syncrifyHttpRequest(baseUrl, pathAndQuery, { method = 'GET', body = null, cookie = null, timeoutMs = 30000 } = {}) {
   return new Promise((resolve, reject) => {
     const parsed  = new URL(pathAndQuery, baseUrl);
     const mod     = parsed.protocol === 'https:' ? https : http;
@@ -157,10 +157,14 @@ function syncrifyHttpRequest(baseUrl, pathAndQuery, { method = 'GET', body = nul
     }
     const opts = { hostname: parsed.hostname, port: parsed.port || undefined, path: parsed.pathname + parsed.search, method, headers };
     const req = mod.request(opts, res => {
+      // Guard against a response that starts but then stalls mid-stream.
+      const stallTimer = setTimeout(() => req.destroy(new Error('Response stalled')), timeoutMs);
       let text = '';
       res.on('data', c => text += c);
-      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, text }));
+      res.on('end', () => { clearTimeout(stallTimer); resolve({ status: res.statusCode, headers: res.headers, text }); });
     });
+    // Guard against the server never responding at all (connect hangs, or request never acknowledged).
+    req.setTimeout(timeoutMs, () => req.destroy(new Error('Request timed out')));
     req.on('error', reject);
     if (body) req.write(body);
     req.end();
