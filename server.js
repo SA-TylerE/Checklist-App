@@ -174,6 +174,79 @@ app.get('/api/syncro/search', (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Syncro customer cache (Quotes page client picker) ──────────────────────────
+// Periodically pulls the full Syncro customer list into syncro_customers so the
+// client picker can search a local table instantly instead of hitting Syncro's
+// API on every keystroke — same "poll on a timer, cache locally" shape as the
+// Syncrify backup-data loop further down.
+async function fetchAllSyncroCustomers(subdomain, token) {
+  const customers = [];
+  let page = 1;
+  for (;;) {
+    const result = await jsonHttpRequest(`https://${subdomain}.syncromsp.com/api/v1/customers?page=${page}`, {
+      method: 'GET',
+      headers: { accept: 'application/json', Authorization: token },
+    });
+    if (result.status !== 200 || !result.json) break;
+    const pageCustomers = result.json.customers || [];
+    customers.push(...pageCustomers);
+    const totalPages = result.json.meta?.total_pages || 1;
+    if (page >= totalPages || pageCustomers.length === 0) break;
+    page++;
+  }
+  return customers;
+}
+
+function replaceSyncroCustomers(customers) {
+  const now = Date.now();
+  db.transaction((list) => {
+    db.prepare('DELETE FROM syncro_customers').run();
+    const insert = db.prepare('INSERT INTO syncro_customers (id, business_name, email, phone, data, updated_at) VALUES (?,?,?,?,?,?)');
+    for (const c of list) {
+      insert.run(String(c.id), c.business_name || '', c.email || '', c.phone || '', JSON.stringify(c), now);
+    }
+  })(customers);
+}
+
+async function pollSyncroCustomersOnce() {
+  try {
+    const cfg = readCfg();
+    const token = cfg.syncro_api_token;
+    const subdomain = cfg.syncro_subdomain;
+    if (!token || !subdomain) return { ok: false, error: 'Syncro not configured' };
+    const customers = await fetchAllSyncroCustomers(subdomain, token);
+    replaceSyncroCustomers(customers);
+    return { ok: true, count: customers.length };
+  } catch (e) {
+    console.log(`[syncro-customers] Poll failed: ${e.message}`);
+    return { ok: false, error: e.message };
+  }
+}
+
+function pollSyncroCustomersLoop() {
+  pollSyncroCustomersOnce().finally(() => {
+    const settings    = readSettings();
+    const intervalSec = Math.max(300, parseInt(settings.syncroCustomerPollSec) || 1800);
+    setTimeout(pollSyncroCustomersLoop, intervalSec * 1000);
+  });
+}
+
+app.get('/api/syncro-customers', (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    const rows = q
+      ? db.prepare('SELECT id, business_name, email, phone FROM syncro_customers WHERE business_name LIKE ? ORDER BY business_name LIMIT 25').all(`%${q}%`)
+      : db.prepare('SELECT id, business_name, email, phone FROM syncro_customers ORDER BY business_name LIMIT 25').all();
+    res.json(rows.map(r => ({ id: r.id, businessName: r.business_name, email: r.email, phone: r.phone })));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/syncro-customers/refresh', async (req, res) => {
+  const result = await pollSyncroCustomersOnce();
+  if (result.ok) { pushEvent('syncro-customers-updated', { count: result.count }, req.headers['x-source-id']); res.json(result); }
+  else res.status(400).json(result);
+});
+
 // ── Direct Syncrify polling (live activity) ───────────────────────────────────
 // server.js logs into Syncrify itself (e.g. over Tailscale) using
 // syncrifyHost/syncrifyUser/syncrifyPass configured in Settings, and polls
@@ -769,16 +842,20 @@ function readPurchaseRequests() {
   const itemRows = db.prepare('SELECT * FROM purchase_request_items').all();
   const itemsByPr = {};
   for (const it of itemRows) {
-    (itemsByPr[it.purchase_request_id] ||= []).push({ id: it.id, description: it.description, qty: it.qty, estUnitCost: it.est_unit_cost, notes: it.notes });
+    (itemsByPr[it.purchase_request_id] ||= []).push({
+      id: it.id, description: it.description, qty: it.qty, estUnitCost: it.est_unit_cost, notes: it.notes,
+      vendor: it.vendor, url: it.url, sku: it.sku, received: !!it.received,
+    });
   }
   const out = {};
   for (const row of prRows) {
     out[row.id] = {
       id: row.id, clientId: row.client_id, clientName: row.client_name,
-      requestedBy: row.requested_by, vendor: row.vendor, notes: row.notes,
+      requestedBy: row.requested_by, notes: row.notes,
       priority: !!row.priority, status: row.status, clientEmail: row.client_email,
       approvalStatus: row.approval_status, approvalId: row.approval_id,
       approvalSentAt: row.approval_sent_at, approvalResolvedAt: row.approval_resolved_at,
+      invoiceId: row.invoice_id,
       createdAt: row.created_at, updatedAt: row.updated_at,
       items: itemsByPr[row.id] || [],
     };
@@ -790,27 +867,28 @@ function replacePurchaseRequests(obj) {
   const now = Date.now();
   db.transaction((data) => {
     const existing = {};
-    for (const row of db.prepare('SELECT id, approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at, created_at FROM purchase_requests').all()) {
+    for (const row of db.prepare('SELECT id, approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at, invoice_id, created_at FROM purchase_requests').all()) {
       existing[row.id] = row;
     }
     db.prepare('DELETE FROM purchase_request_items').run();
     db.prepare('DELETE FROM purchase_requests').run();
     const insertPr = db.prepare(`INSERT INTO purchase_requests
-      (id, client_id, client_name, requested_by, vendor, notes, priority, status, client_email,
-       approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at, created_at, updated_at)
+      (id, client_id, client_name, requested_by, notes, priority, status, client_email,
+       approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at, invoice_id, created_at, updated_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
-    const insertItem = db.prepare('INSERT INTO purchase_request_items (purchase_request_id, description, qty, est_unit_cost, notes) VALUES (?,?,?,?,?)');
+    const insertItem = db.prepare('INSERT INTO purchase_request_items (purchase_request_id, description, qty, est_unit_cost, notes, vendor, url, sku, received) VALUES (?,?,?,?,?,?,?,?,?)');
     for (const [id, pr] of Object.entries(data)) {
       const prev = existing[id];
       insertPr.run(
-        id, pr.clientId||null, pr.clientName||null, pr.requestedBy||null, pr.vendor||null, pr.notes||null,
+        id, pr.clientId||null, pr.clientName||null, pr.requestedBy||null, pr.notes||null,
         pr.priority?1:0, pr.status||'draft', pr.clientEmail||null,
         prev?.approval_status || 'not_sent', prev?.approval_id || null, prev?.approval_token || null,
-        prev?.approval_sent_at || null, prev?.approval_resolved_at || null,
+        prev?.approval_sent_at || null, prev?.approval_resolved_at || null, prev?.invoice_id || null,
         prev?.created_at || now, now
       );
       for (const item of (pr.items||[])) {
-        insertItem.run(id, item.description||'', item.qty||0, item.estUnitCost||0, item.notes||null);
+        insertItem.run(id, item.description||'', item.qty||0, item.estUnitCost||0, item.notes||null,
+          item.vendor||null, item.url||null, item.sku||null, item.received?1:0);
       }
     }
   })(obj);
@@ -979,7 +1057,7 @@ function replaceInvoiceEdits(obj) {
 
 function createInvoice(payload) {
   const now = Date.now();
-  const id  = 'inv-' + now;
+  const id  = 'inv-' + now + '-' + Math.random().toString(36).slice(2, 6);
   let number;
   db.transaction(() => {
     const row = db.prepare('SELECT COALESCE(MAX(number), 1000) AS maxNumber FROM invoices').get();
@@ -1014,6 +1092,51 @@ app.put('/api/invoices', (req, res) => {
     replaceInvoiceEdits(req.body);
     pushEvent('invoices-updated', {}, req.headers['x-source-id']);
     res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+app.delete('/api/invoices/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM invoices WHERE id = ?').run(req.params.id); // cascades to invoice_line_items
+    pushEvent('invoices-updated', {}, req.headers['x-source-id']);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/purchase-requests/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM purchase_requests WHERE id = ?').run(req.params.id); // cascades to purchase_request_items
+    pushEvent('purchase-requests-updated', {}, req.headers['x-source-id']);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Turns a received Purchase Request into a real Invoice — same client + line
+// items (vendor/url/sku are internal-purchasing-only fields and are dropped,
+// matching the "no internal detail on client-facing documents" rule), linked
+// back via source_purchase_request_id/invoice_id so each keeps a pointer to
+// the other. The two stay separate records (not merged) so a request can
+// still be split across multiple invoices later if needed.
+app.post('/api/purchase-requests/:id/generate-invoice', (req, res) => {
+  try {
+    const pr = db.prepare('SELECT * FROM purchase_requests WHERE id = ?').get(req.params.id);
+    if (!pr) return res.status(404).json({ error: 'Purchase request not found' });
+    if (pr.invoice_id) return res.status(400).json({ error: 'An invoice has already been generated for this request' });
+
+    const items = db.prepare('SELECT description, qty, est_unit_cost FROM purchase_request_items WHERE purchase_request_id = ?').all(pr.id);
+    const { id: invoiceId, number } = createInvoice({
+      clientId: pr.client_id,
+      clientName: pr.client_name,
+      notes: pr.notes,
+      sourcePurchaseRequestId: pr.id,
+      lineItems: items.map(it => ({ description: it.description, qty: it.qty, unitPrice: it.est_unit_cost })),
+    });
+
+    const now = Date.now();
+    db.prepare(`UPDATE purchase_requests SET status='invoiced', invoice_id=?, updated_at=? WHERE id=?`).run(invoiceId, now, pr.id);
+
+    pushEvent('purchase-requests-updated', {}, req.headers['x-source-id']);
+    pushEvent('invoices-updated', {}, req.headers['x-source-id']);
+    res.json({ ok: true, invoiceId, number });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1183,6 +1306,7 @@ if (require.main === module) {
   pollSyncrifyActivityLoop();
   pollSyncrifyDataLoop();
   pollApprovalStatusLoop();
+  pollSyncroCustomersLoop();
 }
 
 loadLiveCache();

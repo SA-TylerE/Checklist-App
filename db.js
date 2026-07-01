@@ -94,9 +94,39 @@ function createDb(dataDir) {
       unit_price REAL
     );
     CREATE INDEX IF NOT EXISTS idx_ili_invoice ON invoice_line_items(invoice_id);
+
+    CREATE TABLE IF NOT EXISTS syncro_customers (
+      id TEXT PRIMARY KEY,
+      business_name TEXT,
+      email TEXT,
+      phone TEXT,
+      data TEXT,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_syncro_customers_name ON syncro_customers(business_name);
   `);
 
+  // Additive migrations for columns introduced after the tables above first
+  // shipped — CREATE TABLE IF NOT EXISTS alone won't add columns to a
+  // database that already exists on a deployed server.
+  ensureColumns(db, 'purchase_requests', [
+    ['invoice_id', 'TEXT'],
+  ]);
+  ensureColumns(db, 'purchase_request_items', [
+    ['vendor', 'TEXT'],
+    ['url', 'TEXT'],
+    ['sku', 'TEXT'],
+    ['received', 'INTEGER DEFAULT 0'],
+  ]);
+
   return db;
+}
+
+function ensureColumns(db, table, columns) {
+  const existing = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name));
+  for (const [name, type] of columns) {
+    if (!existing.has(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${type}`);
+  }
 }
 
 function kvGet(db, key, fallback) {

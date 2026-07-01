@@ -4,7 +4,7 @@ const fs   = require('fs');
 const os   = require('os');
 const path = require('path');
 const http = require('http');
-const { createDb, kvGet } = require('../db');
+const { createDb, kvGet, kvSet } = require('../db');
 
 let server, baseUrl, dataDir, app;
 
@@ -286,4 +286,103 @@ test('migrate-json-to-sqlite reads legacy JSON files into app.db and is idempote
   } finally {
     fs.rmSync(legacyDir, { recursive: true, force: true });
   }
+});
+
+test('purchase request line items round-trip vendor/url/sku/received', async () => {
+  const prs = {
+    'pr-robust': {
+      clientId: 'abc123', clientName: 'Test Client', status: 'draft',
+      items: [{ description: 'Switch', qty: 2, estUnitCost: 300, vendor: 'CDW', url: 'https://cdw.com/product/123', sku: 'SW-123', received: true }],
+    },
+  };
+  await fetch(`${baseUrl}/api/purchase-requests`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prs),
+  });
+  const body = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
+  const item = body['pr-robust'].items[0];
+  assert.equal(item.vendor, 'CDW');
+  assert.equal(item.url, 'https://cdw.com/product/123');
+  assert.equal(item.sku, 'SW-123');
+  assert.equal(item.received, true);
+});
+
+test('generate-invoice creates a linked invoice and blocks a second conversion', async () => {
+  await fetch(`${baseUrl}/api/purchase-requests`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 'pr-convert': {
+      clientId: 'abc123', clientName: 'Test Client', status: 'received',
+      items: [{ description: 'Server', qty: 1, estUnitCost: 2000, vendor: 'Ingram' }],
+    }}),
+  });
+
+  const res = await fetch(`${baseUrl}/api/purchase-requests/pr-convert/generate-invoice`, { method: 'POST' });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.ok(body.invoiceId);
+  assert.ok(body.number >= 1001);
+
+  const invoices = await (await fetch(`${baseUrl}/api/invoices`)).json();
+  const inv = invoices[body.invoiceId];
+  assert.equal(inv.clientName, 'Test Client');
+  assert.equal(inv.sourcePurchaseRequestId, 'pr-convert');
+  assert.equal(inv.lineItems[0].description, 'Server');
+  assert.equal(inv.lineItems[0].unitPrice, 2000);
+  // vendor is an internal-purchasing-only field and must not leak onto the invoice
+  assert.equal(inv.lineItems[0].vendor, undefined);
+
+  const prs = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
+  assert.equal(prs['pr-convert'].status, 'invoiced');
+  assert.equal(prs['pr-convert'].invoiceId, body.invoiceId);
+
+  const second = await fetch(`${baseUrl}/api/purchase-requests/pr-convert/generate-invoice`, { method: 'POST' });
+  assert.equal(second.status, 400);
+});
+
+test('DELETE /api/purchase-requests/:id and /api/invoices/:id remove the record', async () => {
+  await fetch(`${baseUrl}/api/purchase-requests`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 'pr-delete-me': { clientId: 'abc123', clientName: 'Test Client', items: [] } }),
+  });
+  const delPrRes = await fetch(`${baseUrl}/api/purchase-requests/pr-delete-me`, { method: 'DELETE' });
+  assert.equal(delPrRes.status, 200);
+  const prsAfter = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
+  assert.equal(prsAfter['pr-delete-me'], undefined);
+
+  const created = await (await fetch(`${baseUrl}/api/invoices`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId: 'abc123', clientName: 'Test Client', lineItems: [] }),
+  })).json();
+  const delInvRes = await fetch(`${baseUrl}/api/invoices/${created.id}`, { method: 'DELETE' });
+  assert.equal(delInvRes.status, 200);
+  const invoicesAfter = await (await fetch(`${baseUrl}/api/invoices`)).json();
+  assert.equal(invoicesAfter[created.id], undefined);
+});
+
+test('GET /api/syncro-customers searches the local cache table', async () => {
+  const db = app.locals.db;
+  const now = Date.now();
+  db.prepare('INSERT INTO syncro_customers (id, business_name, email, phone, data, updated_at) VALUES (?,?,?,?,?,?)')
+    .run('syn-1', 'Acme Corp', 'billing@acme.com', '555-1000', '{}', now);
+  db.prepare('INSERT INTO syncro_customers (id, business_name, email, phone, data, updated_at) VALUES (?,?,?,?,?,?)')
+    .run('syn-2', 'Widget Co', 'ap@widget.co', '555-2000', '{}', now);
+
+  const all = await (await fetch(`${baseUrl}/api/syncro-customers`)).json();
+  assert.ok(all.length >= 2);
+
+  const filtered = await (await fetch(`${baseUrl}/api/syncro-customers?q=Acme`)).json();
+  assert.equal(filtered.length, 1);
+  assert.equal(filtered[0].businessName, 'Acme Corp');
+  assert.equal(filtered[0].email, 'billing@acme.com');
+});
+
+test('POST /api/syncro-customers/refresh fails cleanly when Syncro is not configured', async () => {
+  // An earlier test in this suite configures syncro_subdomain/syncro_api_token;
+  // clear them here so this hits the "not configured" guard rather than
+  // attempting a real network call to a fake subdomain.
+  kvSet(app.locals.db, 'config', {});
+  const res = await fetch(`${baseUrl}/api/syncro-customers/refresh`, { method: 'POST' });
+  assert.equal(res.status, 400);
+  const body = await res.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, 'Syncro not configured');
 });

@@ -280,6 +280,17 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .field-group textarea{max-width:100%;} /* let textareas fill for readability */
 .modal-card .field-group input,.modal-card .field-group select,.modal-card .field-group textarea,.edit-client-card .field-group input{max-width:100%;} /* full width inside modals */
 .field-group input:focus,.field-group textarea:focus,.field-group select:focus{border-color:var(--accent);}
+/* Searchable Syncro client picker */
+.syncro-suggestions{position:absolute;top:100%;left:0;right:0;z-index:20;max-height:220px;overflow-y:auto;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;margin-top:2px;box-shadow:0 4px 12px rgba(0,0,0,0.25);}
+.syncro-suggestion-item{padding:7px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);}
+.syncro-suggestion-item:last-child{border-bottom:none;}
+.syncro-suggestion-item:hover{background:var(--bg3);}
+/* Right-click context menu */
+.context-menu{position:fixed;z-index:900;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.35);padding:4px;min-width:160px;}
+.context-menu-item{padding:7px 12px;font-size:12px;border-radius:5px;cursor:pointer;white-space:nowrap;}
+.context-menu-item:hover{background:var(--bg3);}
+.context-menu-item.danger{color:var(--danger);}
+.context-menu-sep{height:1px;background:var(--border);margin:4px 2px;}
 .field-group input::placeholder,.field-group textarea::placeholder{color:var(--text3);}
 .field-group textarea{resize:vertical;min-height:52px;}
 
