@@ -317,7 +317,7 @@ function switchSection(name){
   activeSection=name;
   document.getElementById('sidebar').classList.remove('hidden','collapsed');
   document.getElementById('settings-btn')?.classList.remove('active');
-  ['onboarding','sales','reference','backups'].forEach(s=>{
+  ['onboarding','sales','quotes','reference','backups'].forEach(s=>{
     document.getElementById('ah-btn-'+s)?.classList.toggle('active',s===name);
     document.getElementById('ss-'+s)?.classList.toggle('active',s===name);
   });
@@ -330,6 +330,12 @@ function switchSection(name){
     renderSidebar();
     renderSalesSidebar();
     showView('sales');
+  } else if(name==='quotes'){
+    activeClientId=null;
+    activeSalesQuoteId=null;
+    renderQuotesSidebar();
+    showView('quotes');
+    renderQuotesDashboard();
   } else if(name==='reference'){
     activeClientId=null;
     activeSalesQuoteId=null;
@@ -1109,6 +1115,331 @@ async function loadSalesQuotes(){
 async function saveSalesQuotes(){
   try{await fetch('/api/sales-quotes',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(salesQuotes)});}
   catch(e){console.error(e);}
+}
+
+// ── Quotes page: Purchase Requests + Invoices ──────────────────────────────────
+let purchaseRequests={};
+let invoices={};
+let activeQuotesTab='pr'; // 'pr' | 'invoice'
+let activePurchaseRequestId=null;
+let activeInvoiceId=null;
+
+async function loadPurchaseRequests(){
+  try{const r=await fetch('/api/purchase-requests');if(r.ok)purchaseRequests=await r.json();}
+  catch(_){purchaseRequests={};}
+}
+async function savePurchaseRequests(){
+  try{await fetch('/api/purchase-requests',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(purchaseRequests)});}
+  catch(e){console.error(e);}
+}
+async function loadInvoices(){
+  try{const r=await fetch('/api/invoices');if(r.ok)invoices=await r.json();}
+  catch(_){invoices={};}
+}
+async function saveInvoices(){
+  try{await fetch('/api/invoices',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(invoices)});}
+  catch(e){console.error(e);}
+}
+
+function getClientOptions(){
+  return Object.values(clients).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+}
+
+function purchaseRequestStatusLabel(s){return{not_sent:'Not Sent',pending:'Pending',approved:'Approved',denied:'Denied'}[s]||'Not Sent';}
+function invoiceStatusLabel(s){return{draft:'Draft',sent:'Sent',paid:'Paid',overdue:'Overdue',void:'Void'}[s]||'Draft';}
+
+function switchQuotesTab(tab){
+  activeQuotesTab=tab;
+  document.getElementById('quotes-tab-pr')?.classList.toggle('active',tab==='pr');
+  document.getElementById('quotes-tab-invoice')?.classList.toggle('active',tab==='invoice');
+  renderQuotesSidebar();
+}
+
+function renderQuotesSidebar(){
+  const list=document.getElementById('quotes-list');
+  if(!list) return;
+  if(activeQuotesTab==='pr'){
+    const items=Object.values(purchaseRequests).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    list.innerHTML=items.map(pr=>`
+      <div class="client-item ${pr.id===activePurchaseRequestId?'active':''}" title="${escHtml(pr.clientName||'')}">
+        <div style="padding:7px 14px;cursor:pointer;" onclick="selectPurchaseRequest('${pr.id}')">
+          <div class="cn"><span>${escHtml(pr.clientName||'(no client)')}</span><span class="quote-status ${pr.approvalStatus||'not_sent'}">${purchaseRequestStatusLabel(pr.approvalStatus)}</span></div>
+          <div class="cm">${escHtml(pr.vendor||'')}</div>
+        </div>
+      </div>`).join('') || `<div style="padding:20px 12px;text-align:center;font-size:12px;color:var(--text3);">No purchase requests yet.</div>`;
+  } else {
+    const items=Object.values(invoices).sort((a,b)=>(b.number||0)-(a.number||0));
+    list.innerHTML=items.map(inv=>`
+      <div class="client-item ${inv.id===activeInvoiceId?'active':''}" title="${escHtml(inv.clientName||'')}">
+        <div style="padding:7px 14px;cursor:pointer;" onclick="selectInvoice('${inv.id}')">
+          <div class="cn"><span>#${inv.number} · ${escHtml(inv.clientName||'(no client)')}</span><span class="quote-status ${inv.status||'draft'}">${invoiceStatusLabel(inv.status)}</span></div>
+        </div>
+      </div>`).join('') || `<div style="padding:20px 12px;text-align:center;font-size:12px;color:var(--text3);">No invoices yet.</div>`;
+  }
+}
+
+function renderQuotesDashboard(){
+  if(activePurchaseRequestId&&purchaseRequests[activePurchaseRequestId]){ renderPurchaseRequestDetail(activePurchaseRequestId); return; }
+  if(activeInvoiceId&&invoices[activeInvoiceId]){ renderInvoiceDetail(activeInvoiceId); return; }
+  const el=document.getElementById('quotes-content');
+  if(el) el.innerHTML=`<div style="padding:30px;color:var(--text3);">Select a purchase request or invoice from the sidebar, or create a new one.</div>`;
+}
+
+function newQuotesItemFromSidebar(){
+  if(activeQuotesTab==='pr') createPurchaseRequest();
+  else createInvoiceFromSidebar();
+}
+
+async function createPurchaseRequest(){
+  const id='pr-'+Date.now();
+  purchaseRequests[id]={
+    id, clientId:'', clientName:'', requestedBy:localStorage.getItem('myName')||'',
+    vendor:'', notes:'', priority:false, status:'draft', clientEmail:'',
+    approvalStatus:'not_sent', items:[], createdAt:Date.now(), updatedAt:Date.now(),
+  };
+  await savePurchaseRequests();
+  renderQuotesSidebar();
+  selectPurchaseRequest(id);
+}
+
+function selectPurchaseRequest(id){
+  activePurchaseRequestId=id;
+  activeInvoiceId=null;
+  activeQuotesTab='pr';
+  renderQuotesSidebar();
+  showView('quotes');
+  renderPurchaseRequestDetail(id);
+}
+
+function renderPurchaseRequestDetail(id){
+  const pr=purchaseRequests[id];
+  const el=document.getElementById('quotes-content');
+  if(!pr||!el) return;
+  const clientOptions=getClientOptions().map(c=>`<option value="${c.id}" ${c.id===pr.clientId?'selected':''}>${escHtml(c.name)}</option>`).join('');
+  const itemsRows=(pr.items||[]).map((it,i)=>`
+    <tr>
+      <td><input value="${escHtml(it.description||'')}" oninput="updatePrItem('${id}',${i},'description',this.value)"></td>
+      <td><input type="number" min="0" step="1" value="${it.qty||0}" style="width:70px;" oninput="updatePrItem('${id}',${i},'qty',this.value)"></td>
+      <td><input type="number" min="0" step="0.01" value="${it.estUnitCost||0}" style="width:90px;" oninput="updatePrItem('${id}',${i},'estUnitCost',this.value)"></td>
+      <td style="text-align:right;">$${((it.qty||0)*(it.estUnitCost||0)).toFixed(2)}</td>
+      <td><button class="btn-secondary" style="padding:2px 8px;font-size:11px;" onclick="removePrItem('${id}',${i})">✕</button></td>
+    </tr>`).join('');
+  const total=(pr.items||[]).reduce((s,it)=>s+(it.qty||0)*(it.estUnitCost||0),0);
+  const canSend=pr.approvalStatus==='not_sent';
+  el.innerHTML=`
+    <div class="wizard-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <h2 style="margin:0;">Purchase Request</h2>
+        <span class="quote-status ${pr.approvalStatus||'not_sent'}">${purchaseRequestStatusLabel(pr.approvalStatus)}</span>
+      </div>
+      <div id="pr-alert-${id}"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+        <div class="field-group" style="margin:0;"><label>Client</label>
+          <select onchange="updatePrField('${id}','clientId',this.value)"><option value="">— Select client —</option>${clientOptions}</select>
+        </div>
+        <div class="field-group" style="margin:0;"><label>Client Email</label>
+          <input value="${escHtml(pr.clientEmail||'')}" oninput="updatePrField('${id}','clientEmail',this.value)" placeholder="client@example.com">
+        </div>
+        <div class="field-group" style="margin:0;"><label>Vendor</label>
+          <input value="${escHtml(pr.vendor||'')}" oninput="updatePrField('${id}','vendor',this.value)">
+        </div>
+        <div class="field-group" style="margin:0;"><label>Status</label>
+          <select onchange="updatePrField('${id}','status',this.value)">
+            ${['draft','ordered','received','cancelled'].map(s=>`<option value="${s}" ${s===pr.status?'selected':''}>${s[0].toUpperCase()+s.slice(1)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field-group" style="grid-column:1/-1;margin:0;"><label>Notes</label>
+          <textarea rows="2" oninput="updatePrField('${id}','notes',this.value)">${escHtml(pr.notes||'')}</textarea>
+        </div>
+      </div>
+      <div style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:7px;">Line Items</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px;">
+        <thead><tr><th style="text-align:left;">Description</th><th>Qty</th><th>Est. Unit Cost</th><th style="text-align:right;">Total</th><th></th></tr></thead>
+        <tbody>${itemsRows}</tbody>
+      </table>
+      <button class="btn-secondary" style="font-size:11px;margin-bottom:14px;" onclick="addPrItem('${id}')">+ Add Item</button>
+      <div style="text-align:right;font-weight:700;margin-bottom:16px;">Estimated Total: $${total.toFixed(2)}</div>
+      <div class="wizard-actions">
+        <button class="btn-secondary" onclick="switchSection('quotes')">Back</button>
+        <button class="btn-primary" ${canSend?'':'disabled'} onclick="sendPurchaseRequestForApproval('${id}')">${pr.approvalStatus==='not_sent'?'Send for Approval':'Sent — '+purchaseRequestStatusLabel(pr.approvalStatus)}</button>
+      </div>
+    </div>`;
+}
+
+function updatePrField(id,field,value){
+  const pr=purchaseRequests[id]; if(!pr) return;
+  if(field==='clientId'){ pr.clientId=value; pr.clientName=clients[value]?.name||''; }
+  else pr[field]=value;
+  pr.updatedAt=Date.now();
+  savePurchaseRequests();
+  renderQuotesSidebar();
+}
+function addPrItem(id){
+  const pr=purchaseRequests[id]; if(!pr) return;
+  pr.items=pr.items||[];
+  pr.items.push({description:'',qty:1,estUnitCost:0,notes:''});
+  savePurchaseRequests();
+  renderPurchaseRequestDetail(id);
+}
+function removePrItem(id,idx){
+  const pr=purchaseRequests[id]; if(!pr) return;
+  pr.items.splice(idx,1);
+  savePurchaseRequests();
+  renderPurchaseRequestDetail(id);
+}
+function updatePrItem(id,idx,field,value){
+  const pr=purchaseRequests[id]; if(!pr) return;
+  const it=pr.items[idx]; if(!it) return;
+  it[field]=(field==='qty'||field==='estUnitCost')?parseFloat(value)||0:value;
+  savePurchaseRequests();
+  renderPurchaseRequestDetail(id);
+}
+
+async function sendPurchaseRequestForApproval(id){
+  const pr=purchaseRequests[id]; if(!pr) return;
+  if(!pr.clientEmail){ showAlert(`pr-alert-${id}`,'error','Set a client email before sending.'); return; }
+  try{
+    const r=await fetch(`/api/purchase-requests/${id}/send-approval`,{method:'POST',headers:{'X-Tech-Name':localStorage.getItem('myName')||''}});
+    const body=await r.json();
+    if(!r.ok) throw new Error(body.error||'Failed to send');
+    await loadPurchaseRequests();
+    renderQuotesSidebar();
+    renderPurchaseRequestDetail(id);
+  }catch(e){ showAlert(`pr-alert-${id}`,'error',e.message); }
+}
+
+async function createInvoiceFromSidebar(){
+  const clientOptions=getClientOptions();
+  if(!clientOptions.length){ alert('Add a client before creating an invoice.'); return; }
+  const r=await fetch('/api/invoices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clientId:clientOptions[0].id,clientName:clientOptions[0].name,lineItems:[]})});
+  const body=await r.json();
+  await loadInvoices();
+  renderQuotesSidebar();
+  selectInvoice(body.id);
+}
+
+function selectInvoice(id){
+  activeInvoiceId=id;
+  activePurchaseRequestId=null;
+  activeQuotesTab='invoice';
+  renderQuotesSidebar();
+  showView('quotes');
+  renderInvoiceDetail(id);
+}
+
+function calcInvoiceTotal(inv){
+  const subtotal=(inv.lineItems||[]).reduce((s,it)=>s+(it.qty||0)*(it.unitPrice||0),0);
+  const tax=subtotal*((inv.taxRate||0)/100);
+  return {subtotal,tax,total:subtotal+tax};
+}
+
+function renderInvoiceDetail(id){
+  const inv=invoices[id];
+  const el=document.getElementById('quotes-content');
+  if(!inv||!el) return;
+  const clientOptions=getClientOptions().map(c=>`<option value="${c.id}" ${c.id===inv.clientId?'selected':''}>${escHtml(c.name)}</option>`).join('');
+  const itemsRows=(inv.lineItems||[]).map((it,i)=>`
+    <tr>
+      <td><input value="${escHtml(it.description||'')}" oninput="updateInvoiceItem('${id}',${i},'description',this.value)"></td>
+      <td><input type="number" min="0" step="1" value="${it.qty||0}" style="width:70px;" oninput="updateInvoiceItem('${id}',${i},'qty',this.value)"></td>
+      <td><input type="number" min="0" step="0.01" value="${it.unitPrice||0}" style="width:90px;" oninput="updateInvoiceItem('${id}',${i},'unitPrice',this.value)"></td>
+      <td style="text-align:right;">$${((it.qty||0)*(it.unitPrice||0)).toFixed(2)}</td>
+      <td><button class="btn-secondary" style="padding:2px 8px;font-size:11px;" onclick="removeInvoiceItem('${id}',${i})">✕</button></td>
+    </tr>`).join('');
+  const totals=calcInvoiceTotal(inv);
+  el.innerHTML=`
+    <div class="wizard-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <h2 style="margin:0;">Invoice #${inv.number}</h2>
+        <span class="quote-status ${inv.status||'draft'}">${invoiceStatusLabel(inv.status)}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+        <div class="field-group" style="margin:0;"><label>Client</label>
+          <select onchange="updateInvoiceField('${id}','clientId',this.value)">${clientOptions}</select>
+        </div>
+        <div class="field-group" style="margin:0;"><label>Status</label>
+          <select onchange="updateInvoiceField('${id}','status',this.value)">
+            ${['draft','sent','paid','overdue','void'].map(s=>`<option value="${s}" ${s===inv.status?'selected':''}>${invoiceStatusLabel(s)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field-group" style="margin:0;"><label>Tax Rate (%)</label>
+          <input type="number" min="0" step="0.01" value="${inv.taxRate||0}" oninput="updateInvoiceField('${id}','taxRate',this.value)">
+        </div>
+        <div class="field-group" style="margin:0;"><label>Due Date</label>
+          <input type="date" value="${inv.dueDate?new Date(inv.dueDate).toISOString().slice(0,10):''}" onchange="updateInvoiceField('${id}','dueDate',this.value?new Date(this.value).getTime():null)">
+        </div>
+        <div class="field-group" style="grid-column:1/-1;margin:0;"><label>Notes</label>
+          <textarea rows="2" oninput="updateInvoiceField('${id}','notes',this.value)">${escHtml(inv.notes||'')}</textarea>
+        </div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px;">
+        <thead><tr><th style="text-align:left;">Description</th><th>Qty</th><th>Unit Price</th><th style="text-align:right;">Total</th><th></th></tr></thead>
+        <tbody>${itemsRows}</tbody>
+      </table>
+      <button class="btn-secondary" style="font-size:11px;margin-bottom:14px;" onclick="addInvoiceItem('${id}')">+ Add Line Item</button>
+      <div style="text-align:right;margin-bottom:16px;">
+        <div>Subtotal: $${totals.subtotal.toFixed(2)}</div>
+        <div>Tax: $${totals.tax.toFixed(2)}</div>
+        <div style="font-weight:700;">Total: $${totals.total.toFixed(2)}</div>
+      </div>
+      <div class="wizard-actions">
+        <button class="btn-secondary" onclick="switchSection('quotes')">Back</button>
+        <button class="btn-secondary" onclick="printInvoice('${id}')">Print</button>
+      </div>
+    </div>`;
+}
+
+function updateInvoiceField(id,field,value){
+  const inv=invoices[id]; if(!inv) return;
+  if(field==='clientId'){ inv.clientId=value; inv.clientName=clients[value]?.name||''; }
+  else if(field==='taxRate') inv.taxRate=parseFloat(value)||0;
+  else inv[field]=value;
+  inv.updatedAt=Date.now();
+  saveInvoices();
+  renderQuotesSidebar();
+}
+function addInvoiceItem(id){
+  const inv=invoices[id]; if(!inv) return;
+  inv.lineItems=inv.lineItems||[];
+  inv.lineItems.push({description:'',qty:1,unitPrice:0});
+  saveInvoices();
+  renderInvoiceDetail(id);
+}
+function removeInvoiceItem(id,idx){
+  const inv=invoices[id]; if(!inv) return;
+  inv.lineItems.splice(idx,1);
+  saveInvoices();
+  renderInvoiceDetail(id);
+}
+function updateInvoiceItem(id,idx,field,value){
+  const inv=invoices[id]; if(!inv) return;
+  const it=inv.lineItems[idx]; if(!it) return;
+  it[field]=(field==='qty'||field==='unitPrice')?parseFloat(value)||0:value;
+  saveInvoices();
+  renderInvoiceDetail(id);
+}
+
+function printInvoice(id){
+  const inv=invoices[id]; if(!inv) return;
+  const totals=calcInvoiceTotal(inv);
+  const rows=(inv.lineItems||[]).map(it=>`<tr><td>${escHtml(it.description||'')}</td><td style="text-align:right;">${it.qty||0}</td><td style="text-align:right;">$${(it.unitPrice||0).toFixed(2)}</td><td style="text-align:right;">$${((it.qty||0)*(it.unitPrice||0)).toFixed(2)}</td></tr>`).join('');
+  const w=window.open('','_blank');
+  w.document.write(`
+    <html><head><title>Invoice #${inv.number}</title>
+    <style>body{font-family:sans-serif;padding:30px;color:#111;} table{width:100%;border-collapse:collapse;margin-top:20px;} th,td{padding:8px;border-bottom:1px solid #ddd;} th{text-align:left;} .totals{margin-top:16px;text-align:right;}</style>
+    </head><body>
+    <h1>Invoice #${inv.number}</h1>
+    <p><strong>${escHtml(inv.clientName||'')}</strong></p>
+    <table><thead><tr><th>Description</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Unit Price</th><th style="text-align:right;">Total</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+    <div class="totals">
+      <div>Subtotal: $${totals.subtotal.toFixed(2)}</div>
+      <div>Tax: $${totals.tax.toFixed(2)}</div>
+      <div><strong>Total: $${totals.total.toFixed(2)}</strong></div>
+    </div>
+    </body></html>`);
+  w.document.close();
+  w.print();
 }
 
 function newQuoteFromSidebar(){
@@ -5705,6 +6036,14 @@ function connectSSE(){
     const el=document.getElementById('backups-content');
     if(el&&el.offsetParent!==null){renderBackupsSidebar();bkRenderMain();}
   });
+  sseSource.addEventListener('purchase-requests-updated',async()=>{
+    await loadPurchaseRequests();
+    if(activeSection==='quotes'){ renderQuotesSidebar(); renderQuotesDashboard(); }
+  });
+  sseSource.addEventListener('invoices-updated',async()=>{
+    await loadInvoices();
+    if(activeSection==='quotes'){ renderQuotesSidebar(); renderQuotesDashboard(); }
+  });
   sseSource.addEventListener('app-updated',()=>{
     const banner=document.getElementById('update-banner');
     if(banner) banner.style.display='block';
@@ -5729,7 +6068,7 @@ async function loadConfig(){
     else console.warn('steps.json not found');
     const settingsRes=await fetch('/api/settings').catch(()=>null);
     if(settingsRes&&settingsRes.ok){const sd=await settingsRes.json();appSettings={...appSettings,...sd};if(!sd.products) appSettings.products=DEFAULT_PRODUCTS;}
-    await loadClients();await loadSalesQuotes();renderSidebar();buildProductsGrid();document.getElementById('sidebar').classList.add('hidden');showView('home');
+    await loadClients();await loadSalesQuotes();await loadPurchaseRequests();await loadInvoices();renderSidebar();buildProductsGrid();document.getElementById('sidebar').classList.add('hidden');showView('home');
   }catch(e){showAlert('config-alert','error',`Failed to load: ${e.message}`);}
 }
 async function loadClients(){try{const r=await fetch('/api/clients');if(!r.ok)throw new Error();clients=await r.json();}catch(e){clients={};}}
@@ -5875,7 +6214,8 @@ function showView(name){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   const map={home:'view-home',config:'view-config','new-client':'view-new-client',empty:'view-empty',
              checklist:'view-checklist',reference:'view-reference',settings:'view-settings',
-             sales:'view-sales','new-quote':'view-new-quote',quote:'view-quote',backups:'view-backups'};
+             sales:'view-sales','new-quote':'view-new-quote',quote:'view-quote',backups:'view-backups',
+             quotes:'view-quotes'};
   document.getElementById(map[name]||'view-home')?.classList.add('active');
   if(name==='home') renderHomeView();
   if(name==='new-client'){

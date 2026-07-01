@@ -5,15 +5,14 @@ const os       = require('os');
 const https    = require('https');
 const http     = require('http');
 const { exec } = require('child_process');
+const { createDb, kvGet, kvSet } = require('./db');
+const { migrate } = require('./scripts/migrate-json-to-sqlite');
 
 const app        = express();
 const PORT       = process.env.PORT || 3001;
 const DATA_DIR   = process.env.DATA_DIR || path.join(__dirname, 'data');
-const DATA_FILE  = path.join(DATA_DIR, 'clients.json');
-const CFG_FILE   = path.join(DATA_DIR, 'config.json');
-const LOG_FILE   = path.join(DATA_DIR, 'logs.json');
+const DB_FILE    = path.join(DATA_DIR, 'app.db');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
-const LIVE_CACHE_FILE = path.join(DATA_DIR, 'live-backup-cache.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MAX_LOGS   = 5000;
 
@@ -41,47 +40,84 @@ function ensureDirs() {
   [DATA_DIR, BACKUP_DIR].forEach(d => {
     if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
   });
-  if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, '{}');
 }
 
 // Write to a temp file then rename — prevents partial writes from corrupting JSON if the process crashes mid-write.
+// (Still used for the public/steps.json editor route — data-file persistence below uses SQLite instead.)
 function atomicWrite(filePath, data) {
   const tmp = filePath + '.tmp.' + process.pid;
   fs.writeFileSync(tmp, data, 'utf8');
   fs.renameSync(tmp, filePath);
 }
 
+ensureDirs();
+migrate(DATA_DIR); // idempotent — no-ops once data/app.db already has migrated data
+const db = createDb(DATA_DIR);
+
 function readCfg() {
-  try { return JSON.parse(fs.readFileSync(CFG_FILE, 'utf8')); }
-  catch(_) { return {}; }
+  return kvGet(db, 'config', {});
 }
 
-function doBackup(label) {
+function readSettings() {
+  return kvGet(db, 'settings', {});
+}
+
+function readClients() {
+  const rows = db.prepare('SELECT id, data FROM clients').all();
+  const out = {};
+  for (const row of rows) out[row.id] = JSON.parse(row.data);
+  return out;
+}
+
+function replaceClients(obj) {
+  const now = Date.now();
+  db.transaction((data) => {
+    db.prepare('DELETE FROM clients').run();
+    const insert = db.prepare('INSERT INTO clients (id, data, updated_at) VALUES (?, ?, ?)');
+    for (const [id, value] of Object.entries(data)) insert.run(id, JSON.stringify(value), now);
+  })(obj);
+}
+
+function readContracts() {
+  const rows = db.prepare('SELECT id, data FROM contracts').all();
+  const out = {};
+  for (const row of rows) out[row.id] = JSON.parse(row.data);
+  return out;
+}
+
+function replaceContracts(obj) {
+  const now = Date.now();
+  db.transaction((data) => {
+    db.prepare('DELETE FROM contracts').run();
+    const insert = db.prepare('INSERT INTO contracts (id, data, updated_at) VALUES (?, ?, ?)');
+    for (const [id, value] of Object.entries(data)) insert.run(id, JSON.stringify(value), now);
+  })(obj);
+}
+
+async function doBackup(label) {
   try {
-    if (!fs.existsSync(DATA_FILE)) return null;
     const stamp = label || new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
-    const dest  = path.join(BACKUP_DIR, `clients-${stamp}.json`);
-    fs.copyFileSync(DATA_FILE, dest);
+    const dest  = path.join(BACKUP_DIR, `app-${stamp}.db`);
+    await db.backup(dest);
     // Prune to last 30
     const files = fs.readdirSync(BACKUP_DIR)
-      .filter(f => f.startsWith('clients-') && f.endsWith('.json'))
+      .filter(f => f.startsWith('app-') && f.endsWith('.db'))
       .sort();
     while (files.length > 30) fs.unlinkSync(path.join(BACKUP_DIR, files.shift()));
     return path.basename(dest);
   } catch(e) { console.error('Backup error:', e.message); return null; }
 }
 
-ensureDirs();
 // Daily startup backup
 const todayStamp = new Date().toISOString().slice(0,10);
-if (!fs.readdirSync(BACKUP_DIR).some(f => f.includes(todayStamp))) doBackup(todayStamp);
+if (!fs.readdirSync(BACKUP_DIR).some(f => f.includes(todayStamp))) doBackup(todayStamp).catch(()=>{});
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 // Config read — token is NOT returned; client receives syncroTokenSet (bool) only.
 app.get('/api/config', (req, res) => {
   try {
-    if (!fs.existsSync(CFG_FILE)) return res.status(404).json({ error: 'config.json not found' });
-    const cfg = readCfg();
+    const cfg = kvGet(db, 'config', null);
+    if (!cfg) return res.status(404).json({ error: 'config not found' });
     const token = cfg.syncro_api_token || '';
     res.json({
       syncroTokenSet:  !!token,
@@ -108,7 +144,7 @@ app.put('/api/config', (req, res) => {
       due_warning_days: b.dueWarningDays  ?? cur.due_warning_days,
       org_name:         b.orgName         ?? cur.org_name,
     };
-    atomicWrite(CFG_FILE, JSON.stringify(updated, null, 2));
+    kvSet(db, 'config', updated);
     pushEvent('config-updated', {}, req.headers['x-source-id']);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: 'Failed to write config' }); }
@@ -167,6 +203,36 @@ function syncrifyHttpRequest(baseUrl, pathAndQuery, { method = 'GET', body = nul
     req.setTimeout(timeoutMs, () => req.destroy(new Error('Request timed out')));
     req.on('error', reject);
     if (body) req.write(body);
+    req.end();
+  });
+}
+
+// Generic JSON-over-HTTPS request used to talk to systemalternatives.net's
+// approval API (SA-Website) — same timeout-guarded Promise shape as
+// syncrifyHttpRequest above, but with JSON headers instead of Syncrify's
+// form-encoded/scrape-specific ones.
+function jsonHttpRequest(url, { method = 'GET', body = null, headers = {}, timeoutMs = 15000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const mod    = parsed.protocol === 'https:' ? https : http;
+    const bodyStr = body != null ? JSON.stringify(body) : null;
+    const reqHeaders = { 'Content-Type': 'application/json', ...headers };
+    if (bodyStr) reqHeaders['Content-Length'] = Buffer.byteLength(bodyStr);
+    const opts = { hostname: parsed.hostname, port: parsed.port || undefined, path: parsed.pathname + parsed.search, method, headers: reqHeaders };
+    const req = mod.request(opts, res => {
+      const stallTimer = setTimeout(() => req.destroy(new Error('Response stalled')), timeoutMs);
+      let text = '';
+      res.on('data', c => text += c);
+      res.on('end', () => {
+        clearTimeout(stallTimer);
+        let json = null;
+        try { json = JSON.parse(text); } catch (_) {}
+        resolve({ status: res.statusCode, json, text });
+      });
+    });
+    req.setTimeout(timeoutMs, () => req.destroy(new Error('Request timed out')));
+    req.on('error', reject);
+    if (bodyStr) req.write(bodyStr);
     req.end();
   });
 }
@@ -400,7 +466,7 @@ async function fetchSyncrifyDriveData(host, user, pass) {
 let _liveActivity = { data: [], lastUpdated: null, error: null };
 
 async function pollSyncrifyActivityLoop() {
-  const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+  const settings = readSettings();
   const host = (settings.syncrifyHost || '').trim().replace(/\/+$/, '');
   const user = (settings.syncrifyUser || '').trim();
   const pass = settings.syncrifyPass || '';
@@ -428,7 +494,8 @@ let _liveDriveData  = { data: null, lastUpdated: null, error: null };
 // restart instead of sitting empty until the next poll completes.
 function loadLiveCache() {
   try {
-    const cached = JSON.parse(fs.readFileSync(LIVE_CACHE_FILE, 'utf8'));
+    const cached = kvGet(db, 'live_backup_cache', null);
+    if (!cached) return;
     if (cached.backupData?.lastUpdated) _liveBackupData = { data: cached.backupData.data || [], lastUpdated: cached.backupData.lastUpdated, error: null };
     if (cached.driveData?.lastUpdated)  _liveDriveData  = { data: cached.driveData.data || null, lastUpdated: cached.driveData.lastUpdated, error: null };
   } catch (_) {}
@@ -436,15 +503,15 @@ function loadLiveCache() {
 
 function saveLiveCache() {
   try {
-    atomicWrite(LIVE_CACHE_FILE, JSON.stringify({
+    kvSet(db, 'live_backup_cache', {
       backupData: { data: _liveBackupData.data, lastUpdated: _liveBackupData.lastUpdated },
       driveData:  { data: _liveDriveData.data, lastUpdated: _liveDriveData.lastUpdated },
-    }, null, 2));
+    });
   } catch (_) {}
 }
 
 async function pollSyncrifyDataLoop() {
-  const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+  const settings = readSettings();
   const host = (settings.syncrifyHost || '').trim().replace(/\/+$/, '');
   const user = (settings.syncrifyUser || '').trim();
   const pass = settings.syncrifyPass || '';
@@ -493,7 +560,7 @@ app.get('/api/backup-data', async (req, res) => {
     if (_liveBackupData.lastUpdated) {
       return res.json({ data: _liveBackupData.data, lastUpdated: _liveBackupData.lastUpdated, error: _liveBackupData.error || undefined, source: 'direct' });
     }
-    const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+    const settings = readSettings();
     const syncrifyConfigured = !!((settings.syncrifyHost || '').trim() && (settings.syncrifyUser || '').trim() && settings.syncrifyPass);
     res.json({ data: [], lastUpdated: null, source: syncrifyConfigured ? 'direct-pending' : 'none', error: _liveBackupData.error || undefined });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -506,7 +573,7 @@ app.get('/api/backup-activity', async (req, res) => {
     if (_liveActivity.lastUpdated) {
       return res.json({ data: _liveActivity.data, lastUpdated: _liveActivity.lastUpdated, error: _liveActivity.error || undefined, source: 'direct' });
     }
-    const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+    const settings = readSettings();
     const syncrifyConfigured = !!((settings.syncrifyHost || '').trim() && (settings.syncrifyUser || '').trim() && settings.syncrifyPass);
     res.json({ data: [], lastUpdated: null, source: syncrifyConfigured ? 'direct-pending' : 'none', error: _liveActivity.error || undefined });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -519,7 +586,7 @@ app.get('/api/backup-activity', async (req, res) => {
 // slower (one request per client/profile) so it's used by a separate "Test Data Fetch" button.
 app.post('/api/syncrify-test', async (req, res) => {
   try {
-    const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+    const settings = readSettings();
     const host = (settings.syncrifyHost || '').trim().replace(/\/+$/, '');
     const user = (settings.syncrifyUser || '').trim();
     const pass = settings.syncrifyPass || '';
@@ -561,7 +628,7 @@ app.post('/api/syncrify-test', async (req, res) => {
 //                    inspecting page structure when porting new scrapers.
 app.get('/api/syncrify-debug', async (req, res) => {
   try {
-    const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+    const settings = readSettings();
     const host = (settings.syncrifyHost || '').trim().replace(/\/+$/, '');
     const user = (settings.syncrifyUser || '').trim();
     const pass = settings.syncrifyPass || '';
@@ -641,7 +708,7 @@ app.get('/api/backup-drive', async (req, res) => {
     if (_liveDriveData.lastUpdated) {
       return res.json({ data: _liveDriveData.data, lastUpdated: _liveDriveData.lastUpdated, error: _liveDriveData.error || undefined, source: 'direct' });
     }
-    const settings = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+    const settings = readSettings();
     const syncrifyConfigured = !!((settings.syncrifyHost || '').trim() && (settings.syncrifyUser || '').trim() && settings.syncrifyPass);
     res.json({ data: null, lastUpdated: null, source: syncrifyConfigured ? 'direct-pending' : 'none', error: _liveDriveData.error || undefined });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -663,37 +730,291 @@ app.get('/api/shorten', (req, res) => {
   }).on('error', e => res.status(500).json({ error: e.message }));
 });
 
-// Sales quotes
-const SALES_QUOTES_FILE = path.join(DATA_DIR, 'sales-quotes.json');
+// Sales quotes (backed by the `contracts` table — see plan's "Contracts" nav rename)
 app.get('/api/sales-quotes', (req, res) => {
-  try {
-    if (!fs.existsSync(SALES_QUOTES_FILE)) return res.json({});
-    res.json(JSON.parse(fs.readFileSync(SALES_QUOTES_FILE, 'utf8')));
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  try { res.json(readContracts()); }
+  catch(e) { res.status(500).json({ error: e.message }); }
 });
 app.put('/api/sales-quotes', (req, res) => {
   try {
     if (!req.body || typeof req.body !== 'object') return res.status(400).json({ error: 'Invalid payload' });
-    atomicWrite(SALES_QUOTES_FILE, JSON.stringify(req.body, null, 2));
+    replaceContracts(req.body);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // Clients read/write
 app.get('/api/clients', (req, res) => {
-  try { res.json(JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))); }
+  try { res.json(readClients()); }
   catch(e) { res.status(500).json({ error: 'Failed to read client data' }); }
 });
 
 app.put('/api/clients', (req, res) => {
   try {
     if (!req.body || typeof req.body !== 'object') return res.status(400).json({ error: 'Invalid payload' });
-    atomicWrite(DATA_FILE, JSON.stringify(req.body, null, 2));
+    replaceClients(req.body);
     const sessionId = req.headers['x-session-id'] || req.headers['x-source-id'] || '';
     const techName  = req.headers['x-tech-name'] || '';
     pushEvent('clients-updated', { clients: req.body, sessionId, techName }, sessionId);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: 'Failed to write client data' }); }
+});
+
+// ── Purchase Requests (Quotes page) ────────────────────────────────────────────
+// Full-object read/replace like clients/contracts, except approval_* columns
+// are server-managed (set only by send-approval/poll-status below) so a normal
+// frontend edit-and-save never clobbers in-flight approval state.
+function readPurchaseRequests() {
+  const prRows   = db.prepare('SELECT * FROM purchase_requests').all();
+  const itemRows = db.prepare('SELECT * FROM purchase_request_items').all();
+  const itemsByPr = {};
+  for (const it of itemRows) {
+    (itemsByPr[it.purchase_request_id] ||= []).push({ id: it.id, description: it.description, qty: it.qty, estUnitCost: it.est_unit_cost, notes: it.notes });
+  }
+  const out = {};
+  for (const row of prRows) {
+    out[row.id] = {
+      id: row.id, clientId: row.client_id, clientName: row.client_name,
+      requestedBy: row.requested_by, vendor: row.vendor, notes: row.notes,
+      priority: !!row.priority, status: row.status, clientEmail: row.client_email,
+      approvalStatus: row.approval_status, approvalId: row.approval_id,
+      approvalSentAt: row.approval_sent_at, approvalResolvedAt: row.approval_resolved_at,
+      createdAt: row.created_at, updatedAt: row.updated_at,
+      items: itemsByPr[row.id] || [],
+    };
+  }
+  return out;
+}
+
+function replacePurchaseRequests(obj) {
+  const now = Date.now();
+  db.transaction((data) => {
+    const existing = {};
+    for (const row of db.prepare('SELECT id, approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at, created_at FROM purchase_requests').all()) {
+      existing[row.id] = row;
+    }
+    db.prepare('DELETE FROM purchase_request_items').run();
+    db.prepare('DELETE FROM purchase_requests').run();
+    const insertPr = db.prepare(`INSERT INTO purchase_requests
+      (id, client_id, client_name, requested_by, vendor, notes, priority, status, client_email,
+       approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at, created_at, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    const insertItem = db.prepare('INSERT INTO purchase_request_items (purchase_request_id, description, qty, est_unit_cost, notes) VALUES (?,?,?,?,?)');
+    for (const [id, pr] of Object.entries(data)) {
+      const prev = existing[id];
+      insertPr.run(
+        id, pr.clientId||null, pr.clientName||null, pr.requestedBy||null, pr.vendor||null, pr.notes||null,
+        pr.priority?1:0, pr.status||'draft', pr.clientEmail||null,
+        prev?.approval_status || 'not_sent', prev?.approval_id || null, prev?.approval_token || null,
+        prev?.approval_sent_at || null, prev?.approval_resolved_at || null,
+        prev?.created_at || now, now
+      );
+      for (const item of (pr.items||[])) {
+        insertItem.run(id, item.description||'', item.qty||0, item.estUnitCost||0, item.notes||null);
+      }
+    }
+  })(obj);
+}
+
+app.get('/api/purchase-requests', (req, res) => {
+  try { res.json(readPurchaseRequests()); }
+  catch(e) { res.status(500).json({ error: e.message }); }
+});
+app.put('/api/purchase-requests', (req, res) => {
+  try {
+    if (!req.body || typeof req.body !== 'object') return res.status(400).json({ error: 'Invalid payload' });
+    replacePurchaseRequests(req.body);
+    pushEvent('purchase-requests-updated', {}, req.headers['x-source-id']);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Sends a purchase request to SA-Website (systemalternatives.net) for client
+// approval — an outbound-only call, since this app has no inbound public
+// exposure. The result comes back later via the batched poll loop below, not
+// an inbound webhook.
+app.post('/api/purchase-requests/:id/send-approval', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const row = db.prepare('SELECT * FROM purchase_requests WHERE id = ?').get(id);
+    if (!row) return res.status(404).json({ error: 'Purchase request not found' });
+    if (!row.client_email) return res.status(400).json({ error: 'Purchase request has no client email set' });
+
+    const apiBase = (process.env.SA_WEBSITE_API_BASE || '').replace(/\/+$/, '');
+    const apiKey  = process.env.SA_WEBSITE_API_KEY || '';
+    if (!apiBase || !apiKey) return res.status(500).json({ error: 'SA_WEBSITE_API_BASE/SA_WEBSITE_API_KEY not configured' });
+
+    const items = db.prepare('SELECT description, qty, est_unit_cost AS estUnitCost, notes FROM purchase_request_items WHERE purchase_request_id = ?').all(id);
+    const totalEstimate = items.reduce((sum, it) => sum + (it.qty||0) * (it.estUnitCost||0), 0);
+
+    const approvalId = 'apr-' + Date.now();
+    const result = await jsonHttpRequest(`${apiBase}/approval_request.php`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: {
+        mode: 'create',
+        approval_id: approvalId,
+        client_email: row.client_email,
+        client_name: row.client_name,
+        items,
+        total_estimate: totalEstimate,
+        notes: row.notes || '',
+      },
+    });
+    if (result.status !== 200 || !result.json?.ok) {
+      return res.status(502).json({ error: result.json?.error || `SA-Website returned status ${result.status}` });
+    }
+
+    const now = Date.now();
+    db.prepare(`UPDATE purchase_requests SET approval_status='pending', approval_id=?, approval_sent_at=?, updated_at=? WHERE id=?`)
+      .run(approvalId, now, now, id);
+    db.prepare('INSERT INTO logs (id, client_id, ts, data) VALUES (?, ?, ?, ?)')
+      .run(`${now}-${Math.random().toString(36).slice(2,6)}`, row.client_id, now,
+        JSON.stringify({ ts: new Date(now).toISOString(), tech: req.headers['x-tech-name']||'', action: 'purchase-request-sent-for-approval', clientId: row.client_id, clientName: row.client_name }));
+
+    pushEvent('purchase-requests-updated', {}, req.headers['x-source-id']);
+    res.json({ ok: true, approvalId });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// One outbound call per cycle, covering every outstanding approval — not one
+// call per pending item — so polling cost stays flat regardless of how many
+// purchase requests are awaiting a client decision.
+async function pollApprovalStatusOnce() {
+  try {
+    const pending = db.prepare(`SELECT id, approval_id, client_id, client_name FROM purchase_requests WHERE approval_status = 'pending' AND approval_id IS NOT NULL`).all();
+    const apiBase = (process.env.SA_WEBSITE_API_BASE || '').replace(/\/+$/, '');
+    const apiKey  = process.env.SA_WEBSITE_API_KEY || '';
+    if (pending.length > 0 && apiBase && apiKey) {
+      const result = await jsonHttpRequest(`${apiBase}/approval_request.php`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: { mode: 'get_status', approval_ids: pending.map(p => p.approval_id) },
+      });
+      if (result.status === 200 && result.json?.ok) {
+        const statuses = result.json.statuses || {};
+        const now = Date.now();
+        let anyResolved = false;
+        for (const pr of pending) {
+          const info = statuses[pr.approval_id];
+          if (!info || info.status === 'pending') continue;
+          anyResolved = true;
+          db.prepare(`UPDATE purchase_requests SET approval_status=?, approval_resolved_at=?, updated_at=? WHERE id=?`)
+            .run(info.status, info.resolved_at || now, now, pr.id);
+          db.prepare('INSERT INTO logs (id, client_id, ts, data) VALUES (?, ?, ?, ?)')
+            .run(`${now}-${Math.random().toString(36).slice(2,6)}`, pr.client_id, now,
+              JSON.stringify({ ts: new Date(now).toISOString(), tech: '', action: `purchase-request-${info.status}`, clientId: pr.client_id, clientName: pr.client_name }));
+        }
+        if (anyResolved) pushEvent('purchase-requests-updated', {}, 'server');
+      } else {
+        console.log(`[approval-poll] SA-Website returned status ${result.status}`);
+      }
+    }
+  } catch (e) {
+    console.log(`[approval-poll] Poll failed: ${e.message}`);
+  }
+}
+
+function pollApprovalStatusLoop() {
+  pollApprovalStatusOnce().finally(() => {
+    const settings    = readSettings();
+    const intervalSec = Math.max(60, parseInt(settings.approvalPollSec) || 600);
+    setTimeout(pollApprovalStatusLoop, intervalSec * 1000);
+  });
+}
+
+// ── Invoices (Quotes page, tracking-only) ──────────────────────────────────────
+// GET/PUT edit existing invoices (status, line items) like the other full-object
+// endpoints; POST is the only path that assigns a new sequential invoice number,
+// done inside a transaction so concurrent creates can never collide.
+function readInvoices() {
+  const invRows  = db.prepare('SELECT * FROM invoices').all();
+  const itemRows = db.prepare('SELECT * FROM invoice_line_items').all();
+  const itemsByInv = {};
+  for (const it of itemRows) {
+    (itemsByInv[it.invoice_id] ||= []).push({ id: it.id, description: it.description, qty: it.qty, unitPrice: it.unit_price });
+  }
+  const out = {};
+  for (const row of invRows) {
+    out[row.id] = {
+      id: row.id, number: row.number, clientId: row.client_id, clientName: row.client_name,
+      status: row.status, taxRate: row.tax_rate, notes: row.notes,
+      sourcePurchaseRequestId: row.source_purchase_request_id,
+      issueDate: row.issue_date, dueDate: row.due_date, paidAt: row.paid_at,
+      createdAt: row.created_at, updatedAt: row.updated_at,
+      lineItems: itemsByInv[row.id] || [],
+    };
+  }
+  return out;
+}
+
+function replaceInvoiceEdits(obj) {
+  const now = Date.now();
+  db.transaction((data) => {
+    const existing = {};
+    for (const row of db.prepare('SELECT id, number, created_at FROM invoices').all()) existing[row.id] = row;
+    db.prepare('DELETE FROM invoice_line_items').run();
+    db.prepare('DELETE FROM invoices').run();
+    const insertInv = db.prepare(`INSERT INTO invoices
+      (id, number, client_id, client_name, status, tax_rate, notes, source_purchase_request_id, issue_date, due_date, paid_at, created_at, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    const insertItem = db.prepare('INSERT INTO invoice_line_items (invoice_id, description, qty, unit_price) VALUES (?,?,?,?)');
+    for (const [id, inv] of Object.entries(data)) {
+      const prev = existing[id];
+      const number = inv.number ?? prev?.number;
+      if (number == null) throw new Error(`Invoice ${id} is missing its sequential number`);
+      insertInv.run(
+        id, number, inv.clientId||null, inv.clientName||null, inv.status||'draft', inv.taxRate||0, inv.notes||null,
+        inv.sourcePurchaseRequestId||null, inv.issueDate||null, inv.dueDate||null, inv.paidAt||null,
+        prev?.created_at || inv.createdAt || now, now
+      );
+      for (const item of (inv.lineItems||[])) {
+        insertItem.run(id, item.description||'', item.qty||0, item.unitPrice||0);
+      }
+    }
+  })(obj);
+}
+
+function createInvoice(payload) {
+  const now = Date.now();
+  const id  = 'inv-' + now;
+  let number;
+  db.transaction(() => {
+    const row = db.prepare('SELECT COALESCE(MAX(number), 1000) AS maxNumber FROM invoices').get();
+    number = row.maxNumber + 1;
+    db.prepare(`INSERT INTO invoices
+      (id, number, client_id, client_name, status, tax_rate, notes, source_purchase_request_id, issue_date, due_date, paid_at, created_at, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(id, number, payload.clientId||null, payload.clientName||null, payload.status||'draft', payload.taxRate||0,
+           payload.notes||null, payload.sourcePurchaseRequestId||null, payload.issueDate||now, payload.dueDate||null, null, now, now);
+    const insertItem = db.prepare('INSERT INTO invoice_line_items (invoice_id, description, qty, unit_price) VALUES (?,?,?,?)');
+    for (const item of (payload.lineItems||[])) {
+      insertItem.run(id, item.description||'', item.qty||0, item.unitPrice||0);
+    }
+  })();
+  return { id, number };
+}
+
+app.get('/api/invoices', (req, res) => {
+  try { res.json(readInvoices()); }
+  catch(e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/invoices', (req, res) => {
+  try {
+    const { id, number } = createInvoice(req.body || {});
+    pushEvent('invoices-updated', {}, req.headers['x-source-id']);
+    res.json({ ok: true, id, number });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+app.put('/api/invoices', (req, res) => {
+  try {
+    if (!req.body || typeof req.body !== 'object') return res.status(400).json({ error: 'Invalid payload' });
+    replaceInvoiceEdits(req.body);
+    pushEvent('invoices-updated', {}, req.headers['x-source-id']);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // Steps/guides write (for future editor)
@@ -714,24 +1035,24 @@ app.put('/api/guides', (req, res) => {
 });
 
 // Settings
-const SETTINGS_FILE  = path.join(DATA_DIR, 'settings.json');
 const SECRET_MASK    = '********';
 app.get('/api/settings', (req, res) => {
   try {
-    if (!fs.existsSync(SETTINGS_FILE)) return res.json({ staleDays: 30, dueDays: 3 });
-    const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
-    if (settings.syncrifyPass) settings.syncrifyPass = SECRET_MASK;
-    res.json(settings);
+    const settings = kvGet(db, 'settings', null);
+    if (!settings) return res.json({ staleDays: 30, dueDays: 3 });
+    const out = { ...settings };
+    if (out.syncrifyPass) out.syncrifyPass = SECRET_MASK;
+    res.json(out);
   } catch(e) { res.json({ staleDays: 30, dueDays: 3 }); }
 });
 app.put('/api/settings', (req, res) => {
   try {
     const incoming = req.body;
     if (incoming.syncrifyPass === SECRET_MASK) {
-      const existing = fs.existsSync(SETTINGS_FILE) ? JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) : {};
+      const existing = readSettings();
       incoming.syncrifyPass = existing.syncrifyPass || '';
     }
-    atomicWrite(SETTINGS_FILE, JSON.stringify(incoming, null, 2));
+    kvSet(db, 'settings', incoming);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -740,7 +1061,7 @@ app.put('/api/settings', (req, res) => {
 app.get('/api/backups', (req, res) => {
   try {
     const files = fs.readdirSync(BACKUP_DIR)
-      .filter(f => f.startsWith('clients-') && f.endsWith('.json'))
+      .filter(f => f.startsWith('app-') && f.endsWith('.db'))
       .sort().reverse()
       .map(f => ({
         name: f,
@@ -751,8 +1072,8 @@ app.get('/api/backups', (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/backups', (req, res) => {
-  const name = doBackup();
+app.post('/api/backups', async (req, res) => {
+  const name = await doBackup();
   if (name) res.json({ ok: true, name });
   else res.status(500).json({ error: 'Backup failed' });
 });
@@ -761,7 +1082,7 @@ app.get('/api/backups/download', (req, res) => {
   // Download latest or specific file
   try {
     const file = req.query.file || fs.readdirSync(BACKUP_DIR)
-      .filter(f=>f.startsWith('clients-')&&f.endsWith('.json')).sort().reverse()[0];
+      .filter(f=>f.startsWith('app-')&&f.endsWith('.db')).sort().reverse()[0];
     if (!file) return res.status(404).json({ error: 'No backups found' });
     const fp = path.join(BACKUP_DIR, path.basename(file)); // basename prevents path traversal
     if (!fs.existsSync(fp)) return res.status(404).json({ error: 'File not found' });
@@ -782,24 +1103,25 @@ app.get('/api/events', (req, res) => {
 });
 
 // Logs
-function readLogs(){
-  try{ return JSON.parse(fs.readFileSync(LOG_FILE,'utf8')); }catch(_){ return []; }
+function readLogs(clientId, limit){
+  const rows = clientId
+    ? db.prepare('SELECT data FROM logs WHERE client_id = ? ORDER BY ts DESC LIMIT ?').all(clientId, limit)
+    : db.prepare('SELECT data FROM logs ORDER BY ts DESC LIMIT ?').all(limit);
+  return rows.map(r => JSON.parse(r.data));
 }
 app.get('/api/logs',(req,res)=>{
   try{
-    let logs=readLogs();
     const {clientId,limit=500}=req.query;
-    if(clientId) logs=logs.filter(l=>l.clientId===clientId);
-    res.json(logs.slice(0,parseInt(limit)));
+    res.json(readLogs(clientId || null, parseInt(limit) || 500));
   }catch(e){res.status(500).json({error:e.message});}
 });
 app.post('/api/logs',(req,res)=>{
   try{
-    let logs=readLogs();
-    const entry={...req.body,id:Date.now()+'-'+Math.random().toString(36).slice(2,6)};
-    logs.unshift(entry);
-    if(logs.length>MAX_LOGS) logs=logs.slice(0,MAX_LOGS);
-    atomicWrite(LOG_FILE,JSON.stringify(logs));
+    const id=Date.now()+'-'+Math.random().toString(36).slice(2,6);
+    const entry={...req.body,id};
+    const tsMs = entry.ts ? (Date.parse(entry.ts) || Date.now()) : Date.now();
+    db.prepare('INSERT INTO logs (id, client_id, ts, data) VALUES (?, ?, ?, ?)').run(id, entry.clientId || null, tsMs, JSON.stringify(entry));
+    db.prepare('DELETE FROM logs WHERE id NOT IN (SELECT id FROM logs ORDER BY ts DESC LIMIT ?)').run(MAX_LOGS);
     res.json({ok:true});
   }catch(e){res.status(500).json({error:e.message});}
 });
@@ -847,7 +1169,7 @@ app.post('/api/update', (req, res) => {
 // Health
 app.get('/api/health', (req, res) => {
   let fileSize=0;
-  try { fileSize=fs.statSync(DATA_FILE).size; } catch(_){}
+  try { fileSize=fs.statSync(DB_FILE).size; } catch(_){}
   res.json({
     status:'ok', uptime:Math.round(process.uptime()),
     dataFileSizeKB:Math.round(fileSize/1024),
@@ -860,8 +1182,11 @@ if (require.main === module) {
   app.listen(PORT, '127.0.0.1', () => console.log(`Checklist API on 127.0.0.1:${PORT}`));
   pollSyncrifyActivityLoop();
   pollSyncrifyDataLoop();
+  pollApprovalStatusLoop();
 }
 
 loadLiveCache();
 
+app.locals.db = db;
+app.locals.pollApprovalStatusLoopOnce = pollApprovalStatusOnce;
 module.exports = app;

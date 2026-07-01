@@ -15,7 +15,8 @@
     <span class="ah-brand" onclick="goToDashboard()" style="cursor:pointer;" title="Back to dashboard">SA</span>
     <nav class="ah-nav" role="navigation" aria-label="App sections">
       <button class="ah-nav-btn" id="ah-btn-onboarding" onclick="switchSection('onboarding')">Onboarding</button>
-      <button class="ah-nav-btn" id="ah-btn-sales" onclick="switchSection('sales')">Sales</button>
+      <button class="ah-nav-btn" id="ah-btn-sales" onclick="switchSection('sales')">Contracts</button>
+      <button class="ah-nav-btn" id="ah-btn-quotes" onclick="switchSection('quotes')">Quotes</button>
       <button class="ah-nav-btn" id="ah-btn-backups" onclick="switchSection('backups')">Backups<span id="bk-nav-badge" style="display:none;background:#ef4444;color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 5px;line-height:1.4;"></span></button>
       <button class="ah-nav-btn" id="ah-btn-reference" onclick="switchSection('reference')">Reference</button>
     </nav>
@@ -56,6 +57,18 @@
           <div id="sales-list"></div>
           <div class="sidebar-footer">
             <button class="btn-new" onclick="newQuoteFromSidebar()">+ New Quote</button>
+          </div>
+        </div>
+
+        <!-- Quotes section (Purchase Requests + Invoices) -->
+        <div class="sidebar-section" id="ss-quotes">
+          <div style="display:flex;gap:4px;padding:8px 10px 4px;">
+            <button class="btn-secondary" id="quotes-tab-pr" onclick="switchQuotesTab('pr')" style="flex:1;font-size:11px;padding:6px 4px;">Purchase Requests</button>
+            <button class="btn-secondary" id="quotes-tab-invoice" onclick="switchQuotesTab('invoice')" style="flex:1;font-size:11px;padding:6px 4px;">Invoices</button>
+          </div>
+          <div id="quotes-list"></div>
+          <div class="sidebar-footer">
+            <button class="btn-new" id="quotes-new-btn" onclick="newQuotesItemFromSidebar()">+ New</button>
           </div>
         </div>
 
@@ -151,6 +164,11 @@
         <!-- Sales helper — quote detail -->
         <div id="view-quote" class="view">
           <div id="quote-content"></div>
+        </div>
+
+        <!-- Quotes page — Purchase Requests + Invoices -->
+        <div id="view-quotes" class="view">
+          <div id="quotes-content"></div>
         </div>
 
         <!-- Backups view -->

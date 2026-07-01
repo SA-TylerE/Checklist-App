@@ -90,6 +90,11 @@ input[type=number]{-moz-appearance:textfield;}
 .quote-status.on-hold{background:rgba(245,158,11,0.12);color:var(--warn);}
 .quote-status.blocked{background:rgba(239,68,68,0.12);color:var(--danger);}
 .quote-status.customer-active,.quote-status[onclick]{cursor:pointer;}
+/* Purchase request approval / invoice statuses */
+.quote-status.not_sent,.quote-status.void{background:rgba(148,163,184,0.14);color:var(--text3);}
+.quote-status.pending{background:rgba(245,158,11,0.12);color:var(--warn);}
+.quote-status.approved,.quote-status.paid{background:rgba(34,197,94,0.12);color:var(--success);}
+.quote-status.denied,.quote-status.overdue{background:rgba(239,68,68,0.12);color:var(--danger);}
 /* Sidebar priority star */
 .sidebar-star{position:absolute;right:0;top:0;bottom:0;width:32px;z-index:2;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.15);padding:0;transition:color 0.15s;}
 .sidebar-star:hover,.sidebar-star.on{color:var(--warn);}
