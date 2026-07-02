@@ -280,6 +280,10 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .field-group textarea{max-width:100%;} /* let textareas fill for readability */
 .modal-card .field-group input,.modal-card .field-group select,.modal-card .field-group textarea,.edit-client-card .field-group input{max-width:100%;} /* full width inside modals */
 .field-group input:focus,.field-group textarea:focus,.field-group select:focus{border-color:var(--accent);}
+/* Line item rows (Purchase Requests / Invoices) — plain inputs styled to match .field-group's, but usable outside that wrapper, and shrinkable within a CSS grid track (raw <input> has an intrinsic min-width that otherwise overflows a grid track). */
+.li-input{width:100%;min-width:0;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;outline:none;font-family:var(--sans);}
+.li-input:focus{border-color:var(--accent);}
+.li-row{min-width:0;}
 /* Searchable Syncro client picker */
 .syncro-suggestions{position:absolute;top:100%;left:0;right:0;z-index:20;max-height:220px;overflow-y:auto;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;margin-top:2px;box-shadow:0 4px 12px rgba(0,0,0,0.25);}
 .syncro-suggestion-item{padding:7px 10px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);}

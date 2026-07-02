@@ -902,7 +902,7 @@ app.put('/api/purchase-requests', (req, res) => {
   try {
     if (!req.body || typeof req.body !== 'object') return res.status(400).json({ error: 'Invalid payload' });
     replacePurchaseRequests(req.body);
-    pushEvent('purchase-requests-updated', {}, req.headers['x-source-id']);
+    pushEvent('purchase-requests-updated', {}, req.headers['x-session-id']);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -920,7 +920,7 @@ app.post('/api/purchase-requests/:id/send-approval', async (req, res) => {
 
     const apiBase = (process.env.SA_WEBSITE_API_BASE || '').replace(/\/+$/, '');
     const apiKey  = process.env.SA_WEBSITE_API_KEY || '';
-    if (!apiBase || !apiKey) return res.status(500).json({ error: 'SA_WEBSITE_API_BASE/SA_WEBSITE_API_KEY not configured' });
+    if (!apiBase || !apiKey) return res.status(500).json({ error: 'Client approval isn\'t set up on this server yet — ask an admin to configure SA_WEBSITE_API_BASE and SA_WEBSITE_API_KEY.' });
 
     const items = db.prepare('SELECT description, qty, est_unit_cost AS estUnitCost, notes FROM purchase_request_items WHERE purchase_request_id = ?').all(id);
     const totalEstimate = items.reduce((sum, it) => sum + (it.qty||0) * (it.estUnitCost||0), 0);
@@ -950,7 +950,7 @@ app.post('/api/purchase-requests/:id/send-approval', async (req, res) => {
       .run(`${now}-${Math.random().toString(36).slice(2,6)}`, row.client_id, now,
         JSON.stringify({ ts: new Date(now).toISOString(), tech: req.headers['x-tech-name']||'', action: 'purchase-request-sent-for-approval', clientId: row.client_id, clientName: row.client_name }));
 
-    pushEvent('purchase-requests-updated', {}, req.headers['x-source-id']);
+    pushEvent('purchase-requests-updated', {}, req.headers['x-session-id']);
     res.json({ ok: true, approvalId });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1082,7 +1082,7 @@ app.get('/api/invoices', (req, res) => {
 app.post('/api/invoices', (req, res) => {
   try {
     const { id, number } = createInvoice(req.body || {});
-    pushEvent('invoices-updated', {}, req.headers['x-source-id']);
+    pushEvent('invoices-updated', {}, req.headers['x-session-id']);
     res.json({ ok: true, id, number });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -1090,14 +1090,14 @@ app.put('/api/invoices', (req, res) => {
   try {
     if (!req.body || typeof req.body !== 'object') return res.status(400).json({ error: 'Invalid payload' });
     replaceInvoiceEdits(req.body);
-    pushEvent('invoices-updated', {}, req.headers['x-source-id']);
+    pushEvent('invoices-updated', {}, req.headers['x-session-id']);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 app.delete('/api/invoices/:id', (req, res) => {
   try {
     db.prepare('DELETE FROM invoices WHERE id = ?').run(req.params.id); // cascades to invoice_line_items
-    pushEvent('invoices-updated', {}, req.headers['x-source-id']);
+    pushEvent('invoices-updated', {}, req.headers['x-session-id']);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -1105,7 +1105,7 @@ app.delete('/api/invoices/:id', (req, res) => {
 app.delete('/api/purchase-requests/:id', (req, res) => {
   try {
     db.prepare('DELETE FROM purchase_requests WHERE id = ?').run(req.params.id); // cascades to purchase_request_items
-    pushEvent('purchase-requests-updated', {}, req.headers['x-source-id']);
+    pushEvent('purchase-requests-updated', {}, req.headers['x-session-id']);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -1134,8 +1134,8 @@ app.post('/api/purchase-requests/:id/generate-invoice', (req, res) => {
     const now = Date.now();
     db.prepare(`UPDATE purchase_requests SET status='invoiced', invoice_id=?, updated_at=? WHERE id=?`).run(invoiceId, now, pr.id);
 
-    pushEvent('purchase-requests-updated', {}, req.headers['x-source-id']);
-    pushEvent('invoices-updated', {}, req.headers['x-source-id']);
+    pushEvent('purchase-requests-updated', {}, req.headers['x-session-id']);
+    pushEvent('invoices-updated', {}, req.headers['x-session-id']);
     res.json({ ok: true, invoiceId, number });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });

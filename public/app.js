@@ -1131,7 +1131,7 @@ async function loadPurchaseRequests(){
   catch(_){purchaseRequests={};}
 }
 async function savePurchaseRequests(){
-  try{await fetch('/api/purchase-requests',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(purchaseRequests)});}
+  try{await fetch('/api/purchase-requests',{method:'PUT',headers:{'Content-Type':'application/json','X-Session-Id':SESSION_ID},body:JSON.stringify(purchaseRequests)});}
   catch(e){console.error(e);}
 }
 async function loadInvoices(){
@@ -1139,7 +1139,7 @@ async function loadInvoices(){
   catch(_){invoices={};}
 }
 async function saveInvoices(){
-  try{await fetch('/api/invoices',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(invoices)});}
+  try{await fetch('/api/invoices',{method:'PUT',headers:{'Content-Type':'application/json','X-Session-Id':SESSION_ID},body:JSON.stringify(invoices)});}
   catch(e){console.error(e);}
 }
 
@@ -1302,7 +1302,7 @@ async function duplicatePurchaseRequest(id){
 function deletePurchaseRequest(id){
   const pr=purchaseRequests[id]; if(!pr) return;
   styledConfirm(`Delete purchase request for "${pr.clientName||'this client'}"?`,async()=>{
-    await fetch(`/api/purchase-requests/${id}`,{method:'DELETE'});
+    await fetch(`/api/purchase-requests/${id}`,{method:'DELETE',headers:{'X-Session-Id':SESSION_ID}});
     delete purchaseRequests[id];
     if(activePurchaseRequestId===id){ activePurchaseRequestId=null; renderQuotesDashboard(); }
     renderQuotesSidebar();
@@ -1310,7 +1310,7 @@ function deletePurchaseRequest(id){
 }
 async function duplicateInvoice(id){
   const inv=invoices[id]; if(!inv) return;
-  const r=await fetch('/api/invoices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+  const r=await fetch('/api/invoices',{method:'POST',headers:{'Content-Type':'application/json','X-Session-Id':SESSION_ID},body:JSON.stringify({
     clientId:inv.clientId, clientName:inv.clientName, notes:inv.notes, taxRate:inv.taxRate,
     lineItems:(inv.lineItems||[]).map(it=>({description:it.description,qty:it.qty,unitPrice:it.unitPrice})),
   })});
@@ -1322,7 +1322,7 @@ async function duplicateInvoice(id){
 function deleteInvoice(id){
   const inv=invoices[id]; if(!inv) return;
   styledConfirm(`Delete invoice #${inv.number}?`,async()=>{
-    await fetch(`/api/invoices/${id}`,{method:'DELETE'});
+    await fetch(`/api/invoices/${id}`,{method:'DELETE',headers:{'X-Session-Id':SESSION_ID}});
     delete invoices[id];
     if(activeInvoiceId===id){ activeInvoiceId=null; renderQuotesDashboard(); }
     renderQuotesSidebar();
@@ -1367,19 +1367,19 @@ function renderPurchaseRequestDetail(id){
   const el=document.getElementById('quotes-content');
   if(!pr||!el) return;
   const itemsRows=(pr.items||[]).map((it,i)=>`
-    <div style="border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px;">
-      <div style="display:grid;grid-template-columns:2fr 70px 100px 90px auto;gap:8px;align-items:center;margin-bottom:6px;">
-        <input placeholder="Description" value="${escHtml(it.description||'')}" onchange="savePrItem('${id}',${i},'description',this.value)">
-        <input type="number" min="0" step="1" placeholder="Qty" value="${it.qty||0}" oninput="livePrItem('${id}',${i},'qty',this.value)" onchange="savePrItem('${id}',${i},'qty',this.value)">
-        <input type="number" min="0" step="0.01" placeholder="Unit cost" value="${it.estUnitCost||0}" oninput="livePrItem('${id}',${i},'estUnitCost',this.value)" onchange="savePrItem('${id}',${i},'estUnitCost',this.value)">
+    <div style="border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px;min-width:0;">
+      <div class="li-row" style="display:grid;grid-template-columns:minmax(0,2fr) 60px 90px 70px auto;gap:8px;align-items:center;margin-bottom:6px;">
+        <input class="li-input" placeholder="Description" value="${escHtml(it.description||'')}" onchange="savePrItem('${id}',${i},'description',this.value)">
+        <input class="li-input" type="number" min="0" step="1" placeholder="Qty" value="${it.qty||0}" oninput="livePrItem('${id}',${i},'qty',this.value)" onchange="savePrItem('${id}',${i},'qty',this.value)">
+        <input class="li-input" type="number" min="0" step="0.01" placeholder="Unit cost" value="${it.estUnitCost||0}" oninput="livePrItem('${id}',${i},'estUnitCost',this.value)" onchange="savePrItem('${id}',${i},'estUnitCost',this.value)">
         <div style="text-align:right;font-weight:600;" id="pr-item-total-${id}-${i}">$${((it.qty||0)*(it.estUnitCost||0)).toFixed(2)}</div>
         <button class="btn-secondary" style="padding:2px 8px;font-size:11px;" onclick="removePrItem('${id}',${i})">✕</button>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1.4fr auto;gap:8px;align-items:center;">
-        <input placeholder="Vendor (e.g. CDW)" value="${escHtml(it.vendor||'')}" onchange="savePrItem('${id}',${i},'vendor',this.value)">
-        <input placeholder="SKU / part #" value="${escHtml(it.sku||'')}" onchange="savePrItem('${id}',${i},'sku',this.value)">
-        <div style="display:flex;gap:4px;align-items:center;">
-          <input type="url" placeholder="Purchase link" style="flex:1;" value="${escHtml(it.url||'')}" onchange="savePrItem('${id}',${i},'url',this.value)">
+      <div class="li-row" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.4fr) auto;gap:8px;align-items:center;">
+        <input class="li-input" placeholder="Vendor (e.g. CDW)" value="${escHtml(it.vendor||'')}" onchange="savePrItem('${id}',${i},'vendor',this.value)">
+        <input class="li-input" placeholder="SKU / part #" value="${escHtml(it.sku||'')}" onchange="savePrItem('${id}',${i},'sku',this.value)">
+        <div style="display:flex;gap:4px;align-items:center;min-width:0;">
+          <input class="li-input" type="url" placeholder="Purchase link" style="flex:1;min-width:0;" value="${escHtml(it.url||'')}" onchange="savePrItem('${id}',${i},'url',this.value)">
           ${it.url?`<a href="${escHtml(it.url)}" target="_blank" rel="noopener" title="Open purchase link">🔗</a>`:''}
         </div>
         <label style="display:flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap;">
@@ -1483,7 +1483,7 @@ async function sendPurchaseRequestForApproval(id){
   const pr=purchaseRequests[id]; if(!pr) return;
   if(!pr.clientEmail){ showAlert(`pr-alert-${id}`,'error','Set a client email before sending.'); return; }
   try{
-    const r=await fetch(`/api/purchase-requests/${id}/send-approval`,{method:'POST',headers:{'X-Tech-Name':localStorage.getItem('myName')||''}});
+    const r=await fetch(`/api/purchase-requests/${id}/send-approval`,{method:'POST',headers:{'X-Tech-Name':localStorage.getItem('myName')||'','X-Session-Id':SESSION_ID}});
     const body=await r.json();
     if(!r.ok) throw new Error(body.error||'Failed to send');
     await loadPurchaseRequests();
@@ -1494,7 +1494,7 @@ async function sendPurchaseRequestForApproval(id){
 
 async function generateInvoiceFromPr(id){
   try{
-    const r=await fetch(`/api/purchase-requests/${id}/generate-invoice`,{method:'POST'});
+    const r=await fetch(`/api/purchase-requests/${id}/generate-invoice`,{method:'POST',headers:{'X-Session-Id':SESSION_ID}});
     const body=await r.json();
     if(!r.ok) throw new Error(body.error||'Failed to generate invoice');
     await loadPurchaseRequests();
@@ -1505,7 +1505,7 @@ async function generateInvoiceFromPr(id){
 }
 
 async function createInvoiceFromSidebar(){
-  const r=await fetch('/api/invoices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lineItems:[]})});
+  const r=await fetch('/api/invoices',{method:'POST',headers:{'Content-Type':'application/json','X-Session-Id':SESSION_ID},body:JSON.stringify({lineItems:[]})});
   const body=await r.json();
   await loadInvoices();
   renderQuotesSidebar();
@@ -1533,9 +1533,9 @@ function renderInvoiceDetail(id){
   if(!inv||!el) return;
   const itemsRows=(inv.lineItems||[]).map((it,i)=>`
     <tr>
-      <td><input value="${escHtml(it.description||'')}" onchange="saveInvoiceItem('${id}',${i},'description',this.value)"></td>
-      <td><input type="number" min="0" step="1" value="${it.qty||0}" style="width:70px;" oninput="liveInvoiceItem('${id}',${i},'qty',this.value)" onchange="saveInvoiceItem('${id}',${i},'qty',this.value)"></td>
-      <td><input type="number" min="0" step="0.01" value="${it.unitPrice||0}" style="width:90px;" oninput="liveInvoiceItem('${id}',${i},'unitPrice',this.value)" onchange="saveInvoiceItem('${id}',${i},'unitPrice',this.value)"></td>
+      <td><input class="li-input" value="${escHtml(it.description||'')}" onchange="saveInvoiceItem('${id}',${i},'description',this.value)"></td>
+      <td><input class="li-input" type="number" min="0" step="1" value="${it.qty||0}" style="width:70px;" oninput="liveInvoiceItem('${id}',${i},'qty',this.value)" onchange="saveInvoiceItem('${id}',${i},'qty',this.value)"></td>
+      <td><input class="li-input" type="number" min="0" step="0.01" value="${it.unitPrice||0}" style="width:90px;" oninput="liveInvoiceItem('${id}',${i},'unitPrice',this.value)" onchange="saveInvoiceItem('${id}',${i},'unitPrice',this.value)"></td>
       <td style="text-align:right;" id="inv-item-total-${id}-${i}">$${((it.qty||0)*(it.unitPrice||0)).toFixed(2)}</td>
       <td><button class="btn-secondary" style="padding:2px 8px;font-size:11px;" onclick="removeInvoiceItem('${id}',${i})">✕</button></td>
     </tr>`).join('');
@@ -6263,11 +6263,15 @@ function connectSSE(){
     const el=document.getElementById('backups-content');
     if(el&&el.offsetParent!==null){renderBackupsSidebar();bkRenderMain();}
   });
-  sseSource.addEventListener('purchase-requests-updated',async()=>{
+  sseSource.addEventListener('purchase-requests-updated',async(e)=>{
+    const payload=JSON.parse(e.data);
+    if(payload.src===SESSION_ID) return; // this tab's own save — already reflected locally, skip the rebuild
     await loadPurchaseRequests();
     if(activeSection==='quotes'){ renderQuotesSidebar(); renderQuotesDashboard(); }
   });
-  sseSource.addEventListener('invoices-updated',async()=>{
+  sseSource.addEventListener('invoices-updated',async(e)=>{
+    const payload=JSON.parse(e.data);
+    if(payload.src===SESSION_ID) return;
     await loadInvoices();
     if(activeSection==='quotes'){ renderQuotesSidebar(); renderQuotesDashboard(); }
   });
