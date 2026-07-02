@@ -918,9 +918,10 @@ app.post('/api/purchase-requests/:id/send-approval', async (req, res) => {
     if (!row) return res.status(404).json({ error: 'Purchase request not found' });
     if (!row.client_email) return res.status(400).json({ error: 'Purchase request has no client email set' });
 
-    const apiBase = (process.env.SA_WEBSITE_API_BASE || '').replace(/\/+$/, '');
-    const apiKey  = process.env.SA_WEBSITE_API_KEY || '';
-    if (!apiBase || !apiKey) return res.status(500).json({ error: 'Client approval isn\'t set up on this server yet — ask an admin to configure SA_WEBSITE_API_BASE and SA_WEBSITE_API_KEY.' });
+    const approvalSettings = readSettings();
+    const apiBase = (approvalSettings.saWebsiteApiBase || '').replace(/\/+$/, '');
+    const apiKey  = approvalSettings.saWebsiteApiKey || '';
+    if (!apiBase || !apiKey) return res.status(500).json({ error: 'Client approval isn\'t set up yet — add the SA Website API Base URL and API Key in Settings.' });
 
     const items = db.prepare('SELECT description, qty, est_unit_cost AS estUnitCost, notes FROM purchase_request_items WHERE purchase_request_id = ?').all(id);
     const totalEstimate = items.reduce((sum, it) => sum + (it.qty||0) * (it.estUnitCost||0), 0);
@@ -963,8 +964,9 @@ app.post('/api/purchase-requests/:id/send-approval', async (req, res) => {
 async function pollApprovalStatusOnce() {
   try {
     const pending = db.prepare(`SELECT id, approval_id, client_id, client_name FROM purchase_requests WHERE approval_status = 'pending' AND approval_id IS NOT NULL`).all();
-    const apiBase = (process.env.SA_WEBSITE_API_BASE || '').replace(/\/+$/, '');
-    const apiKey  = process.env.SA_WEBSITE_API_KEY || '';
+    const pollSettings = readSettings();
+    const apiBase = (pollSettings.saWebsiteApiBase || '').replace(/\/+$/, '');
+    const apiKey  = pollSettings.saWebsiteApiKey || '';
     if (pending.length > 0 && apiBase && apiKey) {
       const result = await jsonHttpRequest(`${apiBase}/approval_request.php`, {
         method: 'POST',
@@ -1165,16 +1167,16 @@ app.get('/api/settings', (req, res) => {
     if (!settings) return res.json({ staleDays: 30, dueDays: 3 });
     const out = { ...settings };
     if (out.syncrifyPass) out.syncrifyPass = SECRET_MASK;
+    if (out.saWebsiteApiKey) out.saWebsiteApiKey = SECRET_MASK;
     res.json(out);
   } catch(e) { res.json({ staleDays: 30, dueDays: 3 }); }
 });
 app.put('/api/settings', (req, res) => {
   try {
     const incoming = req.body;
-    if (incoming.syncrifyPass === SECRET_MASK) {
-      const existing = readSettings();
-      incoming.syncrifyPass = existing.syncrifyPass || '';
-    }
+    const existing = readSettings();
+    if (incoming.syncrifyPass === SECRET_MASK) incoming.syncrifyPass = existing.syncrifyPass || '';
+    if (incoming.saWebsiteApiKey === SECRET_MASK) incoming.saWebsiteApiKey = existing.saWebsiteApiKey || '';
     kvSet(db, 'settings', incoming);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }

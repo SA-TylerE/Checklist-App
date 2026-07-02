@@ -224,8 +224,12 @@ test('send-approval flow: create + batched poll flips approval status via a mock
   });
   await new Promise(resolve => mock.listen(0, '127.0.0.1', resolve));
   const mockBase = `http://127.0.0.1:${mock.address().port}`;
-  process.env.SA_WEBSITE_API_BASE = mockBase;
-  process.env.SA_WEBSITE_API_KEY  = 'test-key';
+  // SA Website API base/key live in Settings (like Syncro/Syncrify creds), not env vars.
+  const priorSettings = await (await fetch(`${baseUrl}/api/settings`)).json();
+  await fetch(`${baseUrl}/api/settings`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...priorSettings, saWebsiteApiBase: mockBase, saWebsiteApiKey: 'test-key' }),
+  });
 
   try {
     const sendRes = await fetch(`${baseUrl}/api/purchase-requests/pr-1/send-approval`, { method: 'POST' });
@@ -244,8 +248,10 @@ test('send-approval flow: create + batched poll flips approval status via a mock
     assert.equal(after['pr-1'].approvalStatus, 'approved');
     assert.ok(after['pr-1'].approvalResolvedAt);
   } finally {
-    delete process.env.SA_WEBSITE_API_BASE;
-    delete process.env.SA_WEBSITE_API_KEY;
+    await fetch(`${baseUrl}/api/settings`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...priorSettings, saWebsiteApiBase: '', saWebsiteApiKey: '' }),
+    });
     await new Promise(resolve => mock.close(resolve));
   }
 });

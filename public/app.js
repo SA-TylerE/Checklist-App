@@ -3547,6 +3547,8 @@ async function saveAllSettings(){
   const bs=parseFloat(document.getElementById('setting-bk-block-size')?.value||'')||500;
   const cb=parseFloat(document.getElementById('setting-bk-cost-per-block')?.value||'')||40;
   const cd=parseFloat(document.getElementById('setting-bk-cost-per-device')?.value||'')||25;
+  const saWebsiteApiBase=(document.getElementById('setting-sa-website-base')?.value||'').trim()||undefined;
+  const saWebsiteApiKey=(document.getElementById('setting-sa-website-key')?.value||'').trim()||undefined;
   const syncrifyHost=(document.getElementById('setting-syncrify-host')?.value||'').trim()||undefined;
   const syncrifyUser=(document.getElementById('setting-syncrify-user')?.value||'').trim()||undefined;
   const syncrifyPass=(document.getElementById('setting-syncrify-pass')?.value||'').trim()||undefined;
@@ -3565,6 +3567,8 @@ async function saveAllSettings(){
   appSettings.bkBlockSizeGB=bs;
   appSettings.bkCostPerBlock=cb;
   appSettings.bkCostPerDevice=cd;
+  appSettings.saWebsiteApiBase=saWebsiteApiBase;
+  appSettings.saWebsiteApiKey=saWebsiteApiKey;
   appSettings.syncrifyHost=syncrifyHost;
   appSettings.syncrifyUser=syncrifyUser;
   appSettings.syncrifyPass=syncrifyPass;
@@ -3794,6 +3798,24 @@ function renderSettingsView(){
             <div style="font-size:11px;color:var(--text3);margin-top:4px;">Sets the recommended client price in the product manager. Formula: Client Cost = SA Cost ÷ (1 − Margin%)</div>
           </div>
           <button class="btn-secondary" onclick="openProductsModal()">Manage Products</button>
+        </div>
+      </div>
+      <div class="settings-section-label">Quotes</div>
+      <div class="settings-block">
+        <div class="settings-block-header">Client Approval Emails</div>
+        <div class="settings-block-body">
+          <p style="font-size:12px;color:var(--text2);margin-bottom:14px;">Sends purchase-request approval links to clients through systemalternatives.net. Requires a matching API key configured on that site (<span style="font-family:var(--mono);">CHECKLIST_APP_API_KEY</span>).</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="field-group" style="margin:0;grid-column:1/-1;">
+              <label>SA Website API Base URL</label>
+              <input id="setting-sa-website-base" value="${escHtml(appSettings.saWebsiteApiBase||'')}" placeholder="https://systemalternatives.net/api" style="font-size:11px;">
+            </div>
+            <div class="field-group" style="margin:0;grid-column:1/-1;">
+              <label>SA Website API Key</label>
+              <input id="setting-sa-website-key" type="password" value="${escHtml(appSettings.saWebsiteApiKey||'')}" placeholder="••••••••" style="font-size:11px;">
+              <div class="field-hint">Must match CHECKLIST_APP_API_KEY on systemalternatives.net.</div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="settings-section-label">Backups</div>
