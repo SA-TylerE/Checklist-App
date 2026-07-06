@@ -3573,6 +3573,7 @@ async function saveAllSettings(){
   const cd=parseFloat(document.getElementById('setting-bk-cost-per-device')?.value||'')||25;
   const saWebsiteApiBase=(document.getElementById('setting-sa-website-base')?.value||'').trim()||undefined;
   const saWebsiteApiKey=(document.getElementById('setting-sa-website-key')?.value||'').trim()||undefined;
+  const approvalNotifyEmail=(document.getElementById('setting-approval-notify-email')?.value||'').trim()||undefined;
   const syncrifyHost=(document.getElementById('setting-syncrify-host')?.value||'').trim()||undefined;
   const syncrifyUser=(document.getElementById('setting-syncrify-user')?.value||'').trim()||undefined;
   const syncrifyPass=(document.getElementById('setting-syncrify-pass')?.value||'').trim()||undefined;
@@ -3593,6 +3594,7 @@ async function saveAllSettings(){
   appSettings.bkCostPerDevice=cd;
   appSettings.saWebsiteApiBase=saWebsiteApiBase;
   appSettings.saWebsiteApiKey=saWebsiteApiKey;
+  appSettings.approvalNotifyEmail=approvalNotifyEmail;
   appSettings.syncrifyHost=syncrifyHost;
   appSettings.syncrifyUser=syncrifyUser;
   appSettings.syncrifyPass=syncrifyPass;
@@ -3838,6 +3840,11 @@ function renderSettingsView(){
               <label>SA Website API Key</label>
               <input id="setting-sa-website-key" type="password" value="${escHtml(appSettings.saWebsiteApiKey||'')}" placeholder="••••••••" style="font-size:11px;">
               <div class="field-hint">Must match CHECKLIST_APP_API_KEY on systemalternatives.net.</div>
+            </div>
+            <div class="field-group" style="margin:0;grid-column:1/-1;">
+              <label>Approval Notification Email</label>
+              <input id="setting-approval-notify-email" type="email" value="${escHtml(appSettings.approvalNotifyEmail||'')}" placeholder="approval@systemalternatives.net" style="font-size:11px;">
+              <div class="field-hint">Gets a copy of the signed PDF once a client approves or denies. Defaults to approval@systemalternatives.net if left blank — override here to redirect during testing.</div>
             </div>
           </div>
         </div>

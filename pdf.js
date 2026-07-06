@@ -18,11 +18,16 @@ const APPROVAL_PHONE = '503-878-8000';
 // purchasing-only fields) never reach this renderer, so they can't
 // accidentally end up on a client-facing PDF.
 //
+// A signature/date line pair is always drawn near the bottom, so a client who
+// prefers to print and physically sign has somewhere to do that.
+//
 // signature (optional): { decision, signerName, resolvedAtIso, resolvedBy, ip, verificationId, denyReason }
 // — when present (only once a Purchase Request has actually been approved or
-// denied), stamps an audit block at the bottom. This is an e-signature-style
-// record (who/when/from where + a tamper-evident verification id), not a
-// cryptographic PKI signature.
+// denied via the approval website), the signature/date lines are auto-filled
+// with the typed name and resolution date instead of being left blank, and a
+// colored decision banner + audit block (who/when/from where + a
+// tamper-evident verification id) is added. This is an e-signature-style
+// record, not a cryptographic PKI signature.
 function renderDocumentPdf({ kind, number, clientName, preparedBy, items, notes, taxRate, dueDate, orgName, signature }) {
   const doc = new PDFDocument({ margin: 50, size: 'LETTER' });
   const leftX = doc.page.margins.left;
@@ -164,39 +169,62 @@ function renderDocumentPdf({ kind, number, clientName, preparedBy, items, notes,
     doc.font('Helvetica').fillColor('#000').text(notes, leftX, doc.y + 4, { width: contentWidth });
   }
 
-  if (signature) {
-    const approved = signature.decision === 'approved';
-    const hasReason = !approved && signature.denyReason;
-    const boxHeight = 130 + (hasReason ? 16 : 0);
-    ensureRoom(boxHeight + 20);
-    doc.x = leftX;
-    doc.moveDown(1.5);
-    const boxY = doc.y;
-    const pad = 14;
+  // Signature / date area — always rendered (even before a decision has been
+  // made) so a client who'd rather print and sign by hand has an actual line
+  // to sign on. Once the request has been approved or denied through the
+  // approval website, the same signature/date lines are auto-filled with the
+  // typed e-signature name and the resolution date, and a colored decision
+  // banner + tamper-evident audit trail (IP, verification id) is added below.
+  const approved = signature?.decision === 'approved';
+  const hasReason = signature && !approved && signature.denyReason;
+  const bannerHeight = signature ? 34 : 0;
+  const sigAreaHeight = 46;
+  const auditHeight = signature ? (36 + (hasReason ? 16 : 0)) : 0;
+  const boxHeight = bannerHeight + sigAreaHeight + auditHeight;
+  ensureRoom(boxHeight + 20);
+  doc.x = leftX;
+  doc.moveDown(1.5);
+  const boxY = doc.y;
+  const pad = 14;
 
+  if (signature) {
     doc.rect(leftX, boxY, contentWidth, boxHeight)
       .fillAndStroke(approved ? '#f0fdf4' : '#fef2f2', approved ? '#86efac' : '#fca5a5');
     doc.fillColor(approved ? '#166534' : '#991b1b').fontSize(11).font('Helvetica-Bold')
       .text(approved ? 'ELECTRONICALLY APPROVED' : 'ELECTRONICALLY DENIED', leftX + pad, boxY + 10);
+  }
 
-    // The typed name rendered large/italic as the "signature", above a
-    // signature line — an e-signature stamp, not a hand-drawn or PKI signature.
-    const sigLineY = boxY + 34;
-    doc.fillColor('#111').fontSize(20).font('Times-Italic')
-      .text(signature.signerName || '', leftX + pad, sigLineY, { width: contentWidth - pad * 2 });
-    const lineY = sigLineY + 26;
-    doc.moveTo(leftX + pad, lineY).lineTo(leftX + 260, lineY).strokeColor('#999').stroke();
+  const sigWidth = 240;
+  const dateX = leftX + pad + sigWidth + 40;
+  const dateWidth = contentWidth - pad * 2 - sigWidth - 40;
+  const fillY = boxY + bannerHeight + 6;
+  const lineY = fillY + 24;
 
+  // The typed name rendered large/italic as the "signature" — an e-signature
+  // stamp, not a hand-drawn or PKI signature — filling in the same line a
+  // hand signature would otherwise go on.
+  if (signature) {
+    doc.fillColor('#111').fontSize(18).font('Times-Italic')
+      .text(signature.signerName || '', leftX + pad, fillY, { width: sigWidth });
+    const dateStr = signature.resolvedAtIso ? new Date(signature.resolvedAtIso).toLocaleDateString() : '';
+    doc.fillColor('#111').fontSize(11).font('Helvetica').text(dateStr, dateX, fillY + 5, { width: dateWidth });
+  }
+  doc.moveTo(leftX + pad, lineY).lineTo(leftX + pad + sigWidth, lineY).strokeColor('#999').stroke();
+  doc.moveTo(dateX, lineY).lineTo(dateX + dateWidth, lineY).strokeColor('#999').stroke();
+  doc.fillColor('#666').fontSize(8).font('Helvetica');
+  doc.text('Signature', leftX + pad, lineY + 4);
+  doc.text('Date', dateX, lineY + 4);
+
+  if (signature) {
     doc.fillColor('#333').fontSize(9).font('Helvetica');
-    doc.text(`Signed by: ${signature.signerName || ''}`, leftX + pad, lineY + 6);
-    doc.text(`Date: ${signature.resolvedAtIso || ''}`, leftX + pad, doc.y);
-    doc.text(`Submitted from: ${signature.resolvedBy || ''} (IP ${signature.ip || ''})`, leftX + pad, doc.y);
+    doc.text(`Submitted from: ${signature.resolvedBy || ''} (IP ${signature.ip || ''})`, leftX + pad, lineY + 20, { width: contentWidth - pad * 2 });
     doc.text(`Verification ID: ${signature.verificationId || ''}`, leftX + pad, doc.y);
     if (hasReason) doc.font('Helvetica-Bold').text(`Reason: ${signature.denyReason}`, leftX + pad, doc.y).font('Helvetica');
-
-    doc.fillColor('#000');
-    doc.y = boxY + boxHeight + 10;
   }
+
+  doc.fillColor('#000');
+  doc.y = boxY + boxHeight + 10;
+  doc.x = leftX;
 
   doc.end();
   return doc;

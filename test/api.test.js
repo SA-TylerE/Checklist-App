@@ -241,7 +241,7 @@ test('send-approval flow: create + batched poll flips approval status via a mock
   const priorSettings = await (await fetch(`${baseUrl}/api/settings`)).json();
   await fetch(`${baseUrl}/api/settings`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...priorSettings, saWebsiteApiBase: mockBase, saWebsiteApiKey: 'test-key' }),
+    body: JSON.stringify({ ...priorSettings, saWebsiteApiBase: mockBase, saWebsiteApiKey: 'test-key', approvalNotifyEmail: 'test-notify@example.com' }),
   });
 
   try {
@@ -271,6 +271,7 @@ test('send-approval flow: create + batched poll flips approval status via a mock
 
     assert.ok(lastUpdatePdfBody, 'poll loop should push a re-stamped PDF back after resolution');
     assert.equal(lastUpdatePdfBody.approval_id, sendBody.approvalId);
+    assert.equal(lastUpdatePdfBody.notify_email, 'test-notify@example.com', 'the configurable notify email from Settings should be forwarded to SA-Website');
     const signedPdf = Buffer.from(lastUpdatePdfBody.pdf_base64, 'base64');
     assert.equal(signedPdf.slice(0, 5).toString(), '%PDF-');
   } finally {

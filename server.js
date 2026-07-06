@@ -1057,10 +1057,14 @@ app.post('/api/purchase-requests/:id/send-approval', async (req, res) => {
 async function signAndPushEstimatePdf(prId, approvalId, apiBase, apiKey) {
   try {
     const { buffer } = await buildEstimatePdf(prId);
+    // The notify address is configurable in Settings (defaults to
+    // approval@systemalternatives.net on the SA-Website side if left blank)
+    // so it can be pointed at a test inbox without a code change.
+    const notifyEmail = (readSettings().approvalNotifyEmail || '').trim();
     const result = await jsonHttpRequest(`${apiBase}/approval_request.php`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
-      body: { mode: 'update_pdf', approval_id: approvalId, pdf_base64: buffer.toString('base64') },
+      body: { mode: 'update_pdf', approval_id: approvalId, pdf_base64: buffer.toString('base64'), notify_email: notifyEmail },
     });
     if (result.status === 200 && result.json?.ok) {
       db.prepare('UPDATE purchase_requests SET approval_pdf_signed = 1 WHERE id = ?').run(prId);
