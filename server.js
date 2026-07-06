@@ -235,9 +235,12 @@ function pollSyncroCustomersLoop() {
 app.get('/api/syncro-customers', (req, res) => {
   try {
     const q = (req.query.q || '').trim();
+    // Some Syncro customer records have business_name set to an email address
+    // rather than an actual company name — sort those last so real company
+    // names surface first in the picker.
     const rows = q
-      ? db.prepare('SELECT id, business_name, email, phone FROM syncro_customers WHERE business_name LIKE ? ORDER BY business_name LIMIT 25').all(`%${q}%`)
-      : db.prepare('SELECT id, business_name, email, phone FROM syncro_customers ORDER BY business_name LIMIT 25').all();
+      ? db.prepare("SELECT id, business_name, email, phone FROM syncro_customers WHERE business_name LIKE ? ORDER BY (business_name LIKE '%@%'), business_name LIMIT 25").all(`%${q}%`)
+      : db.prepare("SELECT id, business_name, email, phone FROM syncro_customers ORDER BY (business_name LIKE '%@%'), business_name LIMIT 25").all();
     res.json(rows.map(r => ({ id: r.id, businessName: r.business_name, email: r.email, phone: r.phone })));
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -852,11 +855,12 @@ function readPurchaseRequests() {
   for (const row of prRows) {
     out[row.id] = {
       id: row.id, clientId: row.client_id, clientName: row.client_name,
-      requestedBy: row.requested_by, notes: row.notes,
+      requestedBy: row.requested_by, notes: row.notes, internalNotes: row.internal_notes,
       priority: !!row.priority, status: row.status, clientEmail: row.client_email,
       approvalStatus: row.approval_status, approvalId: row.approval_id,
       approvalSentAt: row.approval_sent_at, approvalResolvedAt: row.approval_resolved_at,
       approvalIp: row.approval_ip, approvalVerificationId: row.approval_verification_id,
+      signerName: row.signer_name, denyReason: row.deny_reason,
       invoiceId: row.invoice_id, number: row.number,
       createdAt: row.created_at, updatedAt: row.updated_at,
       items: itemsByPr[row.id] || [],
@@ -869,25 +873,26 @@ function replacePurchaseRequests(obj) {
   const now = Date.now();
   db.transaction((data) => {
     const existing = {};
-    for (const row of db.prepare('SELECT id, approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at, approval_ip, approval_verification_id, approval_pdf_signed, invoice_id, number, created_at FROM purchase_requests').all()) {
+    for (const row of db.prepare('SELECT id, approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at, approval_ip, approval_verification_id, approval_pdf_signed, signer_name, deny_reason, invoice_id, number, created_at FROM purchase_requests').all()) {
       existing[row.id] = row;
     }
     db.prepare('DELETE FROM purchase_request_items').run();
     db.prepare('DELETE FROM purchase_requests').run();
     const insertPr = db.prepare(`INSERT INTO purchase_requests
-      (id, client_id, client_name, requested_by, notes, priority, status, client_email,
+      (id, client_id, client_name, requested_by, notes, internal_notes, priority, status, client_email,
        approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at,
-       approval_ip, approval_verification_id, approval_pdf_signed, invoice_id, number, created_at, updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+       approval_ip, approval_verification_id, approval_pdf_signed, signer_name, deny_reason, invoice_id, number, created_at, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     const insertItem = db.prepare('INSERT INTO purchase_request_items (purchase_request_id, description, qty, est_unit_cost, notes, vendor, url, sku, received) VALUES (?,?,?,?,?,?,?,?,?)');
     for (const [id, pr] of Object.entries(data)) {
       const prev = existing[id];
       insertPr.run(
-        id, pr.clientId||null, pr.clientName||null, pr.requestedBy||null, pr.notes||null,
+        id, pr.clientId||null, pr.clientName||null, pr.requestedBy||null, pr.notes||null, pr.internalNotes||null,
         pr.priority?1:0, pr.status||'draft', pr.clientEmail||null,
         prev?.approval_status || 'not_sent', prev?.approval_id || null, prev?.approval_token || null,
         prev?.approval_sent_at || null, prev?.approval_resolved_at || null,
         prev?.approval_ip || null, prev?.approval_verification_id || null, prev?.approval_pdf_signed || 0,
+        prev?.signer_name || null, prev?.deny_reason || null,
         prev?.invoice_id || null, prev?.number || null,
         prev?.created_at || now, now
       );
@@ -898,6 +903,22 @@ function replacePurchaseRequests(obj) {
     }
   })(obj);
 }
+
+// Client-visible edits made after a request was already approved/denied should
+// invalidate that decision — this is the one exception to "approval_status is
+// entirely server-managed" above, exposed as its own route (rather than
+// letting the whole-object PUT set it) so the invariant there stays simple.
+app.post('/api/purchase-requests/:id/mark-modified', (req, res) => {
+  try {
+    const row = db.prepare('SELECT approval_status FROM purchase_requests WHERE id = ?').get(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Purchase request not found' });
+    if (row.approval_status === 'approved' || row.approval_status === 'denied') {
+      db.prepare(`UPDATE purchase_requests SET approval_status='modified', updated_at=? WHERE id=?`).run(Date.now(), req.params.id);
+      pushEvent('purchase-requests-updated', {}, req.headers['x-session-id']);
+    }
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
 
 app.get('/api/purchase-requests', (req, res) => {
   try { res.json(readPurchaseRequests()); }
@@ -941,10 +962,12 @@ async function buildEstimatePdf(id) {
   const signature = (row.approval_status === 'approved' || row.approval_status === 'denied')
     ? {
         decision: row.approval_status,
+        signerName: row.signer_name,
         resolvedBy: row.client_email,
         resolvedAtIso: row.approval_resolved_at ? new Date(row.approval_resolved_at).toISOString() : '',
         ip: row.approval_ip,
         verificationId: row.approval_verification_id,
+        denyReason: row.deny_reason,
       }
     : null;
   const doc = renderDocumentPdf({
@@ -1007,7 +1030,11 @@ app.post('/api/purchase-requests/:id/send-approval', async (req, res) => {
     }
 
     const now = Date.now();
-    db.prepare(`UPDATE purchase_requests SET approval_status='pending', approval_id=?, approval_sent_at=?, updated_at=? WHERE id=?`)
+    // Clears out any prior cycle's signature/resolution data — relevant when
+    // this is a resend after a "Modified" edit invalidated an earlier decision.
+    db.prepare(`UPDATE purchase_requests SET approval_status='pending', approval_id=?, approval_sent_at=?,
+      approval_resolved_at=NULL, approval_ip=NULL, approval_verification_id=NULL, approval_pdf_signed=0,
+      signer_name=NULL, deny_reason=NULL, updated_at=? WHERE id=?`)
       .run(approvalId, now, now, id);
     db.prepare('INSERT INTO logs (id, client_id, ts, data) VALUES (?, ?, ?, ?)')
       .run(`${now}-${Math.random().toString(36).slice(2,6)}`, row.client_id, now,
@@ -1069,8 +1096,8 @@ async function pollApprovalStatusOnce() {
           if (!info || info.status === 'pending') continue;
           anyResolved = true;
           const resolvedAtMs = info.resolved_at ? Date.parse(info.resolved_at) || now : now;
-          db.prepare(`UPDATE purchase_requests SET approval_status=?, approval_resolved_at=?, approval_ip=?, approval_verification_id=?, updated_at=? WHERE id=?`)
-            .run(info.status, resolvedAtMs, info.resolved_ip || null, info.verification_id || null, now, pr.id);
+          db.prepare(`UPDATE purchase_requests SET approval_status=?, approval_resolved_at=?, approval_ip=?, approval_verification_id=?, signer_name=?, deny_reason=?, updated_at=? WHERE id=?`)
+            .run(info.status, resolvedAtMs, info.resolved_ip || null, info.verification_id || null, info.signer_name || null, info.deny_reason || null, now, pr.id);
           db.prepare('INSERT INTO logs (id, client_id, ts, data) VALUES (?, ?, ?, ?)')
             .run(`${now}-${Math.random().toString(36).slice(2,6)}`, pr.client_id, now,
               JSON.stringify({ ts: new Date(now).toISOString(), tech: '', action: `purchase-request-${info.status}`, clientId: pr.client_id, clientName: pr.client_name }));

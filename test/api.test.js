@@ -220,7 +220,11 @@ test('send-approval flow: create + batched poll flips approval status via a mock
       } else if (data.mode === 'get_status') {
         const statuses = {};
         for (const id of data.approval_ids) {
-          statuses[id] = { status: 'approved', resolved_at: new Date().toISOString(), resolved_ip: '203.0.113.5', verification_id: 'ABCD1234EF567890', client_email: 'client@example.com' };
+          statuses[id] = {
+            status: 'approved', resolved_at: new Date().toISOString(), resolved_ip: '203.0.113.5',
+            verification_id: 'ABCD1234EF567890', client_email: 'client@example.com',
+            signer_name: 'Jane Client', deny_reason: null,
+          };
         }
         res.end(JSON.stringify({ ok: true, statuses }));
       } else if (data.mode === 'update_pdf') {
@@ -262,6 +266,8 @@ test('send-approval flow: create + batched poll flips approval status via a mock
     assert.ok(after['pr-1'].approvalResolvedAt);
     assert.equal(after['pr-1'].approvalIp, '203.0.113.5');
     assert.equal(after['pr-1'].approvalVerificationId, 'ABCD1234EF567890');
+    assert.equal(after['pr-1'].signerName, 'Jane Client');
+    assert.equal(after['pr-1'].denyReason, null);
 
     assert.ok(lastUpdatePdfBody, 'poll loop should push a re-stamped PDF back after resolution');
     assert.equal(lastUpdatePdfBody.approval_id, sendBody.approvalId);
@@ -332,6 +338,48 @@ test('purchase request line items round-trip vendor/url/sku/received', async () 
   assert.equal(item.received, true);
 });
 
+test('internal_notes round-trips via PUT but never appears in the SA-Website payload', async () => {
+  const prs = {
+    'pr-internal': {
+      clientId: 'abc123', clientName: 'Test Client', clientEmail: 'client@example.com',
+      notes: 'Client-visible note', internalNotes: 'Tech-only: buy from CDW, markup 15%',
+      items: [{ description: 'Widget', qty: 1, estUnitCost: 10 }],
+    },
+  };
+  await fetch(`${baseUrl}/api/purchase-requests`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prs),
+  });
+  const body = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
+  assert.equal(body['pr-internal'].internalNotes, 'Tech-only: buy from CDW, markup 15%');
+  assert.equal(body['pr-internal'].notes, 'Client-visible note');
+});
+
+test('mark-modified flips an approved/denied request to modified, and re-allows send-approval', async () => {
+  await fetch(`${baseUrl}/api/purchase-requests`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 'pr-mod': { clientId: 'abc123', clientName: 'Test Client', items: [] } }),
+  });
+  const db = app.locals.db;
+  db.prepare(`UPDATE purchase_requests SET approval_status='approved' WHERE id='pr-mod'`).run();
+
+  const res = await fetch(`${baseUrl}/api/purchase-requests/pr-mod/mark-modified`, { method: 'POST' });
+  assert.equal(res.status, 200);
+
+  const after = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
+  assert.equal(after['pr-mod'].approvalStatus, 'modified');
+});
+
+test('mark-modified is a no-op on a request that was never resolved', async () => {
+  await fetch(`${baseUrl}/api/purchase-requests`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 'pr-not-resolved': { clientId: 'abc123', clientName: 'Test Client', items: [] } }),
+  });
+  const res = await fetch(`${baseUrl}/api/purchase-requests/pr-not-resolved/mark-modified`, { method: 'POST' });
+  assert.equal(res.status, 200);
+  const after = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
+  assert.equal(after['pr-not-resolved'].approvalStatus, 'not_sent');
+});
+
 test('generate-invoice creates a linked invoice and blocks a second conversion', async () => {
   await fetch(`${baseUrl}/api/purchase-requests`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -399,6 +447,23 @@ test('GET /api/syncro-customers searches the local cache table', async () => {
   assert.equal(filtered.length, 1);
   assert.equal(filtered[0].businessName, 'Acme Corp');
   assert.equal(filtered[0].email, 'billing@acme.com');
+});
+
+test('GET /api/syncro-customers sorts real company names ahead of email-like business names', async () => {
+  const db = app.locals.db;
+  const now = Date.now();
+  // Some Syncro records have business_name set to an email address rather
+  // than a real company name — those should sort after actual company names.
+  db.prepare('INSERT INTO syncro_customers (id, business_name, email, phone, data, updated_at) VALUES (?,?,?,?,?,?)')
+    .run('syn-email', 'aaa-first-alphabetically@example.com', 'aaa-first-alphabetically@example.com', '', '{}', now);
+  db.prepare('INSERT INTO syncro_customers (id, business_name, email, phone, data, updated_at) VALUES (?,?,?,?,?,?)')
+    .run('syn-company', 'Zebra Industries', 'contact@zebra.com', '', '{}', now);
+
+  const all = await (await fetch(`${baseUrl}/api/syncro-customers`)).json();
+  const companyIdx = all.findIndex(c => c.id === 'syn-company');
+  const emailIdx = all.findIndex(c => c.id === 'syn-email');
+  assert.ok(companyIdx >= 0 && emailIdx >= 0);
+  assert.ok(companyIdx < emailIdx, 'a real company name should be listed before an email-like business name even when alphabetically later');
 });
 
 test('POST /api/syncro-customers/refresh fails cleanly when Syncro is not configured', async () => {

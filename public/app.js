@@ -1154,7 +1154,26 @@ async function saveInvoices(){
   catch(e){console.error(e);}
 }
 
-function purchaseRequestStatusLabel(s){return{not_sent:'Not Sent',pending:'Pending',approved:'Approved',denied:'Denied'}[s]||'Not Sent';}
+function purchaseRequestStatusLabel(s){return{not_sent:'Not Sent',pending:'Pending',approved:'Approved',denied:'Denied',modified:'Modified'}[s]||'Not Sent';}
+
+// Only edits a client would actually see on the estimate PDF invalidate an
+// existing Approved/Denied decision — internal-only fields (internal notes,
+// vendor/purchase link/received, workflow status) don't, since they never
+// reach the client.
+const CLIENT_VISIBLE_PR_FIELDS=new Set(['notes','clientEmail','clientName']);
+const CLIENT_VISIBLE_PR_ITEM_FIELDS=new Set(['description','qty','estUnitCost','sku']);
+async function markPrModifiedIfResolved(id){
+  const pr=purchaseRequests[id]; if(!pr) return;
+  if(pr.approvalStatus!=='approved'&&pr.approvalStatus!=='denied') return;
+  try{
+    const r=await fetch(`/api/purchase-requests/${id}/mark-modified`,{method:'POST',headers:{'X-Session-Id':SESSION_ID}});
+    if(r.ok){
+      pr.approvalStatus='modified';
+      renderQuotesSidebar();
+      if(activePurchaseRequestId===id) renderPurchaseRequestDetail(id);
+    }
+  }catch(e){console.error(e);}
+}
 function invoiceStatusLabel(s){return{draft:'Draft',sent:'Sent',paid:'Paid',overdue:'Overdue',void:'Void'}[s]||'Draft';}
 function prSidebarSummary(pr){
   const n=(pr.items||[]).length;
@@ -1399,7 +1418,7 @@ function renderPurchaseRequestDetail(id){
       </div>
     </div>`).join('');
   const total=(pr.items||[]).reduce((s,it)=>s+(it.qty||0)*(it.estUnitCost||0),0);
-  const canSend=pr.approvalStatus==='not_sent';
+  const canSend=pr.approvalStatus==='not_sent'||pr.approvalStatus==='modified';
   const canGenerateInvoice=pr.status==='received'&&!pr.invoiceId;
   el.innerHTML=`
     <div class="wizard-card">
@@ -1418,8 +1437,11 @@ function renderPurchaseRequestDetail(id){
             ${['draft','ordered','received','invoiced','cancelled'].map(s=>`<option value="${s}" ${s===pr.status?'selected':''}>${s[0].toUpperCase()+s.slice(1)}</option>`).join('')}
           </select>
         </div>
-        <div class="field-group" style="grid-column:1/-1;margin:0;"><label>Notes</label>
+        <div class="field-group" style="grid-column:1/-1;margin:0;"><label>Notes <span style="font-weight:400;color:var(--text3);">(visible to client)</span></label>
           <textarea rows="2" onchange="updatePrField('${id}','notes',this.value)">${escHtml(pr.notes||'')}</textarea>
+        </div>
+        <div class="field-group" style="grid-column:1/-1;margin:0;"><label>Internal Notes <span style="font-weight:400;color:var(--text3);">(tech only — never sent to client)</span></label>
+          <textarea rows="2" onchange="updatePrField('${id}','internalNotes',this.value)">${escHtml(pr.internalNotes||'')}</textarea>
         </div>
       </div>
       <div style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:7px;">Line Items</div>
@@ -1432,7 +1454,7 @@ function renderPurchaseRequestDetail(id){
         <button class="btn-secondary" onclick="window.open('/api/purchase-requests/${id}/pdf','_blank')">Preview PDF</button>
         ${pr.invoiceId?`<button class="btn-secondary" onclick="selectInvoice('${pr.invoiceId}')">View Invoice</button>`
           :canGenerateInvoice?`<button class="btn-secondary" onclick="generateInvoiceFromPr('${id}')">Generate Invoice</button>`:''}
-        <button class="btn-primary" ${canSend?'':'disabled'} onclick="sendPurchaseRequestForApproval('${id}')">${pr.approvalStatus==='not_sent'?'Send for Approval':'Sent — '+purchaseRequestStatusLabel(pr.approvalStatus)}</button>
+        <button class="btn-primary" ${canSend?'':'disabled'} onclick="sendPurchaseRequestForApproval('${id}')">${canSend?(pr.approvalStatus==='modified'?'Resend for Approval':'Send for Approval'):'Sent — '+purchaseRequestStatusLabel(pr.approvalStatus)}</button>
       </div>
     </div>`;
 }
@@ -1443,6 +1465,7 @@ function updatePrField(id,field,value){
   pr.updatedAt=Date.now();
   savePurchaseRequests();
   renderQuotesSidebar();
+  if(CLIENT_VISIBLE_PR_FIELDS.has(field)) markPrModifiedIfResolved(id);
 }
 function updatePrClientFromSyncro(id,customer){
   const pr=purchaseRequests[id]; if(!pr) return;
@@ -1453,6 +1476,7 @@ function updatePrClientFromSyncro(id,customer){
   savePurchaseRequests();
   renderQuotesSidebar();
   renderPurchaseRequestDetail(id);
+  markPrModifiedIfResolved(id);
 }
 function addPrItem(id){
   const pr=purchaseRequests[id]; if(!pr) return;
@@ -1460,12 +1484,14 @@ function addPrItem(id){
   pr.items.push({description:'',qty:1,estUnitCost:0,notes:'',vendor:'',url:'',sku:'',received:false});
   savePurchaseRequests();
   renderPurchaseRequestDetail(id);
+  markPrModifiedIfResolved(id);
 }
 function removePrItem(id,idx){
   const pr=purchaseRequests[id]; if(!pr) return;
   pr.items.splice(idx,1);
   savePurchaseRequests();
   renderPurchaseRequestDetail(id);
+  markPrModifiedIfResolved(id);
 }
 // Live (oninput): updates in-memory value + patches just this row's total and
 // the grand total in place — never rebuilds the form, so typing never loses focus.
@@ -1489,6 +1515,7 @@ function savePrItem(id,idx,field,value){
   it[field]=(field==='qty'||field==='estUnitCost')?parseFloat(value)||0:value;
   savePurchaseRequests();
   renderQuotesSidebar();
+  if(CLIENT_VISIBLE_PR_ITEM_FIELDS.has(field)) markPrModifiedIfResolved(id);
 }
 
 async function sendPurchaseRequestForApproval(id){

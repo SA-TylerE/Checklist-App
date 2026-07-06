@@ -18,7 +18,7 @@ const APPROVAL_PHONE = '503-878-8000';
 // purchasing-only fields) never reach this renderer, so they can't
 // accidentally end up on a client-facing PDF.
 //
-// signature (optional): { decision, resolvedAtIso, resolvedBy, ip, verificationId }
+// signature (optional): { decision, signerName, resolvedAtIso, resolvedBy, ip, verificationId, denyReason }
 // — when present (only once a Purchase Request has actually been approved or
 // denied), stamps an audit block at the bottom. This is an e-signature-style
 // record (who/when/from where + a tamper-evident verification id), not a
@@ -165,21 +165,35 @@ function renderDocumentPdf({ kind, number, clientName, preparedBy, items, notes,
   }
 
   if (signature) {
-    ensureRoom(90);
+    const approved = signature.decision === 'approved';
+    const hasReason = !approved && signature.denyReason;
+    const boxHeight = 130 + (hasReason ? 16 : 0);
+    ensureRoom(boxHeight + 20);
     doc.x = leftX;
     doc.moveDown(1.5);
     const boxY = doc.y;
-    const boxHeight = 80;
-    const approved = signature.decision === 'approved';
+    const pad = 14;
+
     doc.rect(leftX, boxY, contentWidth, boxHeight)
       .fillAndStroke(approved ? '#f0fdf4' : '#fef2f2', approved ? '#86efac' : '#fca5a5');
     doc.fillColor(approved ? '#166534' : '#991b1b').fontSize(11).font('Helvetica-Bold')
-      .text(approved ? 'ELECTRONICALLY APPROVED' : 'ELECTRONICALLY DENIED', leftX + 14, boxY + 10);
+      .text(approved ? 'ELECTRONICALLY APPROVED' : 'ELECTRONICALLY DENIED', leftX + pad, boxY + 10);
+
+    // The typed name rendered large/italic as the "signature", above a
+    // signature line — an e-signature stamp, not a hand-drawn or PKI signature.
+    const sigLineY = boxY + 34;
+    doc.fillColor('#111').fontSize(20).font('Times-Italic')
+      .text(signature.signerName || '', leftX + pad, sigLineY, { width: contentWidth - pad * 2 });
+    const lineY = sigLineY + 26;
+    doc.moveTo(leftX + pad, lineY).lineTo(leftX + 260, lineY).strokeColor('#999').stroke();
+
     doc.fillColor('#333').fontSize(9).font('Helvetica');
-    doc.text(`By: ${signature.resolvedBy || ''}`, leftX + 14, boxY + 30);
-    doc.text(`Date: ${signature.resolvedAtIso || ''}`, leftX + 14, doc.y);
-    doc.text(`IP Address: ${signature.ip || ''}`, leftX + 14, doc.y);
-    doc.text(`Verification ID: ${signature.verificationId || ''}`, leftX + 14, doc.y);
+    doc.text(`Signed by: ${signature.signerName || ''}`, leftX + pad, lineY + 6);
+    doc.text(`Date: ${signature.resolvedAtIso || ''}`, leftX + pad, doc.y);
+    doc.text(`Submitted from: ${signature.resolvedBy || ''} (IP ${signature.ip || ''})`, leftX + pad, doc.y);
+    doc.text(`Verification ID: ${signature.verificationId || ''}`, leftX + pad, doc.y);
+    if (hasReason) doc.font('Helvetica-Bold').text(`Reason: ${signature.denyReason}`, leftX + pad, doc.y).font('Helvetica');
+
     doc.fillColor('#000');
     doc.y = boxY + boxHeight + 10;
   }

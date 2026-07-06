@@ -115,6 +115,9 @@ function createDb(dataDir) {
     ['approval_ip', 'TEXT'],           // e-signature stamp fields, filled in once the poll loop learns the request was resolved
     ['approval_verification_id', 'TEXT'],
     ['approval_pdf_signed', 'INTEGER DEFAULT 0'], // whether the stamped PDF has already been rendered + pushed back to SA-Website
+    ['internal_notes', 'TEXT'],  // tech-only — never sent to SA-Website, the PDF, or any client-facing surface
+    ['signer_name', 'TEXT'],     // typed name the client entered to Approve/Deny
+    ['deny_reason', 'TEXT'],     // required when the client denies
   ]);
   ensureColumns(db, 'purchase_request_items', [
     ['vendor', 'TEXT'],
