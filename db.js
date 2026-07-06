@@ -111,6 +111,7 @@ function createDb(dataDir) {
   // database that already exists on a deployed server.
   ensureColumns(db, 'purchase_requests', [
     ['invoice_id', 'TEXT'],
+    ['number', 'INTEGER'], // "Estimate #", assigned at send-for-approval time — SQLite allows multiple NULLs in a UNIQUE index, so drafts stay numberless without conflict
   ]);
   ensureColumns(db, 'purchase_request_items', [
     ['vendor', 'TEXT'],
@@ -118,6 +119,7 @@ function createDb(dataDir) {
     ['sku', 'TEXT'],
     ['received', 'INTEGER DEFAULT 0'],
   ]);
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_pr_number ON purchase_requests(number);`);
 
   return db;
 }

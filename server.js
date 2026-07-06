@@ -7,6 +7,7 @@ const http     = require('http');
 const { exec } = require('child_process');
 const { createDb, kvGet, kvSet } = require('./db');
 const { migrate } = require('./scripts/migrate-json-to-sqlite');
+const { renderDocumentPdf, pdfBufferFromDoc } = require('./pdf');
 
 const app        = express();
 const PORT       = process.env.PORT || 3001;
@@ -855,7 +856,7 @@ function readPurchaseRequests() {
       priority: !!row.priority, status: row.status, clientEmail: row.client_email,
       approvalStatus: row.approval_status, approvalId: row.approval_id,
       approvalSentAt: row.approval_sent_at, approvalResolvedAt: row.approval_resolved_at,
-      invoiceId: row.invoice_id,
+      invoiceId: row.invoice_id, number: row.number,
       createdAt: row.created_at, updatedAt: row.updated_at,
       items: itemsByPr[row.id] || [],
     };
@@ -867,15 +868,15 @@ function replacePurchaseRequests(obj) {
   const now = Date.now();
   db.transaction((data) => {
     const existing = {};
-    for (const row of db.prepare('SELECT id, approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at, invoice_id, created_at FROM purchase_requests').all()) {
+    for (const row of db.prepare('SELECT id, approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at, invoice_id, number, created_at FROM purchase_requests').all()) {
       existing[row.id] = row;
     }
     db.prepare('DELETE FROM purchase_request_items').run();
     db.prepare('DELETE FROM purchase_requests').run();
     const insertPr = db.prepare(`INSERT INTO purchase_requests
       (id, client_id, client_name, requested_by, notes, priority, status, client_email,
-       approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at, invoice_id, created_at, updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+       approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at, invoice_id, number, created_at, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     const insertItem = db.prepare('INSERT INTO purchase_request_items (purchase_request_id, description, qty, est_unit_cost, notes, vendor, url, sku, received) VALUES (?,?,?,?,?,?,?,?,?)');
     for (const [id, pr] of Object.entries(data)) {
       const prev = existing[id];
@@ -883,7 +884,7 @@ function replacePurchaseRequests(obj) {
         id, pr.clientId||null, pr.clientName||null, pr.requestedBy||null, pr.notes||null,
         pr.priority?1:0, pr.status||'draft', pr.clientEmail||null,
         prev?.approval_status || 'not_sent', prev?.approval_id || null, prev?.approval_token || null,
-        prev?.approval_sent_at || null, prev?.approval_resolved_at || null, prev?.invoice_id || null,
+        prev?.approval_sent_at || null, prev?.approval_resolved_at || null, prev?.invoice_id || null, prev?.number || null,
         prev?.created_at || now, now
       );
       for (const item of (pr.items||[])) {
@@ -907,6 +908,50 @@ app.put('/api/purchase-requests', (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// "Estimate #" — assigned the first time a PDF is generated for this request
+// (preview or send-approval, whichever happens first), not at draft creation,
+// so abandoned drafts never burn a number. Same race-free pattern as invoice numbering.
+function getOrAssignEstimateNumber(id) {
+  const row = db.prepare('SELECT number FROM purchase_requests WHERE id = ?').get(id);
+  if (!row) throw new Error('Purchase request not found');
+  if (row.number != null) return row.number;
+  let number;
+  db.transaction(() => {
+    const maxRow = db.prepare('SELECT COALESCE(MAX(number), 1000) AS maxNumber FROM purchase_requests').get();
+    number = maxRow.maxNumber + 1;
+    db.prepare('UPDATE purchase_requests SET number = ?, updated_at = ? WHERE id = ?').run(number, Date.now(), id);
+  })();
+  return number;
+}
+
+// Returns { buffer, number } — the number is assigned (once, if not already)
+// as a side effect, since generating the estimate PDF is what turns a draft
+// into a numbered client-facing document.
+async function buildEstimatePdf(id) {
+  const row = db.prepare('SELECT * FROM purchase_requests WHERE id = ?').get(id);
+  if (!row) return null;
+  const number = getOrAssignEstimateNumber(id);
+  const items = db.prepare('SELECT description, qty, est_unit_cost FROM purchase_request_items WHERE purchase_request_id = ?').all(id)
+    .map(it => ({ description: it.description, qty: it.qty, unitPrice: it.est_unit_cost }));
+  const orgName = (readCfg().org_name) || 'System Alternatives';
+  const doc = renderDocumentPdf({
+    kind: 'Estimate', number, clientName: row.client_name, preparedBy: row.requested_by,
+    items, notes: row.notes, orgName,
+  });
+  const buffer = await pdfBufferFromDoc(doc);
+  return { buffer, number };
+}
+
+app.get('/api/purchase-requests/:id/pdf', async (req, res) => {
+  try {
+    const result = await buildEstimatePdf(req.params.id);
+    if (!result) return res.status(404).json({ error: 'Purchase request not found' });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="Estimate-${result.number}.pdf"`);
+    res.send(result.buffer);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // Sends a purchase request to SA-Website (systemalternatives.net) for client
 // approval — an outbound-only call, since this app has no inbound public
 // exposure. The result comes back later via the batched poll loop below, not
@@ -926,6 +971,8 @@ app.post('/api/purchase-requests/:id/send-approval', async (req, res) => {
     const items = db.prepare('SELECT description, qty, est_unit_cost AS estUnitCost, notes FROM purchase_request_items WHERE purchase_request_id = ?').all(id);
     const totalEstimate = items.reduce((sum, it) => sum + (it.qty||0) * (it.estUnitCost||0), 0);
 
+    const { buffer: pdfBuffer, number: estimateNumber } = await buildEstimatePdf(id);
+
     const approvalId = 'apr-' + Date.now();
     const result = await jsonHttpRequest(`${apiBase}/approval_request.php`, {
       method: 'POST',
@@ -938,6 +985,8 @@ app.post('/api/purchase-requests/:id/send-approval', async (req, res) => {
         items,
         total_estimate: totalEstimate,
         notes: row.notes || '',
+        pdf_base64: pdfBuffer.toString('base64'),
+        pdf_filename: `Estimate-${estimateNumber}.pdf`,
       },
     });
     if (result.status !== 200 || !result.json?.ok) {
@@ -1101,6 +1150,24 @@ app.delete('/api/invoices/:id', (req, res) => {
     db.prepare('DELETE FROM invoices WHERE id = ?').run(req.params.id); // cascades to invoice_line_items
     pushEvent('invoices-updated', {}, req.headers['x-session-id']);
     res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/invoices/:id/pdf', (req, res) => {
+  try {
+    const row = db.prepare('SELECT * FROM invoices WHERE id = ?').get(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Invoice not found' });
+    const items = db.prepare('SELECT description, qty, unit_price AS unitPrice FROM invoice_line_items WHERE invoice_id = ?').all(row.id);
+    const orgName = (readCfg().org_name) || 'System Alternatives';
+    const doc = renderDocumentPdf({
+      kind: 'Invoice', number: row.number, clientName: row.client_name, preparedBy: null,
+      items, notes: row.notes, taxRate: row.tax_rate, dueDate: row.due_date, orgName,
+    });
+    pdfBufferFromDoc(doc).then(buf => {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="Invoice-${row.number}.pdf"`);
+      res.send(buf);
+    });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -1418,6 +1418,7 @@ function renderPurchaseRequestDetail(id){
       <div class="wizard-actions">
         <button class="btn-secondary" onclick="switchSection('quotes')">Back</button>
         <button class="btn-secondary" style="color:var(--danger);" onclick="deletePurchaseRequest('${id}')">Delete</button>
+        <button class="btn-secondary" onclick="window.open('/api/purchase-requests/${id}/pdf','_blank')">Preview PDF</button>
         ${pr.invoiceId?`<button class="btn-secondary" onclick="selectInvoice('${pr.invoiceId}')">View Invoice</button>`
           :canGenerateInvoice?`<button class="btn-secondary" onclick="generateInvoiceFromPr('${id}')">Generate Invoice</button>`:''}
         <button class="btn-primary" ${canSend?'':'disabled'} onclick="sendPurchaseRequestForApproval('${id}')">${pr.approvalStatus==='not_sent'?'Send for Approval':'Sent — '+purchaseRequestStatusLabel(pr.approvalStatus)}</button>
@@ -1648,25 +1649,10 @@ function saveInvoiceItem(id,idx,field,value){
 
 function printInvoice(id){
   const inv=invoices[id]; if(!inv) return;
-  const totals=calcInvoiceTotal(inv);
-  const rows=(inv.lineItems||[]).map(it=>`<tr><td>${escHtml(it.description||'')}</td><td style="text-align:right;">${it.qty||0}</td><td style="text-align:right;">$${(it.unitPrice||0).toFixed(2)}</td><td style="text-align:right;">$${((it.qty||0)*(it.unitPrice||0)).toFixed(2)}</td></tr>`).join('');
-  const w=window.open('','_blank');
-  w.document.write(`
-    <html><head><title>Invoice #${inv.number}</title>
-    <style>body{font-family:sans-serif;padding:30px;color:#111;} table{width:100%;border-collapse:collapse;margin-top:20px;} th,td{padding:8px;border-bottom:1px solid #ddd;} th{text-align:left;} .totals{margin-top:16px;text-align:right;}</style>
-    </head><body>
-    <h1>Invoice #${inv.number}</h1>
-    <p><strong>${escHtml(inv.clientName||'')}</strong></p>
-    <table><thead><tr><th>Description</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Unit Price</th><th style="text-align:right;">Total</th></tr></thead>
-    <tbody>${rows}</tbody></table>
-    <div class="totals">
-      <div>Subtotal: $${totals.subtotal.toFixed(2)}</div>
-      <div>Tax: $${totals.tax.toFixed(2)}</div>
-      <div><strong>Total: $${totals.total.toFixed(2)}</strong></div>
-    </div>
-    </body></html>`);
-  w.document.close();
-  w.print();
+  // Browsers render PDFs natively in a new tab (with their own print button),
+  // so this just opens the server-rendered branded PDF — no HTML template to
+  // keep in sync with pdf.js's layout.
+  window.open(`/api/invoices/${id}/pdf`, '_blank');
 }
 
 function newQuoteFromSidebar(){

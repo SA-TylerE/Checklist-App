@@ -205,6 +205,7 @@ test('PUT /api/invoices edits status without touching the assigned number', asyn
 test('send-approval flow: create + batched poll flips approval status via a mock SA-Website', async () => {
   // Stand in for systemalternatives.net's approval_request.php: acknowledges
   // "create" and reports every pending id as "approved" on "get_status".
+  let lastCreateBody = null;
   const mock = http.createServer((req, res) => {
     let body = '';
     req.on('data', c => body += c);
@@ -212,6 +213,7 @@ test('send-approval flow: create + batched poll flips approval status via a mock
       const data = JSON.parse(body || '{}');
       res.setHeader('Content-Type', 'application/json');
       if (data.mode === 'create') {
+        lastCreateBody = data;
         res.end(JSON.stringify({ ok: true }));
       } else if (data.mode === 'get_status') {
         const statuses = {};
@@ -236,6 +238,10 @@ test('send-approval flow: create + batched poll flips approval status via a mock
     assert.equal(sendRes.status, 200);
     const sendBody = await sendRes.json();
     assert.ok(sendBody.approvalId);
+
+    assert.ok(lastCreateBody?.pdf_base64, 'mode=create payload should include the estimate PDF as base64');
+    assert.match(lastCreateBody.pdf_filename, /^Estimate-\d+\.pdf$/);
+    assert.ok(Buffer.from(lastCreateBody.pdf_base64, 'base64').slice(0, 5).toString() === '%PDF-', 'decoded attachment should be a real PDF');
 
     let after = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
     assert.equal(after['pr-1'].approvalStatus, 'pending');
@@ -391,4 +397,53 @@ test('POST /api/syncro-customers/refresh fails cleanly when Syncro is not config
   const body = await res.json();
   assert.equal(body.ok, false);
   assert.equal(body.error, 'Syncro not configured');
+});
+
+test('pdf.js renderDocumentPdf produces a valid, non-trivial PDF buffer', async () => {
+  const { renderDocumentPdf, pdfBufferFromDoc } = require('../pdf');
+  const doc = renderDocumentPdf({
+    kind: 'Estimate', number: 4242, clientName: 'Test Client', preparedBy: 'Tester',
+    items: [{ description: 'Widget', qty: 2, unitPrice: 50 }], notes: 'Some notes', orgName: 'Test Org',
+  });
+  const buf = await pdfBufferFromDoc(doc);
+  assert.equal(buf.slice(0, 5).toString(), '%PDF-');
+  assert.ok(buf.length > 1000, 'a rendered PDF with content should be well over 1KB');
+});
+
+test('GET /api/purchase-requests/:id/pdf assigns an estimate number and streams a real PDF', async () => {
+  await fetch(`${baseUrl}/api/purchase-requests`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 'pr-pdf-test': {
+      clientId: 'abc123', clientName: 'Test Client', notes: 'Preview me',
+      items: [{ description: 'Router', qty: 1, estUnitCost: 200 }],
+    }}),
+  });
+
+  const res = await fetch(`${baseUrl}/api/purchase-requests/pr-pdf-test/pdf`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'application/pdf');
+  assert.match(res.headers.get('content-disposition'), /inline/);
+  const buf = Buffer.from(await res.arrayBuffer());
+  assert.equal(buf.slice(0, 5).toString(), '%PDF-');
+
+  const prs = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
+  assert.ok(prs['pr-pdf-test'].number >= 1001, 'estimate number should be assigned on first PDF generation');
+
+  // A second request must reuse the same number rather than incrementing again.
+  await fetch(`${baseUrl}/api/purchase-requests/pr-pdf-test/pdf`);
+  const prsAfterSecondFetch = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
+  assert.equal(prsAfterSecondFetch['pr-pdf-test'].number, prs['pr-pdf-test'].number);
+});
+
+test('GET /api/invoices/:id/pdf streams a real PDF', async () => {
+  const created = await (await fetch(`${baseUrl}/api/invoices`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId: 'abc123', clientName: 'Test Client', lineItems: [{ description: 'Service', qty: 1, unitPrice: 100 }] }),
+  })).json();
+
+  const res = await fetch(`${baseUrl}/api/invoices/${created.id}/pdf`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'application/pdf');
+  const buf = Buffer.from(await res.arrayBuffer());
+  assert.equal(buf.slice(0, 5).toString(), '%PDF-');
 });
