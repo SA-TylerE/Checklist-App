@@ -112,6 +112,9 @@ function createDb(dataDir) {
   ensureColumns(db, 'purchase_requests', [
     ['invoice_id', 'TEXT'],
     ['number', 'INTEGER'], // "Estimate #", assigned at send-for-approval time — SQLite allows multiple NULLs in a UNIQUE index, so drafts stay numberless without conflict
+    ['approval_ip', 'TEXT'],           // e-signature stamp fields, filled in once the poll loop learns the request was resolved
+    ['approval_verification_id', 'TEXT'],
+    ['approval_pdf_signed', 'INTEGER DEFAULT 0'], // whether the stamped PDF has already been rendered + pushed back to SA-Website
   ]);
   ensureColumns(db, 'purchase_request_items', [
     ['vendor', 'TEXT'],

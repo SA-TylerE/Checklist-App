@@ -204,8 +204,10 @@ test('PUT /api/invoices edits status without touching the assigned number', asyn
 
 test('send-approval flow: create + batched poll flips approval status via a mock SA-Website', async () => {
   // Stand in for systemalternatives.net's approval_request.php: acknowledges
-  // "create" and reports every pending id as "approved" on "get_status".
+  // "create" and reports every pending id as "approved" on "get_status", with
+  // e-signature metadata attached, then accepts the re-stamped PDF push.
   let lastCreateBody = null;
+  let lastUpdatePdfBody = null;
   const mock = http.createServer((req, res) => {
     let body = '';
     req.on('data', c => body += c);
@@ -217,8 +219,13 @@ test('send-approval flow: create + batched poll flips approval status via a mock
         res.end(JSON.stringify({ ok: true }));
       } else if (data.mode === 'get_status') {
         const statuses = {};
-        for (const id of data.approval_ids) statuses[id] = { status: 'approved', resolved_at: Date.now() };
+        for (const id of data.approval_ids) {
+          statuses[id] = { status: 'approved', resolved_at: new Date().toISOString(), resolved_ip: '203.0.113.5', verification_id: 'ABCD1234EF567890', client_email: 'client@example.com' };
+        }
         res.end(JSON.stringify({ ok: true, statuses }));
+      } else if (data.mode === 'update_pdf') {
+        lastUpdatePdfBody = data;
+        res.end(JSON.stringify({ ok: true }));
       } else {
         res.end(JSON.stringify({ ok: false, error: 'unknown mode' }));
       }
@@ -253,6 +260,13 @@ test('send-approval flow: create + batched poll flips approval status via a mock
     after = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
     assert.equal(after['pr-1'].approvalStatus, 'approved');
     assert.ok(after['pr-1'].approvalResolvedAt);
+    assert.equal(after['pr-1'].approvalIp, '203.0.113.5');
+    assert.equal(after['pr-1'].approvalVerificationId, 'ABCD1234EF567890');
+
+    assert.ok(lastUpdatePdfBody, 'poll loop should push a re-stamped PDF back after resolution');
+    assert.equal(lastUpdatePdfBody.approval_id, sendBody.approvalId);
+    const signedPdf = Buffer.from(lastUpdatePdfBody.pdf_base64, 'base64');
+    assert.equal(signedPdf.slice(0, 5).toString(), '%PDF-');
   } finally {
     await fetch(`${baseUrl}/api/settings`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -408,6 +422,24 @@ test('pdf.js renderDocumentPdf produces a valid, non-trivial PDF buffer', async 
   const buf = await pdfBufferFromDoc(doc);
   assert.equal(buf.slice(0, 5).toString(), '%PDF-');
   assert.ok(buf.length > 1000, 'a rendered PDF with content should be well over 1KB');
+});
+
+test('pdf.js renders an Item column when items have a name, and a signature stamp when provided', async () => {
+  const { renderDocumentPdf, pdfBufferFromDoc } = require('../pdf');
+  const plainDoc = renderDocumentPdf({
+    kind: 'Estimate', number: 1, clientName: 'A', items: [{ description: 'No item name', qty: 1, unitPrice: 10 }],
+  });
+  const plainBuf = await pdfBufferFromDoc(plainDoc);
+  assert.equal(plainBuf.slice(0, 5).toString(), '%PDF-');
+
+  const stampedDoc = renderDocumentPdf({
+    kind: 'Estimate', number: 2, clientName: 'B',
+    items: [{ name: 'SW-100', description: 'Switch', qty: 1, unitPrice: 300 }],
+    signature: { decision: 'approved', resolvedBy: 'client@example.com', resolvedAtIso: new Date().toISOString(), ip: '203.0.113.5', verificationId: 'ABCD1234' },
+  });
+  const stampedBuf = await pdfBufferFromDoc(stampedDoc);
+  assert.equal(stampedBuf.slice(0, 5).toString(), '%PDF-');
+  assert.ok(stampedBuf.length > plainBuf.length, 'a PDF with an Item column + signature stamp should render more content than a bare one');
 });
 
 test('GET /api/purchase-requests/:id/pdf assigns an estimate number and streams a real PDF', async () => {

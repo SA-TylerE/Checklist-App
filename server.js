@@ -856,6 +856,7 @@ function readPurchaseRequests() {
       priority: !!row.priority, status: row.status, clientEmail: row.client_email,
       approvalStatus: row.approval_status, approvalId: row.approval_id,
       approvalSentAt: row.approval_sent_at, approvalResolvedAt: row.approval_resolved_at,
+      approvalIp: row.approval_ip, approvalVerificationId: row.approval_verification_id,
       invoiceId: row.invoice_id, number: row.number,
       createdAt: row.created_at, updatedAt: row.updated_at,
       items: itemsByPr[row.id] || [],
@@ -868,15 +869,16 @@ function replacePurchaseRequests(obj) {
   const now = Date.now();
   db.transaction((data) => {
     const existing = {};
-    for (const row of db.prepare('SELECT id, approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at, invoice_id, number, created_at FROM purchase_requests').all()) {
+    for (const row of db.prepare('SELECT id, approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at, approval_ip, approval_verification_id, approval_pdf_signed, invoice_id, number, created_at FROM purchase_requests').all()) {
       existing[row.id] = row;
     }
     db.prepare('DELETE FROM purchase_request_items').run();
     db.prepare('DELETE FROM purchase_requests').run();
     const insertPr = db.prepare(`INSERT INTO purchase_requests
       (id, client_id, client_name, requested_by, notes, priority, status, client_email,
-       approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at, invoice_id, number, created_at, updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+       approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at,
+       approval_ip, approval_verification_id, approval_pdf_signed, invoice_id, number, created_at, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     const insertItem = db.prepare('INSERT INTO purchase_request_items (purchase_request_id, description, qty, est_unit_cost, notes, vendor, url, sku, received) VALUES (?,?,?,?,?,?,?,?,?)');
     for (const [id, pr] of Object.entries(data)) {
       const prev = existing[id];
@@ -884,7 +886,9 @@ function replacePurchaseRequests(obj) {
         id, pr.clientId||null, pr.clientName||null, pr.requestedBy||null, pr.notes||null,
         pr.priority?1:0, pr.status||'draft', pr.clientEmail||null,
         prev?.approval_status || 'not_sent', prev?.approval_id || null, prev?.approval_token || null,
-        prev?.approval_sent_at || null, prev?.approval_resolved_at || null, prev?.invoice_id || null, prev?.number || null,
+        prev?.approval_sent_at || null, prev?.approval_resolved_at || null,
+        prev?.approval_ip || null, prev?.approval_verification_id || null, prev?.approval_pdf_signed || 0,
+        prev?.invoice_id || null, prev?.number || null,
         prev?.created_at || now, now
       );
       for (const item of (pr.items||[])) {
@@ -931,12 +935,21 @@ async function buildEstimatePdf(id) {
   const row = db.prepare('SELECT * FROM purchase_requests WHERE id = ?').get(id);
   if (!row) return null;
   const number = getOrAssignEstimateNumber(id);
-  const items = db.prepare('SELECT description, qty, est_unit_cost FROM purchase_request_items WHERE purchase_request_id = ?').all(id)
-    .map(it => ({ description: it.description, qty: it.qty, unitPrice: it.est_unit_cost }));
+  const items = db.prepare('SELECT description, qty, est_unit_cost, sku FROM purchase_request_items WHERE purchase_request_id = ?').all(id)
+    .map(it => ({ name: it.sku, description: it.description, qty: it.qty, unitPrice: it.est_unit_cost }));
   const orgName = (readCfg().org_name) || 'System Alternatives';
+  const signature = (row.approval_status === 'approved' || row.approval_status === 'denied')
+    ? {
+        decision: row.approval_status,
+        resolvedBy: row.client_email,
+        resolvedAtIso: row.approval_resolved_at ? new Date(row.approval_resolved_at).toISOString() : '',
+        ip: row.approval_ip,
+        verificationId: row.approval_verification_id,
+      }
+    : null;
   const doc = renderDocumentPdf({
     kind: 'Estimate', number, clientName: row.client_name, preparedBy: row.requested_by,
-    items, notes: row.notes, orgName,
+    items, notes: row.notes, orgName, signature,
   });
   const buffer = await pdfBufferFromDoc(doc);
   return { buffer, number };
@@ -1007,6 +1020,31 @@ app.post('/api/purchase-requests/:id/send-approval', async (req, res) => {
   }
 });
 
+// Re-renders the estimate PDF (now with signature info to stamp, since the
+// row's approval_status/approval_ip/approval_verification_id are already
+// updated by the time this is called) and pushes it back to SA-Website so the
+// email attachment and the approve.html iframe both end up showing the signed
+// version. Marks approval_pdf_signed=1 only on success, so a transient
+// network failure gets retried on the next poll cycle rather than silently
+// leaving the client-visible PDF unsigned forever.
+async function signAndPushEstimatePdf(prId, approvalId, apiBase, apiKey) {
+  try {
+    const { buffer } = await buildEstimatePdf(prId);
+    const result = await jsonHttpRequest(`${apiBase}/approval_request.php`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: { mode: 'update_pdf', approval_id: approvalId, pdf_base64: buffer.toString('base64') },
+    });
+    if (result.status === 200 && result.json?.ok) {
+      db.prepare('UPDATE purchase_requests SET approval_pdf_signed = 1 WHERE id = ?').run(prId);
+    } else {
+      console.log(`[approval-poll] update_pdf failed for ${prId}: status ${result.status}`);
+    }
+  } catch (e) {
+    console.log(`[approval-poll] Failed to push signed PDF for ${prId}: ${e.message}`);
+  }
+}
+
 // One outbound call per cycle, covering every outstanding approval — not one
 // call per pending item — so polling cost stays flat regardless of how many
 // purchase requests are awaiting a client decision.
@@ -1030,16 +1068,27 @@ async function pollApprovalStatusOnce() {
           const info = statuses[pr.approval_id];
           if (!info || info.status === 'pending') continue;
           anyResolved = true;
-          db.prepare(`UPDATE purchase_requests SET approval_status=?, approval_resolved_at=?, updated_at=? WHERE id=?`)
-            .run(info.status, info.resolved_at || now, now, pr.id);
+          const resolvedAtMs = info.resolved_at ? Date.parse(info.resolved_at) || now : now;
+          db.prepare(`UPDATE purchase_requests SET approval_status=?, approval_resolved_at=?, approval_ip=?, approval_verification_id=?, updated_at=? WHERE id=?`)
+            .run(info.status, resolvedAtMs, info.resolved_ip || null, info.verification_id || null, now, pr.id);
           db.prepare('INSERT INTO logs (id, client_id, ts, data) VALUES (?, ?, ?, ?)')
             .run(`${now}-${Math.random().toString(36).slice(2,6)}`, pr.client_id, now,
               JSON.stringify({ ts: new Date(now).toISOString(), tech: '', action: `purchase-request-${info.status}`, clientId: pr.client_id, clientName: pr.client_name }));
+          await signAndPushEstimatePdf(pr.id, pr.approval_id, apiBase, apiKey);
         }
         if (anyResolved) pushEvent('purchase-requests-updated', {}, 'server');
       } else {
         console.log(`[approval-poll] SA-Website returned status ${result.status}`);
       }
+    }
+
+    // Retry any resolved request whose signed PDF push previously failed —
+    // these never reappear in the "pending" query above once resolved, so
+    // without this they'd stay unsigned forever after a transient failure.
+    if (apiBase && apiKey) {
+      const unsigned = db.prepare(`SELECT id, approval_id FROM purchase_requests
+        WHERE approval_status IN ('approved','denied') AND approval_pdf_signed = 0 AND approval_id IS NOT NULL`).all();
+      for (const pr of unsigned) await signAndPushEstimatePdf(pr.id, pr.approval_id, apiBase, apiKey);
     }
   } catch (e) {
     console.log(`[approval-poll] Poll failed: ${e.message}`);

@@ -1126,6 +1126,17 @@ let activeInvoiceId=null;
 
 function newRecordId(prefix){ return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2,6)}`; }
 
+// Wraps a line-item input with a small uppercase label above it — placeholder
+// text alone disappears once filled in, so every column needs a real label.
+function liField(label,inputHtml){
+  return `<div style="min-width:0;"><label style="display:block;font-size:9px;font-weight:600;color:var(--text2);letter-spacing:0.03em;text-transform:uppercase;margin-bottom:2px;">${escHtml(label)}</label>${inputHtml}</div>`;
+}
+// A number input with a "$" prefix rendered inside the field.
+function liCurrencyInput(value,oninput,onchange){
+  return `<div style="position:relative;"><span style="position:absolute;left:7px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:11px;pointer-events:none;">$</span>
+    <input class="li-input" type="number" min="0" step="0.01" style="padding-left:16px;" value="${value||0}" oninput="${oninput}" onchange="${onchange}"></div>`;
+}
+
 async function loadPurchaseRequests(){
   try{const r=await fetch('/api/purchase-requests');if(r.ok)purchaseRequests=await r.json();}
   catch(_){purchaseRequests={};}
@@ -1368,21 +1379,21 @@ function renderPurchaseRequestDetail(id){
   if(!pr||!el) return;
   const itemsRows=(pr.items||[]).map((it,i)=>`
     <div style="border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px;min-width:0;">
-      <div class="li-row" style="display:grid;grid-template-columns:minmax(0,2fr) 60px 90px 70px auto;gap:8px;align-items:center;margin-bottom:6px;">
-        <input class="li-input" placeholder="Description" value="${escHtml(it.description||'')}" onchange="savePrItem('${id}',${i},'description',this.value)">
-        <input class="li-input" type="number" min="0" step="1" placeholder="Qty" value="${it.qty||0}" oninput="livePrItem('${id}',${i},'qty',this.value)" onchange="savePrItem('${id}',${i},'qty',this.value)">
-        <input class="li-input" type="number" min="0" step="0.01" placeholder="Unit cost" value="${it.estUnitCost||0}" oninput="livePrItem('${id}',${i},'estUnitCost',this.value)" onchange="savePrItem('${id}',${i},'estUnitCost',this.value)">
-        <div style="text-align:right;font-weight:600;" id="pr-item-total-${id}-${i}">$${((it.qty||0)*(it.estUnitCost||0)).toFixed(2)}</div>
-        <button class="btn-secondary" style="padding:2px 8px;font-size:11px;" onclick="removePrItem('${id}',${i})">✕</button>
+      <div class="li-row" style="display:grid;grid-template-columns:100px minmax(0,2fr) 60px 100px 70px auto;gap:8px;margin-bottom:8px;">
+        ${liField('Item',`<input class="li-input" value="${escHtml(it.sku||'')}" onchange="savePrItem('${id}',${i},'sku',this.value)">`)}
+        ${liField('Description',`<input class="li-input" value="${escHtml(it.description||'')}" onchange="savePrItem('${id}',${i},'description',this.value)">`)}
+        ${liField('Qty',`<input class="li-input" type="number" min="0" step="1" value="${it.qty||0}" oninput="livePrItem('${id}',${i},'qty',this.value)" onchange="savePrItem('${id}',${i},'qty',this.value)">`)}
+        ${liField('Unit Cost',liCurrencyInput(it.estUnitCost, `livePrItem('${id}',${i},'estUnitCost',this.value)`, `savePrItem('${id}',${i},'estUnitCost',this.value)`))}
+        ${liField('Total',`<div style="text-align:right;font-weight:600;padding-top:6px;" id="pr-item-total-${id}-${i}">$${((it.qty||0)*(it.estUnitCost||0)).toFixed(2)}</div>`)}
+        <div style="display:flex;align-items:flex-end;"><button class="btn-secondary" style="padding:5px 8px;font-size:11px;" onclick="removePrItem('${id}',${i})">✕</button></div>
       </div>
-      <div class="li-row" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.4fr) auto;gap:8px;align-items:center;">
-        <input class="li-input" placeholder="Vendor (e.g. CDW)" value="${escHtml(it.vendor||'')}" onchange="savePrItem('${id}',${i},'vendor',this.value)">
-        <input class="li-input" placeholder="SKU / part #" value="${escHtml(it.sku||'')}" onchange="savePrItem('${id}',${i},'sku',this.value)">
-        <div style="display:flex;gap:4px;align-items:center;min-width:0;">
-          <input class="li-input" type="url" placeholder="Purchase link" style="flex:1;min-width:0;" value="${escHtml(it.url||'')}" onchange="savePrItem('${id}',${i},'url',this.value)">
+      <div class="li-row" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) auto;gap:8px;">
+        ${liField('Vendor',`<input class="li-input" placeholder="e.g. CDW" value="${escHtml(it.vendor||'')}" onchange="savePrItem('${id}',${i},'vendor',this.value)">`)}
+        ${liField('Purchase Link',`<div style="display:flex;gap:4px;align-items:center;min-width:0;">
+          <input class="li-input" type="url" style="flex:1;min-width:0;" value="${escHtml(it.url||'')}" onchange="savePrItem('${id}',${i},'url',this.value)">
           ${it.url?`<a href="${escHtml(it.url)}" target="_blank" rel="noopener" title="Open purchase link">🔗</a>`:''}
-        </div>
-        <label style="display:flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap;">
+        </div>`)}
+        <label style="display:flex;align-items:flex-end;gap:4px;font-size:11px;white-space:nowrap;padding-bottom:7px;">
           <input type="checkbox" ${it.received?'checked':''} onchange="savePrItem('${id}',${i},'received',this.checked)"> Received
         </label>
       </div>
@@ -1536,7 +1547,7 @@ function renderInvoiceDetail(id){
     <tr>
       <td><input class="li-input" value="${escHtml(it.description||'')}" onchange="saveInvoiceItem('${id}',${i},'description',this.value)"></td>
       <td><input class="li-input" type="number" min="0" step="1" value="${it.qty||0}" style="width:70px;" oninput="liveInvoiceItem('${id}',${i},'qty',this.value)" onchange="saveInvoiceItem('${id}',${i},'qty',this.value)"></td>
-      <td><input class="li-input" type="number" min="0" step="0.01" value="${it.unitPrice||0}" style="width:90px;" oninput="liveInvoiceItem('${id}',${i},'unitPrice',this.value)" onchange="saveInvoiceItem('${id}',${i},'unitPrice',this.value)"></td>
+      <td style="width:90px;">${liCurrencyInput(it.unitPrice, `liveInvoiceItem('${id}',${i},'unitPrice',this.value)`, `saveInvoiceItem('${id}',${i},'unitPrice',this.value)`)}</td>
       <td style="text-align:right;" id="inv-item-total-${id}-${i}">$${((it.qty||0)*(it.unitPrice||0)).toFixed(2)}</td>
       <td><button class="btn-secondary" style="padding:2px 8px;font-size:11px;" onclick="removeInvoiceItem('${id}',${i})">✕</button></td>
     </tr>`).join('');
