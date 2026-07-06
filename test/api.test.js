@@ -216,7 +216,7 @@ test('send-approval flow: create + batched poll flips approval status via a mock
       res.setHeader('Content-Type', 'application/json');
       if (data.mode === 'create') {
         lastCreateBody = data;
-        res.end(JSON.stringify({ ok: true }));
+        res.end(JSON.stringify({ ok: true, link: `http://127.0.0.1/approve?token=fake-token-for-${data.approval_id}` }));
       } else if (data.mode === 'get_status') {
         const statuses = {};
         for (const id of data.approval_ids) {
@@ -256,6 +256,7 @@ test('send-approval flow: create + batched poll flips approval status via a mock
 
     let after = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
     assert.equal(after['pr-1'].approvalStatus, 'pending');
+    assert.equal(after['pr-1'].approvalLink, `http://127.0.0.1/approve?token=fake-token-for-${sendBody.approvalId}`, 'the link returned by mode=create should be stored for the "Copy Approval Link" button');
 
     // Poll runs on its own timer in the live server; call the internal function directly here
     // to verify the batched get_status/update logic without waiting on a real interval.
@@ -290,6 +291,67 @@ test('send-approval returns 400 when the purchase request has no client email', 
     body: JSON.stringify({ 'pr-no-email': { clientId: 'abc123', clientName: 'Test Client', items: [] } }),
   });
   const res = await fetch(`${baseUrl}/api/purchase-requests/pr-no-email/send-approval`, { method: 'POST' });
+  assert.equal(res.status, 400);
+});
+
+test('resend-approval re-sends the same pending approval without minting a new approval_id', async () => {
+  let lastResendBody = null;
+  const mock = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', c => body += c);
+    req.on('end', () => {
+      const data = JSON.parse(body || '{}');
+      res.setHeader('Content-Type', 'application/json');
+      if (data.mode === 'create') {
+        res.end(JSON.stringify({ ok: true, link: `http://127.0.0.1/approve?token=orig-${data.approval_id}` }));
+      } else if (data.mode === 'resend') {
+        lastResendBody = data;
+        res.end(JSON.stringify({ ok: true, link: `http://127.0.0.1/approve?token=fresh-${data.approval_id}` }));
+      } else {
+        res.end(JSON.stringify({ ok: false, error: 'unknown mode' }));
+      }
+    });
+  });
+  await new Promise(resolve => mock.listen(0, '127.0.0.1', resolve));
+  const mockBase = `http://127.0.0.1:${mock.address().port}`;
+  const priorSettings = await (await fetch(`${baseUrl}/api/settings`)).json();
+  await fetch(`${baseUrl}/api/settings`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...priorSettings, saWebsiteApiBase: mockBase, saWebsiteApiKey: 'test-key' }),
+  });
+
+  try {
+    await fetch(`${baseUrl}/api/purchase-requests`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 'pr-resend': { clientId: 'abc123', clientName: 'Test Client', clientEmail: 'client@example.com', items: [] } }),
+    });
+    const sendRes = await fetch(`${baseUrl}/api/purchase-requests/pr-resend/send-approval`, { method: 'POST' });
+    assert.equal(sendRes.status, 200);
+    const sendBody = await sendRes.json();
+
+    const resendRes = await fetch(`${baseUrl}/api/purchase-requests/pr-resend/resend-approval`, { method: 'POST' });
+    assert.equal(resendRes.status, 200);
+    assert.equal(lastResendBody.approval_id, sendBody.approvalId, 'resend should reuse the existing approval_id rather than minting a new one');
+
+    const after = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
+    assert.equal(after['pr-resend'].approvalId, sendBody.approvalId);
+    assert.equal(after['pr-resend'].approvalLink, `http://127.0.0.1/approve?token=fresh-${sendBody.approvalId}`, 'the freshly resent link should replace the stored one');
+    assert.equal(after['pr-resend'].approvalStatus, 'pending');
+  } finally {
+    await fetch(`${baseUrl}/api/settings`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...priorSettings, saWebsiteApiBase: '', saWebsiteApiKey: '' }),
+    });
+    await new Promise(resolve => mock.close(resolve));
+  }
+});
+
+test('resend-approval refuses to resend a request that is not pending', async () => {
+  await fetch(`${baseUrl}/api/purchase-requests`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 'pr-not-pending': { clientId: 'abc123', clientName: 'Test Client', items: [] } }),
+  });
+  const res = await fetch(`${baseUrl}/api/purchase-requests/pr-not-pending/resend-approval`, { method: 'POST' });
   assert.equal(res.status, 400);
 });
 
@@ -465,6 +527,22 @@ test('GET /api/syncro-customers sorts real company names ahead of email-like bus
   const emailIdx = all.findIndex(c => c.id === 'syn-email');
   assert.ok(companyIdx >= 0 && emailIdx >= 0);
   assert.ok(companyIdx < emailIdx, 'a real company name should be listed before an email-like business name even when alphabetically later');
+});
+
+test('replaceSyncroCustomers prefers customer_business_then_name over a blank business_name', async () => {
+  // Syncro leaves business_name blank for individual customers with no
+  // company; customer_business_then_name is Syncro's own precomputed
+  // "business name if present, else full name" field, so an individual
+  // should show their actual name rather than a blank or raw email.
+  app.locals.replaceSyncroCustomers([
+    { id: 'cust-individual', business_name: '', customer_business_then_name: 'Jane Individual', email: 'jane@example.com' },
+    { id: 'cust-company', business_name: 'Acme Corp', customer_business_then_name: 'Acme Corp', email: 'billing@acme.com' },
+  ]);
+  const all = await (await fetch(`${baseUrl}/api/syncro-customers`)).json();
+  const individual = all.find(c => c.id === 'cust-individual');
+  const company = all.find(c => c.id === 'cust-company');
+  assert.equal(individual.businessName, 'Jane Individual');
+  assert.equal(company.businessName, 'Acme Corp');
 });
 
 test('POST /api/syncro-customers/refresh fails cleanly when Syncro is not configured', async () => {

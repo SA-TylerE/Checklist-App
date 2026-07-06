@@ -1123,6 +1123,7 @@ let invoices={};
 let activeQuotesTab='pr'; // 'pr' | 'invoice'
 let activePurchaseRequestId=null;
 let activeInvoiceId=null;
+const prApprovalShortLinkCache={}; // prId -> shortened approval link, so repeat copies don't re-hit the shortener
 
 function newRecordId(prefix){ return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2,6)}`; }
 
@@ -1366,6 +1367,17 @@ function renderQuotesDashboard(){
   if(el) el.innerHTML=`<div style="padding:30px;color:var(--text3);">Select a purchase request or invoice from the sidebar, or create a new one.</div>`;
 }
 
+// Deselects whichever PR/invoice is open and returns to the list placeholder —
+// switchSection('quotes') alone is a no-op here since it never clears
+// activePurchaseRequestId/activeInvoiceId, so calling it from a detail view
+// that's already in the Quotes section just re-renders the same detail.
+function backToQuotesDashboard(){
+  activePurchaseRequestId=null;
+  activeInvoiceId=null;
+  renderQuotesSidebar();
+  renderQuotesDashboard();
+}
+
 function newQuotesItemFromSidebar(){
   if(activeQuotesTab==='pr') createPurchaseRequest();
   else createInvoiceFromSidebar();
@@ -1429,7 +1441,7 @@ function renderPurchaseRequestDetail(id){
       <div id="pr-alert-${id}"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
         ${renderSyncroClientField('pr-client-'+id,pr.clientName,c=>updatePrClientFromSyncro(id,c))}
-        <div class="field-group" style="margin:0;"><label>Client Email</label>
+        <div class="field-group" style="margin:0;"><label>Contact Email</label>
           <input value="${escHtml(pr.clientEmail||'')}" onchange="updatePrField('${id}','clientEmail',this.value)" placeholder="client@example.com">
         </div>
         <div class="field-group" style="margin:0;"><label>Status</label>
@@ -1449,12 +1461,14 @@ function renderPurchaseRequestDetail(id){
       <button class="btn-secondary" style="font-size:11px;margin-bottom:14px;" onclick="addPrItem('${id}')">+ Add Item</button>
       <div style="text-align:right;font-weight:700;margin-bottom:16px;" id="pr-grand-total-${id}">Estimated Total: $${total.toFixed(2)}</div>
       <div class="wizard-actions">
-        <button class="btn-secondary" onclick="switchSection('quotes')">Back</button>
+        <button class="btn-secondary" onclick="backToQuotesDashboard()">Back</button>
         <button class="btn-secondary" style="color:var(--danger);" onclick="deletePurchaseRequest('${id}')">Delete</button>
         <button class="btn-secondary" onclick="window.open('/api/purchase-requests/${id}/pdf','_blank')">Preview PDF</button>
         ${pr.invoiceId?`<button class="btn-secondary" onclick="selectInvoice('${pr.invoiceId}')">View Invoice</button>`
           :canGenerateInvoice?`<button class="btn-secondary" onclick="generateInvoiceFromPr('${id}')">Generate Invoice</button>`:''}
-        <button class="btn-primary" ${canSend?'':'disabled'} onclick="sendPurchaseRequestForApproval('${id}')">${canSend?(pr.approvalStatus==='modified'?'Resend for Approval':'Send for Approval'):'Sent — '+purchaseRequestStatusLabel(pr.approvalStatus)}</button>
+        ${pr.approvalLink?`<button class="btn-secondary" id="pr-copy-link-btn-${id}" onclick="copyApprovalLink('${id}',this)">Copy Approval Link</button>`:''}
+        ${pr.approvalStatus==='pending'?`<button class="btn-secondary" id="pr-resend-btn-${id}" onclick="resendApprovalEmail('${id}',this)">Resend Email</button>`:''}
+        <button id="pr-send-btn-${id}" class="btn-primary" ${canSend?'':'disabled'} onclick="sendPurchaseRequestForApproval('${id}')">${canSend?(pr.approvalStatus==='modified'?'Resend for Approval':'Send for Approval'):'Sent — '+purchaseRequestStatusLabel(pr.approvalStatus)}</button>
       </div>
     </div>`;
 }
@@ -1520,15 +1534,69 @@ function savePrItem(id,idx,field,value){
 
 async function sendPurchaseRequestForApproval(id){
   const pr=purchaseRequests[id]; if(!pr) return;
-  if(!pr.clientEmail){ showAlert(`pr-alert-${id}`,'error','Set a client email before sending.'); return; }
+  if(!pr.clientEmail){ showAlert(`pr-alert-${id}`,'error','Set a contact email before sending.'); return; }
+  const btn=document.getElementById(`pr-send-btn-${id}`);
+  const originalLabel=btn?btn.innerHTML:'';
+  if(btn){ btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Sending…'; }
   try{
     const r=await fetch(`/api/purchase-requests/${id}/send-approval`,{method:'POST',headers:{'X-Tech-Name':localStorage.getItem('myName')||'','X-Session-Id':SESSION_ID}});
     const body=await r.json();
     if(!r.ok) throw new Error(body.error||'Failed to send');
+    delete prApprovalShortLinkCache[id];
     await loadPurchaseRequests();
     renderQuotesSidebar();
     renderPurchaseRequestDetail(id);
-  }catch(e){ showAlert(`pr-alert-${id}`,'error',e.message); }
+    showToast(`Estimate sent to ${pr.clientEmail}`,'success');
+  }catch(e){
+    showAlert(`pr-alert-${id}`,'error',e.message);
+    if(btn){ btn.disabled=false; btn.innerHTML=originalLabel; }
+  }
+}
+
+// Copies the client's approval link for a tech to read out or paste elsewhere
+// (e.g. a chat) — shortened via the same is.gd proxy used for RMM install
+// links, since the raw approve.html?token=... URL is long and unwieldy.
+async function copyApprovalLink(id,btn){
+  const pr=purchaseRequests[id];
+  if(!pr?.approvalLink){ showToast('No approval link yet','error'); return; }
+  const orig=btn.textContent;
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Copying…';
+  try{
+    let short=prApprovalShortLinkCache[id];
+    if(!short){
+      try{
+        const r=await fetch(`/api/shorten?url=${encodeURIComponent(pr.approvalLink)}`);
+        if(r.ok){ const d=await r.json(); if(d.short) short=d.short; }
+      }catch(_){}
+      if(short) prApprovalShortLinkCache[id]=short;
+    }
+    const text=short||pr.approvalLink;
+    if(navigator.clipboard?.writeText){ await navigator.clipboard.writeText(text); } else legacyCopy(text);
+    btn.textContent='Copied!'; btn.style.color='var(--success)';
+  }catch(e){
+    btn.textContent='Copy failed';
+  }finally{
+    setTimeout(()=>{ btn.disabled=false; btn.textContent=orig; btn.style.color=''; },1500);
+  }
+}
+
+async function resendApprovalEmail(id,btn){
+  const pr=purchaseRequests[id]; if(!pr) return;
+  const originalLabel=btn?btn.innerHTML:'';
+  if(btn){ btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Resending…'; }
+  try{
+    const r=await fetch(`/api/purchase-requests/${id}/resend-approval`,{method:'POST',headers:{'X-Tech-Name':localStorage.getItem('myName')||'','X-Session-Id':SESSION_ID}});
+    const body=await r.json();
+    if(!r.ok) throw new Error(body.error||'Failed to resend');
+    delete prApprovalShortLinkCache[id];
+    await loadPurchaseRequests();
+    renderQuotesSidebar();
+    renderPurchaseRequestDetail(id);
+    showToast(`Reminder email resent to ${pr.clientEmail}`,'success');
+  }catch(e){
+    showAlert(`pr-alert-${id}`,'error',e.message);
+    if(btn){ btn.disabled=false; btn.innerHTML=originalLabel; }
+  }
 }
 
 async function generateInvoiceFromPr(id){
@@ -1613,7 +1681,7 @@ function renderInvoiceDetail(id){
         <div style="font-weight:700;">Total: $${totals.total.toFixed(2)}</div>
       </div>
       <div class="wizard-actions">
-        <button class="btn-secondary" onclick="switchSection('quotes')">Back</button>
+        <button class="btn-secondary" onclick="backToQuotesDashboard()">Back</button>
         <button class="btn-secondary" style="color:var(--danger);" onclick="deleteInvoice('${id}')">Delete</button>
         <button class="btn-secondary" onclick="printInvoice('${id}')">Print</button>
       </div>

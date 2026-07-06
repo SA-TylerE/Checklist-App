@@ -118,6 +118,7 @@ function createDb(dataDir) {
     ['internal_notes', 'TEXT'],  // tech-only — never sent to SA-Website, the PDF, or any client-facing surface
     ['signer_name', 'TEXT'],     // typed name the client entered to Approve/Deny
     ['deny_reason', 'TEXT'],     // required when the client denies
+    ['approval_link', 'TEXT'],   // client-facing approve.html?token=... URL, for the "Copy Approval Link" button
   ]);
   ensureColumns(db, 'purchase_request_items', [
     ['vendor', 'TEXT'],
