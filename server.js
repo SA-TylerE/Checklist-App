@@ -806,7 +806,11 @@ app.get('/api/shorten', (req, res) => {
     apiRes.on('data', chunk => data += chunk);
     apiRes.on('end', () => {
       const short = data.trim();
-      if (!short || short.startsWith('Error:')) return res.status(400).json({ error: short || 'Shortening failed' });
+      // is.gd's error responses aren't consistently prefixed (seen both
+      // "Error: ..." and "Error, ..." — e.g. "Error, database insert failed"),
+      // so a blacklist on "Error:" let some error text through as if it were
+      // a valid shortened URL. Whitelist what a real short link looks like instead.
+      if (!/^https?:\/\//i.test(short)) return res.status(400).json({ error: short || 'Shortening failed' });
       res.json({ short });
     });
   }).on('error', e => res.status(500).json({ error: e.message }));

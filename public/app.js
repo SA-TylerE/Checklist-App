@@ -1468,7 +1468,7 @@ function renderPurchaseRequestDetail(id){
           :canGenerateInvoice?`<button class="btn-secondary" onclick="generateInvoiceFromPr('${id}')">Generate Invoice</button>`:''}
         ${pr.approvalLink?`<button class="btn-secondary" id="pr-copy-link-btn-${id}" onclick="copyApprovalLink('${id}',this)">Copy Approval Link</button>`:''}
         ${pr.approvalStatus==='pending'?`<button class="btn-secondary" id="pr-resend-btn-${id}" onclick="resendApprovalEmail('${id}',this)">Resend Email</button>`:''}
-        <button id="pr-send-btn-${id}" class="btn-primary" ${canSend?'':'disabled'} onclick="sendPurchaseRequestForApproval('${id}')">${canSend?(pr.approvalStatus==='modified'?'Resend for Approval':'Send for Approval'):'Sent — '+purchaseRequestStatusLabel(pr.approvalStatus)}</button>
+        <button id="pr-send-btn-${id}" class="btn-primary pr-send-btn" ${canSend?'':'disabled'} onclick="sendPurchaseRequestForApproval('${id}')">${canSend?(pr.approvalStatus==='modified'?'Resend for Approval':'Send for Approval'):'Sent — '+purchaseRequestStatusLabel(pr.approvalStatus)}</button>
       </div>
     </div>`;
 }
