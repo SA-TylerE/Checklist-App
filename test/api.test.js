@@ -216,7 +216,11 @@ test('send-approval flow: create + batched poll flips approval status via a mock
       res.setHeader('Content-Type', 'application/json');
       if (data.mode === 'create') {
         lastCreateBody = data;
-        res.end(JSON.stringify({ ok: true, link: `http://127.0.0.1/approve?token=fake-token-for-${data.approval_id}` }));
+        res.end(JSON.stringify({
+          ok: true,
+          link: `http://127.0.0.1/approve?token=fake-token-for-${data.approval_id}`,
+          short_link: `http://127.0.0.1/l/short-${data.approval_id}`,
+        }));
       } else if (data.mode === 'get_status') {
         const statuses = {};
         for (const id of data.approval_ids) {
@@ -256,7 +260,8 @@ test('send-approval flow: create + batched poll flips approval status via a mock
 
     let after = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
     assert.equal(after['pr-1'].approvalStatus, 'pending');
-    assert.equal(after['pr-1'].approvalLink, `http://127.0.0.1/approve?token=fake-token-for-${sendBody.approvalId}`, 'the link returned by mode=create should be stored for the "Copy Approval Link" button');
+    assert.equal(after['pr-1'].approvalLink, `http://127.0.0.1/approve?token=fake-token-for-${sendBody.approvalId}`, 'the full link returned by mode=create should be stored for reference');
+    assert.equal(after['pr-1'].approvalShortLink, `http://127.0.0.1/l/short-${sendBody.approvalId}`, 'the self-hosted short link returned by mode=create is what "Copy Approval Link" should actually copy');
 
     // Poll runs on its own timer in the live server; call the internal function directly here
     // to verify the batched get_status/update logic without waiting on a real interval.
@@ -303,10 +308,10 @@ test('resend-approval re-sends the same pending approval without minting a new a
       const data = JSON.parse(body || '{}');
       res.setHeader('Content-Type', 'application/json');
       if (data.mode === 'create') {
-        res.end(JSON.stringify({ ok: true, link: `http://127.0.0.1/approve?token=orig-${data.approval_id}` }));
+        res.end(JSON.stringify({ ok: true, link: `http://127.0.0.1/approve?token=orig-${data.approval_id}`, short_link: `http://127.0.0.1/l/orig-${data.approval_id}` }));
       } else if (data.mode === 'resend') {
         lastResendBody = data;
-        res.end(JSON.stringify({ ok: true, link: `http://127.0.0.1/approve?token=fresh-${data.approval_id}` }));
+        res.end(JSON.stringify({ ok: true, link: `http://127.0.0.1/approve?token=fresh-${data.approval_id}`, short_link: `http://127.0.0.1/l/fresh-${data.approval_id}` }));
       } else {
         res.end(JSON.stringify({ ok: false, error: 'unknown mode' }));
       }
@@ -336,6 +341,7 @@ test('resend-approval re-sends the same pending approval without minting a new a
     const after = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
     assert.equal(after['pr-resend'].approvalId, sendBody.approvalId);
     assert.equal(after['pr-resend'].approvalLink, `http://127.0.0.1/approve?token=fresh-${sendBody.approvalId}`, 'the freshly resent link should replace the stored one');
+    assert.equal(after['pr-resend'].approvalShortLink, `http://127.0.0.1/l/fresh-${sendBody.approvalId}`, 'the freshly resent short link should replace the stored one too');
     assert.equal(after['pr-resend'].approvalStatus, 'pending');
   } finally {
     await fetch(`${baseUrl}/api/settings`, {
@@ -473,6 +479,16 @@ test('generate-invoice creates a linked invoice and blocks a second conversion',
 
   const second = await fetch(`${baseUrl}/api/purchase-requests/pr-convert/generate-invoice`, { method: 'POST' });
   assert.equal(second.status, 400);
+});
+
+test('isValidShortUrl rejects is.gd error text regardless of its prefix punctuation', () => {
+  const isValidShortUrl = app.locals.isValidShortUrl;
+  assert.equal(isValidShortUrl('https://is.gd/aB3xY9'), true);
+  assert.equal(isValidShortUrl('http://is.gd/aB3xY9'), true);
+  assert.equal(isValidShortUrl('Error: something went wrong'), false);
+  // The actual bug report: is.gd doesn't always use a colon after "Error".
+  assert.equal(isValidShortUrl('Error, database insert failed'), false);
+  assert.equal(isValidShortUrl(''), false);
 });
 
 test('DELETE /api/purchase-requests/:id and /api/invoices/:id remove the record', async () => {

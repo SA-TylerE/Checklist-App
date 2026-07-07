@@ -1123,7 +1123,6 @@ let invoices={};
 let activeQuotesTab='pr'; // 'pr' | 'invoice'
 let activePurchaseRequestId=null;
 let activeInvoiceId=null;
-const prApprovalShortLinkCache={}; // prId -> shortened approval link, so repeat copies don't re-hit the shortener
 
 function newRecordId(prefix){ return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2,6)}`; }
 
@@ -1466,7 +1465,7 @@ function renderPurchaseRequestDetail(id){
         <button class="btn-secondary" onclick="window.open('/api/purchase-requests/${id}/pdf','_blank')">Preview PDF</button>
         ${pr.invoiceId?`<button class="btn-secondary" onclick="selectInvoice('${pr.invoiceId}')">View Invoice</button>`
           :canGenerateInvoice?`<button class="btn-secondary" onclick="generateInvoiceFromPr('${id}')">Generate Invoice</button>`:''}
-        ${pr.approvalLink?`<button class="btn-secondary" id="pr-copy-link-btn-${id}" onclick="copyApprovalLink('${id}',this)">Copy Approval Link</button>`:''}
+        ${(pr.approvalShortLink||pr.approvalLink)?`<button class="btn-secondary" id="pr-copy-link-btn-${id}" onclick="copyApprovalLink('${id}',this)">Copy Approval Link</button>`:''}
         ${pr.approvalStatus==='pending'?`<button class="btn-secondary" id="pr-resend-btn-${id}" onclick="resendApprovalEmail('${id}',this)">Resend Email</button>`:''}
         <button id="pr-send-btn-${id}" class="btn-primary pr-send-btn" ${canSend?'':'disabled'} onclick="sendPurchaseRequestForApproval('${id}')">${canSend?(pr.approvalStatus==='modified'?'Resend for Approval':'Send for Approval'):'Sent — '+purchaseRequestStatusLabel(pr.approvalStatus)}</button>
       </div>
@@ -1542,7 +1541,6 @@ async function sendPurchaseRequestForApproval(id){
     const r=await fetch(`/api/purchase-requests/${id}/send-approval`,{method:'POST',headers:{'X-Tech-Name':localStorage.getItem('myName')||'','X-Session-Id':SESSION_ID}});
     const body=await r.json();
     if(!r.ok) throw new Error(body.error||'Failed to send');
-    delete prApprovalShortLinkCache[id];
     await loadPurchaseRequests();
     renderQuotesSidebar();
     renderPurchaseRequestDetail(id);
@@ -1554,30 +1552,23 @@ async function sendPurchaseRequestForApproval(id){
 }
 
 // Copies the client's approval link for a tech to read out or paste elsewhere
-// (e.g. a chat) — shortened via the same is.gd proxy used for RMM install
-// links, since the raw approve.html?token=... URL is long and unwieldy.
-async function copyApprovalLink(id,btn){
+// (e.g. a chat). SA-Website mints a self-hosted short link (/l/<code>) at
+// send/resend time — a public shortener (is.gd, same as the RMM install-URL
+// flow) isn't viable here since every approval link is unique, unlike a
+// reused install URL, so it trips the shortener's per-IP new-link rate limit
+// almost immediately under real usage.
+function copyApprovalLink(id,btn){
   const pr=purchaseRequests[id];
-  if(!pr?.approvalLink){ showToast('No approval link yet','error'); return; }
+  const text=pr?.approvalShortLink||pr?.approvalLink;
+  if(!text){ showToast('No approval link yet','error'); return; }
   const orig=btn.textContent;
-  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Copying…';
-  try{
-    let short=prApprovalShortLinkCache[id];
-    if(!short){
-      try{
-        const r=await fetch(`/api/shorten?url=${encodeURIComponent(pr.approvalLink)}`);
-        if(r.ok){ const d=await r.json(); if(d.short) short=d.short; }
-      }catch(_){}
-      if(short) prApprovalShortLinkCache[id]=short;
-    }
-    const text=short||pr.approvalLink;
-    if(navigator.clipboard?.writeText){ await navigator.clipboard.writeText(text); } else legacyCopy(text);
+  const done=()=>{
     btn.textContent='Copied!'; btn.style.color='var(--success)';
-  }catch(e){
-    btn.textContent='Copy failed';
-  }finally{
-    setTimeout(()=>{ btn.disabled=false; btn.textContent=orig; btn.style.color=''; },1500);
-  }
+    setTimeout(()=>{ btn.textContent=orig; btn.style.color=''; },1500);
+  };
+  if(navigator.clipboard?.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(()=>{ legacyCopy(text); done(); });
+  } else { legacyCopy(text); done(); }
 }
 
 async function resendApprovalEmail(id,btn){
@@ -1588,7 +1579,6 @@ async function resendApprovalEmail(id,btn){
     const r=await fetch(`/api/purchase-requests/${id}/resend-approval`,{method:'POST',headers:{'X-Tech-Name':localStorage.getItem('myName')||'','X-Session-Id':SESSION_ID}});
     const body=await r.json();
     if(!r.ok) throw new Error(body.error||'Failed to resend');
-    delete prApprovalShortLinkCache[id];
     await loadPurchaseRequests();
     renderQuotesSidebar();
     renderPurchaseRequestDetail(id);

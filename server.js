@@ -796,6 +796,12 @@ app.get('/api/backup-drive', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// is.gd's error responses aren't consistently prefixed (seen both
+// "Error: ..." and "Error, ..." — e.g. "Error, database insert failed"), so a
+// blacklist on "Error:" let some error text through as if it were a valid
+// shortened URL. Whitelist what a real short link looks like instead.
+function isValidShortUrl(s) { return /^https?:\/\//i.test(s); }
+
 // URL shortener proxy — browser can't call is.gd directly due to CORS
 app.get('/api/shorten', (req, res) => {
   const url = req.query.url;
@@ -806,11 +812,7 @@ app.get('/api/shorten', (req, res) => {
     apiRes.on('data', chunk => data += chunk);
     apiRes.on('end', () => {
       const short = data.trim();
-      // is.gd's error responses aren't consistently prefixed (seen both
-      // "Error: ..." and "Error, ..." — e.g. "Error, database insert failed"),
-      // so a blacklist on "Error:" let some error text through as if it were
-      // a valid shortened URL. Whitelist what a real short link looks like instead.
-      if (!/^https?:\/\//i.test(short)) return res.status(400).json({ error: short || 'Shortening failed' });
+      if (!isValidShortUrl(short)) return res.status(400).json({ error: short || 'Shortening failed' });
       res.json({ short });
     });
   }).on('error', e => res.status(500).json({ error: e.message }));
@@ -869,7 +871,8 @@ function readPurchaseRequests() {
       approvalStatus: row.approval_status, approvalId: row.approval_id,
       approvalSentAt: row.approval_sent_at, approvalResolvedAt: row.approval_resolved_at,
       approvalIp: row.approval_ip, approvalVerificationId: row.approval_verification_id,
-      signerName: row.signer_name, denyReason: row.deny_reason, approvalLink: row.approval_link,
+      signerName: row.signer_name, denyReason: row.deny_reason,
+      approvalLink: row.approval_link, approvalShortLink: row.approval_short_link,
       invoiceId: row.invoice_id, number: row.number,
       createdAt: row.created_at, updatedAt: row.updated_at,
       items: itemsByPr[row.id] || [],
@@ -882,7 +885,7 @@ function replacePurchaseRequests(obj) {
   const now = Date.now();
   db.transaction((data) => {
     const existing = {};
-    for (const row of db.prepare('SELECT id, approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at, approval_ip, approval_verification_id, approval_pdf_signed, signer_name, deny_reason, approval_link, invoice_id, number, created_at FROM purchase_requests').all()) {
+    for (const row of db.prepare('SELECT id, approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at, approval_ip, approval_verification_id, approval_pdf_signed, signer_name, deny_reason, approval_link, approval_short_link, invoice_id, number, created_at FROM purchase_requests').all()) {
       existing[row.id] = row;
     }
     db.prepare('DELETE FROM purchase_request_items').run();
@@ -890,8 +893,8 @@ function replacePurchaseRequests(obj) {
     const insertPr = db.prepare(`INSERT INTO purchase_requests
       (id, client_id, client_name, requested_by, notes, internal_notes, priority, status, client_email,
        approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at,
-       approval_ip, approval_verification_id, approval_pdf_signed, signer_name, deny_reason, approval_link, invoice_id, number, created_at, updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+       approval_ip, approval_verification_id, approval_pdf_signed, signer_name, deny_reason, approval_link, approval_short_link, invoice_id, number, created_at, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     const insertItem = db.prepare('INSERT INTO purchase_request_items (purchase_request_id, description, qty, est_unit_cost, notes, vendor, url, sku, received) VALUES (?,?,?,?,?,?,?,?,?)');
     for (const [id, pr] of Object.entries(data)) {
       const prev = existing[id];
@@ -901,7 +904,7 @@ function replacePurchaseRequests(obj) {
         prev?.approval_status || 'not_sent', prev?.approval_id || null, prev?.approval_token || null,
         prev?.approval_sent_at || null, prev?.approval_resolved_at || null,
         prev?.approval_ip || null, prev?.approval_verification_id || null, prev?.approval_pdf_signed || 0,
-        prev?.signer_name || null, prev?.deny_reason || null, prev?.approval_link || null,
+        prev?.signer_name || null, prev?.deny_reason || null, prev?.approval_link || null, prev?.approval_short_link || null,
         prev?.invoice_id || null, prev?.number || null,
         prev?.created_at || now, now
       );
@@ -1043,8 +1046,8 @@ app.post('/api/purchase-requests/:id/send-approval', async (req, res) => {
     // this is a resend after a "Modified" edit invalidated an earlier decision.
     db.prepare(`UPDATE purchase_requests SET approval_status='pending', approval_id=?, approval_sent_at=?,
       approval_resolved_at=NULL, approval_ip=NULL, approval_verification_id=NULL, approval_pdf_signed=0,
-      signer_name=NULL, deny_reason=NULL, approval_link=?, updated_at=? WHERE id=?`)
-      .run(approvalId, now, result.json.link || null, now, id);
+      signer_name=NULL, deny_reason=NULL, approval_link=?, approval_short_link=?, updated_at=? WHERE id=?`)
+      .run(approvalId, now, result.json.link || null, result.json.short_link || null, now, id);
     db.prepare('INSERT INTO logs (id, client_id, ts, data) VALUES (?, ?, ?, ?)')
       .run(`${now}-${Math.random().toString(36).slice(2,6)}`, row.client_id, now,
         JSON.stringify({ ts: new Date(now).toISOString(), tech: req.headers['x-tech-name']||'', action: 'purchase-request-sent-for-approval', clientId: row.client_id, clientName: row.client_name }));
@@ -1083,8 +1086,8 @@ app.post('/api/purchase-requests/:id/resend-approval', async (req, res) => {
     }
 
     const now = Date.now();
-    db.prepare('UPDATE purchase_requests SET approval_sent_at=?, approval_link=?, updated_at=? WHERE id=?')
-      .run(now, result.json.link || row.approval_link, now, id);
+    db.prepare('UPDATE purchase_requests SET approval_sent_at=?, approval_link=?, approval_short_link=?, updated_at=? WHERE id=?')
+      .run(now, result.json.link || row.approval_link, result.json.short_link || row.approval_short_link, now, id);
     db.prepare('INSERT INTO logs (id, client_id, ts, data) VALUES (?, ?, ?, ?)')
       .run(`${now}-${Math.random().toString(36).slice(2,6)}`, row.client_id, now,
         JSON.stringify({ ts: new Date(now).toISOString(), tech: req.headers['x-tech-name']||'', action: 'purchase-request-approval-resent', clientId: row.client_id, clientName: row.client_name }));
@@ -1515,4 +1518,5 @@ loadLiveCache();
 app.locals.db = db;
 app.locals.pollApprovalStatusLoopOnce = pollApprovalStatusOnce;
 app.locals.replaceSyncroCustomers = replaceSyncroCustomers;
+app.locals.isValidShortUrl = isValidShortUrl;
 module.exports = app;
