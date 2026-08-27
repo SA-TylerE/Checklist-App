@@ -858,8 +858,18 @@ function readPurchaseRequests() {
   const itemsByPr = {};
   for (const it of itemRows) {
     (itemsByPr[it.purchase_request_id] ||= []).push({
-      id: it.id, description: it.description, qty: it.qty, estUnitCost: it.est_unit_cost, notes: it.notes,
-      vendor: it.vendor, url: it.url, sku: it.sku, received: !!it.received,
+      id: it.id, description: it.description, qty: it.qty, estUnitCost: it.est_unit_cost, notes: it.notes, sku: it.sku,
+    });
+  }
+  // "Items for Purchase" — the internal fulfillment tracker, kept separate
+  // from the client-facing Quote items above (see db.js's purchase_items
+  // comment). Never merge this into `items`.
+  const purchaseItemRows = db.prepare('SELECT * FROM purchase_items').all();
+  const purchaseItemsByPr = {};
+  for (const it of purchaseItemRows) {
+    (purchaseItemsByPr[it.purchase_request_id] ||= []).push({
+      id: it.id, item: it.item, description: it.description, qty: it.qty, cost: it.cost, markupPct: it.markup_pct,
+      vendor: it.vendor, url: it.url, purchasingNotes: it.purchasing_notes, received: !!it.received,
     });
   }
   const out = {};
@@ -876,6 +886,7 @@ function readPurchaseRequests() {
       invoiceId: row.invoice_id, number: row.number,
       createdAt: row.created_at, updatedAt: row.updated_at,
       items: itemsByPr[row.id] || [],
+      purchaseItems: purchaseItemsByPr[row.id] || [],
     };
   }
   return out;
@@ -889,13 +900,20 @@ function replacePurchaseRequests(obj) {
       existing[row.id] = row;
     }
     db.prepare('DELETE FROM purchase_request_items').run();
+    db.prepare('DELETE FROM purchase_items').run();
     db.prepare('DELETE FROM purchase_requests').run();
     const insertPr = db.prepare(`INSERT INTO purchase_requests
       (id, client_id, client_name, requested_by, notes, internal_notes, priority, status, client_email,
        approval_status, approval_id, approval_token, approval_sent_at, approval_resolved_at,
        approval_ip, approval_verification_id, approval_pdf_signed, signer_name, deny_reason, approval_link, approval_short_link, invoice_id, number, created_at, updated_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
-    const insertItem = db.prepare('INSERT INTO purchase_request_items (purchase_request_id, description, qty, est_unit_cost, notes, vendor, url, sku, received) VALUES (?,?,?,?,?,?,?,?,?)');
+    // Client-facing Quote items only — vendor/url/received/notes intentionally
+    // dropped from this insert (moved to purchase_items below); a stale client
+    // tab that still sends them is silently ignored.
+    const insertItem = db.prepare('INSERT INTO purchase_request_items (purchase_request_id, description, qty, est_unit_cost, notes, sku) VALUES (?,?,?,?,?,?)');
+    const insertPurchaseItem = db.prepare(`INSERT INTO purchase_items
+      (purchase_request_id, item, description, qty, cost, markup_pct, vendor, url, purchasing_notes, received)
+      VALUES (?,?,?,?,?,?,?,?,?,?)`);
     for (const [id, pr] of Object.entries(data)) {
       const prev = existing[id];
       insertPr.run(
@@ -909,8 +927,11 @@ function replacePurchaseRequests(obj) {
         prev?.created_at || now, now
       );
       for (const item of (pr.items||[])) {
-        insertItem.run(id, item.description||'', item.qty||0, item.estUnitCost||0, item.notes||null,
-          item.vendor||null, item.url||null, item.sku||null, item.received?1:0);
+        insertItem.run(id, item.description||'', item.qty||0, item.estUnitCost||0, item.notes||null, item.sku||null);
+      }
+      for (const item of (pr.purchaseItems||[])) {
+        insertPurchaseItem.run(id, item.item||null, item.description||'', item.qty||0, item.cost||0,
+          item.markupPct||0, item.vendor||null, item.url||null, item.purchasingNotes||null, item.received?1:0);
       }
     }
   })(obj);
@@ -968,6 +989,9 @@ async function buildEstimatePdf(id) {
   const row = db.prepare('SELECT * FROM purchase_requests WHERE id = ?').get(id);
   if (!row) return null;
   const number = getOrAssignEstimateNumber(id);
+  // Client-facing PDF: only purchase_request_items (the Quote), never
+  // purchase_items (the internal Items-for-Purchase tracker — cost/markup/
+  // vendor/purchasing notes must never reach this document).
   const items = db.prepare('SELECT description, qty, est_unit_cost, sku FROM purchase_request_items WHERE purchase_request_id = ?').all(id)
     .map(it => ({ name: it.sku, description: it.description, qty: it.qty, unitPrice: it.est_unit_cost }));
   const orgName = (readCfg().org_name) || 'System Alternatives';
@@ -1016,6 +1040,8 @@ app.post('/api/purchase-requests/:id/send-approval', async (req, res) => {
     const apiKey  = approvalSettings.saWebsiteApiKey || '';
     if (!apiBase || !apiKey) return res.status(500).json({ error: 'Client approval isn\'t set up yet — add the SA Website API Base URL and API Key in Settings.' });
 
+    // SA-Website email payload: only purchase_request_items (the Quote), never
+    // purchase_items (internal Items-for-Purchase — see buildEstimatePdf).
     const items = db.prepare('SELECT description, qty, est_unit_cost AS estUnitCost, notes FROM purchase_request_items WHERE purchase_request_id = ?').all(id);
     const totalEstimate = items.reduce((sum, it) => sum + (it.qty||0) * (it.estUnitCost||0), 0);
 
@@ -1326,6 +1352,8 @@ app.post('/api/purchase-requests/:id/generate-invoice', (req, res) => {
     if (!pr) return res.status(404).json({ error: 'Purchase request not found' });
     if (pr.invoice_id) return res.status(400).json({ error: 'An invoice has already been generated for this request' });
 
+    // Invoice line items: only purchase_request_items (the Quote), never
+    // purchase_items (internal Items-for-Purchase — see buildEstimatePdf).
     const items = db.prepare('SELECT description, qty, est_unit_cost FROM purchase_request_items WHERE purchase_request_id = ?').all(pr.id);
     const { id: invoiceId, number } = createInvoice({
       clientId: pr.client_id,

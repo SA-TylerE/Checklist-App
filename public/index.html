@@ -60,11 +60,13 @@
           </div>
         </div>
 
-        <!-- Quotes section (Purchase Requests + Invoices) -->
+        <!-- Quotes section (Purchase Requests + Invoices, merged into one list) -->
         <div class="sidebar-section" id="ss-quotes">
-          <div style="display:flex;gap:4px;padding:8px 10px 4px;">
-            <button class="btn-secondary" id="quotes-tab-pr" onclick="switchQuotesTab('pr')" style="flex:1;font-size:11px;padding:6px 4px;">Purchase Requests</button>
-            <button class="btn-secondary" id="quotes-tab-invoice" onclick="switchQuotesTab('invoice')" style="flex:1;font-size:11px;padding:6px 4px;">Invoices</button>
+          <div class="sidebar-search">
+            <input type="text" id="quotes-search" placeholder="Search purchase requests & invoices..." oninput="filterQuotesSidebar(this.value)">
+          </div>
+          <div style="padding:0 10px 8px;">
+            <select id="quotes-sort" onchange="setQuotesSort(this.value)" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:11px;outline:none;font-family:var(--sans);"></select>
           </div>
           <div id="quotes-list"></div>
           <div class="sidebar-footer">

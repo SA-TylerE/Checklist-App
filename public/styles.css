@@ -273,6 +273,11 @@ button.quote-status{font-family:var(--sans);appearance:none;-webkit-appearance:n
 .wizard-card{max-width:580px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:22px;}
 .wizard-card h2{font-size:16px;font-weight:600;margin-bottom:4px;}
 .wizard-subtitle{color:var(--text2);font-size:12px;margin-bottom:18px;}
+/* Wider variant for the Purchase Request / Invoice detail views — these are
+   dense line-item tables, not short field forms, so the 580px cap above (kept
+   for New Client/New Quote) just wastes available screen width here. */
+.wizard-card--wide{max-width:1200px;}
+.wizard-card--wide .field-group input,.wizard-card--wide .field-group select{max-width:100%;}
 
 /* Form */
 .field-group{margin-bottom:12px;}

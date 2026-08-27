@@ -191,6 +191,39 @@ const DEFAULT_PRODUCTS=[
 ];
 function getProducts(){return appSettings.products||DEFAULT_PRODUCTS;}
 
+// Quick-pick markup percentages for Items-for-Purchase rows, editable in
+// Settings — seeded with the categories from the team's old purchasing tool.
+const DEFAULT_MARKUP_PRESETS=[
+  {label:'New/Refurb PC',percent:20},
+  {label:'Parts',percent:30},
+  {label:'Graphics PC',percent:50},
+];
+function getMarkupPresets(){return appSettings.markupPresets||DEFAULT_MARKUP_PRESETS;}
+
+// Local draft edited in Settings until "Save Settings" commits it to
+// appSettings.markupPresets — mirrors the Product Manager's _pmProducts
+// pattern, just much smaller (no modal needed for a 3-row list).
+let _markupPresetsDraft=[];
+function markupPresetRowsHtml(){
+  return _markupPresetsDraft.map((p,i)=>`
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+      <input class="li-input" style="flex:1;" placeholder="Label" value="${escHtml(p.label)}" oninput="_markupPresetsDraft[${i}].label=this.value;settingsDirty=true;">
+      <input class="li-input" style="width:70px;" type="number" min="0" step="1" placeholder="%" value="${p.percent}" oninput="_markupPresetsDraft[${i}].percent=parseFloat(this.value)||0;settingsDirty=true;">
+      <span style="font-size:11px;color:var(--text3);">%</span>
+      <button class="btn-secondary" style="padding:5px 8px;font-size:11px;" onclick="removeMarkupPresetRow(${i})">✕</button>
+    </div>`).join('') || `<div style="font-size:11px;color:var(--text3);margin-bottom:6px;">No presets yet — techs will just type a markup % manually.</div>`;
+}
+function addMarkupPresetRow(){
+  _markupPresetsDraft.push({label:'',percent:0});
+  settingsDirty=true;
+  document.getElementById('markup-presets-rows').innerHTML=markupPresetRowsHtml();
+}
+function removeMarkupPresetRow(i){
+  _markupPresetsDraft.splice(i,1);
+  settingsDirty=true;
+  document.getElementById('markup-presets-rows').innerHTML=markupPresetRowsHtml();
+}
+
 const VPN_OPTIONS=[
   {id:'syncrify-vpn-unifi',label:'Unifi'},
   {id:'syncrify-vpn-controlone',label:'ControlOne'},
@@ -1120,7 +1153,6 @@ async function saveSalesQuotes(){
 // ── Quotes page: Purchase Requests + Invoices ──────────────────────────────────
 let purchaseRequests={};
 let invoices={};
-let activeQuotesTab='pr'; // 'pr' | 'invoice'
 let activePurchaseRequestId=null;
 let activeInvoiceId=null;
 
@@ -1132,9 +1164,9 @@ function liField(label,inputHtml){
   return `<div style="min-width:0;"><label style="display:block;font-size:9px;font-weight:600;color:var(--text2);letter-spacing:0.03em;text-transform:uppercase;margin-bottom:2px;">${escHtml(label)}</label>${inputHtml}</div>`;
 }
 // A number input with a "$" prefix rendered inside the field.
-function liCurrencyInput(value,oninput,onchange){
+function liCurrencyInput(value,oninput,onchange,id){
   return `<div style="position:relative;"><span style="position:absolute;left:7px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:11px;pointer-events:none;">$</span>
-    <input class="li-input" type="number" min="0" step="0.01" style="padding-left:16px;" value="${value||0}" oninput="${oninput}" onchange="${onchange}"></div>`;
+    <input class="li-input"${id?` id="${id}"`:''} type="number" min="0" step="0.01" style="padding-left:16px;" value="${value||0}" oninput="${oninput}" onchange="${onchange}"></div>`;
 }
 
 async function loadPurchaseRequests(){
@@ -1260,47 +1292,75 @@ function closeContextMenu(){ document.getElementById('active-context-menu')?.rem
 document.addEventListener('click',closeContextMenu);
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeContextMenu(); });
 
-function switchQuotesTab(tab){
-  activeQuotesTab=tab;
-  document.getElementById('quotes-tab-pr')?.classList.toggle('active',tab==='pr');
-  document.getElementById('quotes-tab-invoice')?.classList.toggle('active',tab==='invoice');
-  renderQuotesSidebar();
+// Purchase Requests and Invoices share one searchable/sortable sidebar list
+// (no tabs) — each entry keeps its own status badge/summary so the two types
+// stay visually distinguishable. Search matches customer name for both types,
+// plus a Purchase Request's Quote item names/descriptions (not its internal
+// Items-for-Purchase — that's a tech-only concern, not what "find my
+// estimate" search is for). Sort persists like the Backups card-sort does.
+let _qSort=localStorage.getItem('quotesSort')||'newest';
+const Q_SORT_LABELS={newest:'Newest First',name:'Customer A–Z'};
+function qSortOptionsHtml(){
+  return Object.entries(Q_SORT_LABELS).map(([v,label])=>`<option value="${v}"${_qSort===v?' selected':''}>${label}</option>`).join('');
 }
+function setQuotesSort(mode){
+  _qSort=mode;
+  localStorage.setItem('quotesSort',mode);
+  renderQuotesSidebar(document.getElementById('quotes-search')?.value||'');
+}
+function filterQuotesSidebar(val){ renderQuotesSidebar(val); }
 
-function renderQuotesSidebar(){
+function renderQuotesSidebar(filter){
   const list=document.getElementById('quotes-list');
   if(!list) return;
-  if(activeQuotesTab==='pr'){
-    const items=Object.values(purchaseRequests).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-    list.innerHTML=items.map(pr=>`
+  const sortSelect=document.getElementById('quotes-sort');
+  if(sortSelect) sortSelect.innerHTML=qSortOptionsHtml();
+
+  const f=(filter||'').toLowerCase();
+  let entries=[
+    ...Object.values(purchaseRequests).map(pr=>({type:'pr',data:pr,clientName:pr.clientName||'',createdAt:pr.createdAt||0})),
+    ...Object.values(invoices).map(inv=>({type:'invoice',data:inv,clientName:inv.clientName||'',createdAt:inv.createdAt||0})),
+  ];
+  if(f){
+    entries=entries.filter(e=>{
+      if(e.clientName.toLowerCase().includes(f)) return true;
+      if(e.type==='pr') return (e.data.items||[]).some(it=>(it.description||it.sku||'').toLowerCase().includes(f));
+      return false;
+    });
+  }
+  entries.sort((a,b)=>_qSort==='name'
+    ? a.clientName.localeCompare(b.clientName)
+    : b.createdAt-a.createdAt);
+
+  list.innerHTML=entries.map(e=>e.type==='pr'?(pr=>`
       <div class="client-item ${pr.id===activePurchaseRequestId?'active':''}" title="${escHtml(pr.clientName||'')}"
         oncontextmenu="event.preventDefault();showPrContextMenu(event,'${pr.id}')">
         <div style="padding:7px 14px;cursor:pointer;" onclick="selectPurchaseRequest('${pr.id}')">
           <div class="cn"><span>${escHtml(pr.clientName||'(no client)')}</span><span class="quote-status ${pr.approvalStatus||'not_sent'}">${purchaseRequestStatusLabel(pr.approvalStatus)}</span></div>
           <div class="cm">${prSidebarSummary(pr)}</div>
         </div>
-      </div>`).join('') || `<div style="padding:20px 12px;text-align:center;font-size:12px;color:var(--text3);">No purchase requests yet.</div>`;
-  } else {
-    const items=Object.values(invoices).sort((a,b)=>(b.number||0)-(a.number||0));
-    list.innerHTML=items.map(inv=>`
+      </div>`)(e.data):(inv=>`
       <div class="client-item ${inv.id===activeInvoiceId?'active':''}" title="${escHtml(inv.clientName||'')}"
         oncontextmenu="event.preventDefault();showInvoiceContextMenu(event,'${inv.id}')">
         <div style="padding:7px 14px;cursor:pointer;" onclick="selectInvoice('${inv.id}')">
           <div class="cn"><span>#${inv.number} · ${escHtml(inv.clientName||'(no client)')}</span><span class="quote-status ${inv.status||'draft'}">${invoiceStatusLabel(inv.status)}</span></div>
         </div>
-      </div>`).join('') || `<div style="padding:20px 12px;text-align:center;font-size:12px;color:var(--text3);">No invoices yet.</div>`;
-  }
+      </div>`)(e.data)
+  ).join('') || `<div style="padding:20px 12px;text-align:center;font-size:12px;color:var(--text3);">${f?'No matches.':'No purchase requests or invoices yet.'}</div>`;
 }
 
 function showPrContextMenu(e,id){
   const pr=purchaseRequests[id]; if(!pr) return;
+  const canGenerateInvoice=pr.status==='received'&&!pr.invoiceId;
   showContextMenu(e.clientX,e.clientY,[
     {label:'Open', onClick:()=>selectPurchaseRequest(id)},
     {label:'Duplicate', onClick:()=>duplicatePurchaseRequest(id)},
     {label:pr.priority?'Unmark Priority':'Mark Priority', onClick:()=>togglePrPriority(id)},
+    pr.invoiceId?{label:'View Invoice', onClick:()=>selectInvoice(pr.invoiceId)}
+      :canGenerateInvoice?{label:'Generate Invoice', onClick:()=>generateInvoiceFromPr(id)}:null,
     {separator:true},
     {label:'Delete', danger:true, onClick:()=>deletePurchaseRequest(id)},
-  ]);
+  ].filter(Boolean));
 }
 function showInvoiceContextMenu(e,id){
   showContextMenu(e.clientX,e.clientY,[
@@ -1324,6 +1384,7 @@ async function duplicatePurchaseRequest(id){
     approvalStatus:'not_sent', approvalId:null, approvalSentAt:null, approvalResolvedAt:null,
     createdAt:Date.now(), updatedAt:Date.now(),
     items:(pr.items||[]).map(it=>({...it})),
+    purchaseItems:(pr.purchaseItems||[]).map(it=>({...it})),
   };
   await savePurchaseRequests();
   renderQuotesSidebar();
@@ -1378,8 +1439,7 @@ function backToQuotesDashboard(){
 }
 
 function newQuotesItemFromSidebar(){
-  if(activeQuotesTab==='pr') createPurchaseRequest();
-  else createInvoiceFromSidebar();
+  createPurchaseRequest();
 }
 
 async function createPurchaseRequest(){
@@ -1387,7 +1447,7 @@ async function createPurchaseRequest(){
   purchaseRequests[id]={
     id, clientId:'', clientName:'', requestedBy:localStorage.getItem('myName')||'',
     notes:'', priority:false, status:'draft', clientEmail:'',
-    approvalStatus:'not_sent', invoiceId:null, items:[], createdAt:Date.now(), updatedAt:Date.now(),
+    approvalStatus:'not_sent', invoiceId:null, items:[], purchaseItems:[], createdAt:Date.now(), updatedAt:Date.now(),
   };
   await savePurchaseRequests();
   renderQuotesSidebar();
@@ -1397,7 +1457,6 @@ async function createPurchaseRequest(){
 function selectPurchaseRequest(id){
   activePurchaseRequestId=id;
   activeInvoiceId=null;
-  activeQuotesTab='pr';
   renderQuotesSidebar();
   showView('quotes');
   renderPurchaseRequestDetail(id);
@@ -1409,7 +1468,7 @@ function renderPurchaseRequestDetail(id){
   if(!pr||!el) return;
   const itemsRows=(pr.items||[]).map((it,i)=>`
     <div style="border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px;min-width:0;">
-      <div class="li-row" style="display:grid;grid-template-columns:100px minmax(0,2fr) 60px 100px 70px auto;gap:8px;margin-bottom:8px;">
+      <div class="li-row" style="display:grid;grid-template-columns:100px minmax(0,2fr) 60px 100px 70px auto;gap:8px;">
         ${liField('Item',`<input class="li-input" value="${escHtml(it.sku||'')}" onchange="savePrItem('${id}',${i},'sku',this.value)">`)}
         ${liField('Description',`<input class="li-input" value="${escHtml(it.description||'')}" onchange="savePrItem('${id}',${i},'description',this.value)">`)}
         ${liField('Qty',`<input class="li-input" type="number" min="0" step="1" value="${it.qty||0}" oninput="livePrItem('${id}',${i},'qty',this.value)" onchange="savePrItem('${id}',${i},'qty',this.value)">`)}
@@ -1417,22 +1476,45 @@ function renderPurchaseRequestDetail(id){
         ${liField('Total',`<div style="text-align:right;font-weight:600;padding-top:6px;" id="pr-item-total-${id}-${i}">$${((it.qty||0)*(it.estUnitCost||0)).toFixed(2)}</div>`)}
         <div style="display:flex;align-items:flex-end;"><button class="btn-secondary" style="padding:5px 8px;font-size:11px;" onclick="removePrItem('${id}',${i})">✕</button></div>
       </div>
-      <div class="li-row" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) auto;gap:8px;">
-        ${liField('Vendor',`<input class="li-input" placeholder="e.g. CDW" value="${escHtml(it.vendor||'')}" onchange="savePrItem('${id}',${i},'vendor',this.value)">`)}
-        ${liField('Purchase Link',`<div style="display:flex;gap:4px;align-items:center;min-width:0;">
-          <input class="li-input" type="url" style="flex:1;min-width:0;" value="${escHtml(it.url||'')}" onchange="savePrItem('${id}',${i},'url',this.value)">
-          ${it.url?`<a href="${escHtml(it.url)}" target="_blank" rel="noopener" title="Open purchase link">🔗</a>`:''}
-        </div>`)}
-        <label style="display:flex;align-items:flex-end;gap:4px;font-size:11px;white-space:nowrap;padding-bottom:7px;">
-          <input type="checkbox" ${it.received?'checked':''} onchange="savePrItem('${id}',${i},'received',this.checked)"> Received
-        </label>
-      </div>
     </div>`).join('');
   const total=(pr.items||[]).reduce((s,it)=>s+(it.qty||0)*(it.estUnitCost||0),0);
+
+  const purchaseItemsRows=(pr.purchaseItems||[]).map((it,i)=>{
+    const price=purchaseItemPrice(it);
+    return `
+    <div style="border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px;min-width:0;">
+      <div class="li-row" style="display:grid;grid-template-columns:90px minmax(0,1.6fr) 55px 90px 130px 90px 85px auto;gap:8px;margin-bottom:8px;">
+        ${liField('Item',`<input class="li-input" value="${escHtml(it.item||'')}" onchange="savePurchaseItem('${id}',${i},'item',this.value)">`)}
+        ${liField('Description',`<input class="li-input" value="${escHtml(it.description||'')}" onchange="savePurchaseItem('${id}',${i},'description',this.value)">`)}
+        ${liField('Qty',`<input class="li-input" type="number" min="0" step="1" value="${it.qty||0}" oninput="livePurchaseItem('${id}',${i},'qty',this.value)" onchange="savePurchaseItem('${id}',${i},'qty',this.value)">`)}
+        ${liField('Cost',liCurrencyInput(it.cost, `livePurchaseItem('${id}',${i},'cost',this.value)`, `savePurchaseItem('${id}',${i},'cost',this.value)`, `pi-cost-${id}-${i}`))}
+        ${liField('Markup %',`<input class="li-input" id="pi-markup-${id}-${i}" type="number" min="0" step="1" value="${it.markupPct||0}" oninput="livePurchaseItem('${id}',${i},'markupPct',this.value)" onchange="savePurchaseItem('${id}',${i},'markupPct',this.value)">
+          <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;">
+            ${getMarkupPresets().map(p=>`<button type="button" class="btn-secondary" style="padding:1px 5px;font-size:9px;" onclick="applyMarkupPreset('${id}',${i},${p.percent})">${escHtml(p.label)} ${p.percent}%</button>`).join('')}
+          </div>`)}
+        ${liField('Price',`<div style="text-align:right;color:var(--text3);padding-top:6px;" id="pi-item-price-${id}-${i}">$${price.toFixed(2)}</div>`)}
+        ${liField('Line Total',`<div style="text-align:right;font-weight:600;padding-top:6px;" id="pi-item-total-${id}-${i}">$${((it.qty||0)*price).toFixed(2)}</div>`)}
+        <div style="display:flex;align-items:flex-end;"><button class="btn-secondary" style="padding:5px 8px;font-size:11px;" onclick="removePurchaseItem('${id}',${i})">✕</button></div>
+      </div>
+      <div class="li-row" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) minmax(0,1.2fr) auto;gap:8px;">
+        ${liField('Vendor',`<input class="li-input" placeholder="e.g. CDW" value="${escHtml(it.vendor||'')}" onchange="savePurchaseItem('${id}',${i},'vendor',this.value)">`)}
+        ${liField('Purchase Link',`<div style="display:flex;gap:4px;align-items:center;min-width:0;">
+          <input class="li-input" type="url" style="flex:1;min-width:0;" value="${escHtml(it.url||'')}" onchange="savePurchaseItem('${id}',${i},'url',this.value)">
+          ${it.url?`<a href="${escHtml(it.url)}" target="_blank" rel="noopener" title="Open purchase link">🔗</a>`:''}
+        </div>`)}
+        ${liField('Purchasing Notes',`<input class="li-input" value="${escHtml(it.purchasingNotes||'')}" onchange="savePurchaseItem('${id}',${i},'purchasingNotes',this.value)">`)}
+        <label style="display:flex;align-items:flex-end;gap:4px;font-size:11px;white-space:nowrap;padding-bottom:7px;">
+          <input type="checkbox" ${it.received?'checked':''} onchange="savePurchaseItem('${id}',${i},'received',this.checked)"> Received
+        </label>
+      </div>
+    </div>`;
+  }).join('');
+  const purchaseTotals=purchaseItemsTotals(pr.purchaseItems);
+
   const canSend=pr.approvalStatus==='not_sent'||pr.approvalStatus==='modified';
   const canGenerateInvoice=pr.status==='received'&&!pr.invoiceId;
   el.innerHTML=`
-    <div class="wizard-card">
+    <div class="wizard-card wizard-card--wide">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
         <h2 style="margin:0;">Purchase Request</h2>
         <span class="quote-status ${pr.approvalStatus||'not_sent'}">${purchaseRequestStatusLabel(pr.approvalStatus)}</span>
@@ -1455,10 +1537,17 @@ function renderPurchaseRequestDetail(id){
           <textarea rows="2" onchange="updatePrField('${id}','internalNotes',this.value)">${escHtml(pr.internalNotes||'')}</textarea>
         </div>
       </div>
-      <div style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:7px;">Line Items</div>
+      <div style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:7px;">Quote <span style="font-weight:400;text-transform:none;color:var(--text3);">(visible to client)</span></div>
       ${itemsRows}
       <button class="btn-secondary" style="font-size:11px;margin-bottom:14px;" onclick="addPrItem('${id}')">+ Add Item</button>
-      <div style="text-align:right;font-weight:700;margin-bottom:16px;" id="pr-grand-total-${id}">Estimated Total: $${total.toFixed(2)}</div>
+      <div style="text-align:right;font-weight:700;margin-bottom:20px;" id="pr-grand-total-${id}">Estimated Total: $${total.toFixed(2)}</div>
+
+      <div style="font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:7px;">Items for Purchase <span style="font-weight:400;text-transform:none;color:var(--text3);">(internal — never shown to client)</span></div>
+      ${purchaseItemsRows}
+      <button class="btn-secondary" style="font-size:11px;margin-bottom:8px;" onclick="addPurchaseItem('${id}')">+ Add Item</button>
+      <div style="text-align:right;margin-bottom:4px;" id="pi-grand-total-${id}">Cost: $${purchaseTotals.cost.toFixed(2)} · Price after markup: $${purchaseTotals.price.toFixed(2)}</div>
+      <div style="text-align:right;font-size:10px;color:var(--text3);margin-bottom:16px;">Independent from the Quote total above — these lists don't have to match.</div>
+
       <div class="wizard-actions">
         <button class="btn-secondary" onclick="backToQuotesDashboard()">Back</button>
         <button class="btn-secondary" style="color:var(--danger);" onclick="deletePurchaseRequest('${id}')">Delete</button>
@@ -1494,7 +1583,7 @@ function updatePrClientFromSyncro(id,customer){
 function addPrItem(id){
   const pr=purchaseRequests[id]; if(!pr) return;
   pr.items=pr.items||[];
-  pr.items.push({description:'',qty:1,estUnitCost:0,notes:'',vendor:'',url:'',sku:'',received:false});
+  pr.items.push({description:'',qty:1,estUnitCost:0,notes:'',sku:''});
   savePurchaseRequests();
   renderPurchaseRequestDetail(id);
   markPrModifiedIfResolved(id);
@@ -1529,6 +1618,63 @@ function savePrItem(id,idx,field,value){
   savePurchaseRequests();
   renderQuotesSidebar();
   if(CLIENT_VISIBLE_PR_ITEM_FIELDS.has(field)) markPrModifiedIfResolved(id);
+}
+
+// ── "Items for Purchase" — internal fulfillment tracker, independent from the
+// Quote items above (mirrors the addPrItem/removePrItem/livePrItem/savePrItem
+// pattern, but never calls markPrModifiedIfResolved — nothing here is
+// client-visible, so editing it can never invalidate an approval decision).
+function purchaseItemPrice(it){ return (it.cost||0)*(1+(it.markupPct||0)/100); }
+function purchaseItemsTotals(items){
+  let cost=0, price=0;
+  for(const it of (items||[])){
+    cost+=(it.qty||0)*(it.cost||0);
+    price+=(it.qty||0)*purchaseItemPrice(it);
+  }
+  return {cost,price};
+}
+function addPurchaseItem(id){
+  const pr=purchaseRequests[id]; if(!pr) return;
+  pr.purchaseItems=pr.purchaseItems||[];
+  pr.purchaseItems.push({item:'',description:'',qty:1,cost:0,markupPct:0,vendor:'',url:'',purchasingNotes:'',received:false});
+  savePurchaseRequests();
+  renderPurchaseRequestDetail(id);
+}
+function removePurchaseItem(id,idx){
+  const pr=purchaseRequests[id]; if(!pr) return;
+  pr.purchaseItems.splice(idx,1);
+  savePurchaseRequests();
+  renderPurchaseRequestDetail(id);
+}
+function livePurchaseItem(id,idx,field,value){
+  const pr=purchaseRequests[id]; if(!pr) return;
+  const it=pr.purchaseItems[idx]; if(!it) return;
+  it[field]=parseFloat(value)||0;
+  const price=purchaseItemPrice(it);
+  const priceEl=document.getElementById(`pi-item-price-${id}-${idx}`);
+  if(priceEl) priceEl.textContent='$'+price.toFixed(2);
+  const rowTotalEl=document.getElementById(`pi-item-total-${id}-${idx}`);
+  if(rowTotalEl) rowTotalEl.textContent='$'+((it.qty||0)*price).toFixed(2);
+  const grandTotalEl=document.getElementById(`pi-grand-total-${id}`);
+  if(grandTotalEl){
+    const totals=purchaseItemsTotals(pr.purchaseItems);
+    grandTotalEl.textContent=`Cost: $${totals.cost.toFixed(2)} · Price after markup: $${totals.price.toFixed(2)}`;
+  }
+}
+function savePurchaseItem(id,idx,field,value){
+  const pr=purchaseRequests[id]; if(!pr) return;
+  const it=pr.purchaseItems[idx]; if(!it) return;
+  it[field]=(field==='qty'||field==='cost'||field==='markupPct')?parseFloat(value)||0:value;
+  savePurchaseRequests();
+}
+// A preset chip click is a discrete commit (not live typing) — update the
+// visible input, then reuse the live/save paths so price/totals refresh the
+// same way a manual edit would.
+function applyMarkupPreset(id,idx,pct){
+  const input=document.getElementById(`pi-markup-${id}-${idx}`);
+  if(input) input.value=pct;
+  livePurchaseItem(id,idx,'markupPct',pct);
+  savePurchaseItem(id,idx,'markupPct',pct);
 }
 
 async function sendPurchaseRequestForApproval(id){
@@ -1601,18 +1747,9 @@ async function generateInvoiceFromPr(id){
   }catch(e){ showAlert(`pr-alert-${id}`,'error',e.message); }
 }
 
-async function createInvoiceFromSidebar(){
-  const r=await fetch('/api/invoices',{method:'POST',headers:{'Content-Type':'application/json','X-Session-Id':SESSION_ID},body:JSON.stringify({lineItems:[]})});
-  const body=await r.json();
-  await loadInvoices();
-  renderQuotesSidebar();
-  selectInvoice(body.id);
-}
-
 function selectInvoice(id){
   activeInvoiceId=id;
   activePurchaseRequestId=null;
-  activeQuotesTab='invoice';
   renderQuotesSidebar();
   showView('quotes');
   renderInvoiceDetail(id);
@@ -1638,7 +1775,7 @@ function renderInvoiceDetail(id){
     </tr>`).join('');
   const totals=calcInvoiceTotal(inv);
   el.innerHTML=`
-    <div class="wizard-card">
+    <div class="wizard-card wizard-card--wide">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
         <h2 style="margin:0;">Invoice #${inv.number}</h2>
         <span class="quote-status ${inv.status||'draft'}">${invoiceStatusLabel(inv.status)}</span>
@@ -3653,6 +3790,7 @@ async function saveAllSettings(){
   appSettings.saWebsiteApiBase=saWebsiteApiBase;
   appSettings.saWebsiteApiKey=saWebsiteApiKey;
   appSettings.approvalNotifyEmail=approvalNotifyEmail;
+  appSettings.markupPresets=_markupPresetsDraft.map(p=>({label:p.label.trim(),percent:parseFloat(p.percent)||0})).filter(p=>p.label);
   appSettings.syncrifyHost=syncrifyHost;
   appSettings.syncrifyUser=syncrifyUser;
   appSettings.syncrifyPass=syncrifyPass;
@@ -3808,6 +3946,7 @@ function renderDashboard(){
 // ─── Settings ─────────────────────────────────────────────────────────────────
 function renderSettingsView(){
   settingsDirty=false;
+  _markupPresetsDraft=JSON.parse(JSON.stringify(getMarkupPresets()));
   document.getElementById('settings-content').innerHTML=`
     <div style="max-width:760px;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;">
@@ -3905,6 +4044,14 @@ function renderSettingsView(){
               <div class="field-hint">Gets a copy of the signed PDF once a client approves or denies. Defaults to approval@systemalternatives.net if left blank — override here to redirect during testing.</div>
             </div>
           </div>
+        </div>
+      </div>
+      <div class="settings-block">
+        <div class="settings-block-header">Markup Presets</div>
+        <div class="settings-block-body">
+          <p style="font-size:12px;color:var(--text2);margin-bottom:14px;">Quick-pick markup percentages shown as chips on each Purchase Request's "Items for Purchase" rows (price = cost × (1 + markup%)).</p>
+          <div id="markup-presets-rows">${markupPresetRowsHtml()}</div>
+          <button class="btn-secondary" style="font-size:11px;margin-top:6px;" onclick="addMarkupPresetRow()">+ Add Preset</button>
         </div>
       </div>
       <div class="settings-section-label">Backups</div>

@@ -115,6 +115,18 @@ test('PUT /api/settings with the masked password preserves the real one', async 
   assert.equal(raw.staleDays, 60);
 });
 
+test('PUT /api/settings round-trips markupPresets for the Items-for-Purchase quick-pick chips', async () => {
+  const priorSettings = await (await fetch(`${baseUrl}/api/settings`)).json();
+  const markupPresets = [{ label: 'New/Refurb PC', percent: 20 }, { label: 'Parts', percent: 30 }];
+  const putRes = await fetch(`${baseUrl}/api/settings`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...priorSettings, markupPresets }),
+  });
+  assert.equal(putRes.status, 200);
+  const body = await (await fetch(`${baseUrl}/api/settings`)).json();
+  assert.deepEqual(body.markupPresets, markupPresets);
+});
+
 test('static assets are served with no-store caching', async () => {
   for (const file of ['/', '/app.js', '/styles.css']) {
     const res = await fetch(`${baseUrl}${file}`);
@@ -249,6 +261,15 @@ test('send-approval flow: create + batched poll flips approval status via a mock
   });
 
   try {
+    // Give pr-1 an Items-for-Purchase entry with a distinctive marker, so we
+    // can prove it never reaches SA-Website (only the Quote items/PDF should).
+    const beforeSend = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
+    await fetch(`${baseUrl}/api/purchase-requests`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...beforeSend, 'pr-1': { ...beforeSend['pr-1'],
+        purchaseItems: [{ item: 'X', description: 'Y', qty: 1, cost: 1, markupPct: 50, vendor: 'PURCHASE-ITEM-MARKER-SHOULD-NOT-LEAK' }] } }),
+    });
+
     const sendRes = await fetch(`${baseUrl}/api/purchase-requests/pr-1/send-approval`, { method: 'POST' });
     assert.equal(sendRes.status, 200);
     const sendBody = await sendRes.json();
@@ -257,6 +278,7 @@ test('send-approval flow: create + batched poll flips approval status via a mock
     assert.ok(lastCreateBody?.pdf_base64, 'mode=create payload should include the estimate PDF as base64');
     assert.match(lastCreateBody.pdf_filename, /^Estimate-\d+\.pdf$/);
     assert.ok(Buffer.from(lastCreateBody.pdf_base64, 'base64').slice(0, 5).toString() === '%PDF-', 'decoded attachment should be a real PDF');
+    assert.ok(!JSON.stringify(lastCreateBody).includes('PURCHASE-ITEM-MARKER-SHOULD-NOT-LEAK'), 'Items-for-Purchase data must never reach the SA-Website payload');
 
     let after = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
     assert.equal(after['pr-1'].approvalStatus, 'pending');
@@ -389,11 +411,61 @@ test('migrate-json-to-sqlite reads legacy JSON files into app.db and is idempote
   }
 });
 
-test('purchase request line items round-trip vendor/url/sku/received', async () => {
+test('purchase_items backfill: legacy vendor/url/received on purchase_request_items is copied over exactly once', async () => {
+  const backfillDir = fs.mkdtempSync(path.join(os.tmpdir(), 'checklist-backfill-'));
+  try {
+    // Simulate a pre-existing production DB where vendor/url/received still
+    // lived directly on purchase_request_items (before this table split).
+    // createDb() itself is what creates purchase_items/sets the backfill
+    // marker, so the first call here (with nothing to backfill yet) already
+    // marks it done — clear that marker afterward to accurately simulate
+    // "upgrading a real DB that predates this migration ever existing".
+    let db = createDb(backfillDir);
+    db.prepare(`DELETE FROM kv_store WHERE key = 'purchase_items_backfilled_at'`).run();
+    const now = Date.now();
+    db.prepare(`INSERT INTO purchase_requests (id, client_id, client_name, created_at, updated_at) VALUES (?,?,?,?,?)`)
+      .run('pr-legacy', 'c1', 'Legacy Client', now, now);
+    db.prepare(`INSERT INTO purchase_request_items (purchase_request_id, description, qty, est_unit_cost, sku, vendor, url, notes, received) VALUES (?,?,?,?,?,?,?,?,?)`)
+      .run('pr-legacy', 'Switch', 2, 300, 'SW-123', 'CDW', 'https://cdw.com/product/123', 'call ahead', 1);
+    db.close();
+
+    // Reopen (simulates a server restart with the updated code) — backfill should run.
+    db = createDb(backfillDir);
+    const rows = db.prepare('SELECT * FROM purchase_items WHERE purchase_request_id = ?').all('pr-legacy');
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].item, 'SW-123');
+    assert.equal(rows[0].description, 'Switch');
+    assert.equal(rows[0].qty, 2);
+    assert.equal(rows[0].cost, 300, 'cost seeds from the old est_unit_cost');
+    assert.equal(rows[0].markup_pct, 0, 'markup starts at 0 so computed price matches history exactly');
+    assert.equal(rows[0].vendor, 'CDW');
+    assert.equal(rows[0].url, 'https://cdw.com/product/123');
+    assert.equal(rows[0].purchasing_notes, 'call ahead');
+    assert.equal(rows[0].received, 1);
+    db.close();
+
+    // Reopen a third time — must not duplicate, even though the row(s) it
+    // copied are still sitting there looking "backfillable" by content alone.
+    db = createDb(backfillDir);
+    const rowsAfter = db.prepare('SELECT * FROM purchase_items WHERE purchase_request_id = ?').all('pr-legacy');
+    assert.equal(rowsAfter.length, 1, 'backfill must not re-run and duplicate on a later restart');
+    db.close();
+  } finally {
+    // Best-effort cleanup only — on Windows, better-sqlite3 can hold this
+    // file's handle a little past close() (especially after several
+    // open/close cycles on the same file, as this test does), which makes
+    // immediate deletion flaky. That's a temp-dir cleanup nuisance, not a
+    // sign the backfill logic itself (already asserted above) is wrong, so a
+    // leftover directory here is safe to just leave for the OS to reclaim.
+    try { fs.rmSync(backfillDir, { recursive: true, force: true }); } catch (_) {}
+  }
+});
+
+test('Quote items round-trip sku, but never accept vendor/url/received (that moved to purchaseItems)', async () => {
   const prs = {
     'pr-robust': {
       clientId: 'abc123', clientName: 'Test Client', status: 'draft',
-      items: [{ description: 'Switch', qty: 2, estUnitCost: 300, vendor: 'CDW', url: 'https://cdw.com/product/123', sku: 'SW-123', received: true }],
+      items: [{ description: 'Switch', qty: 2, estUnitCost: 300, sku: 'SW-123', vendor: 'CDW', url: 'https://cdw.com/product/123', received: true }],
     },
   };
   await fetch(`${baseUrl}/api/purchase-requests`, {
@@ -401,10 +473,42 @@ test('purchase request line items round-trip vendor/url/sku/received', async () 
   });
   const body = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
   const item = body['pr-robust'].items[0];
-  assert.equal(item.vendor, 'CDW');
-  assert.equal(item.url, 'https://cdw.com/product/123');
   assert.equal(item.sku, 'SW-123');
-  assert.equal(item.received, true);
+  assert.equal(item.vendor, undefined, 'vendor is no longer a Quote-item field');
+  assert.equal(item.url, undefined, 'url is no longer a Quote-item field');
+  assert.equal(item.received, undefined, 'received is no longer a Quote-item field');
+});
+
+test('purchaseItems ("Items for Purchase") round-trip independently of Quote items', async () => {
+  const prs = {
+    'pr-purchase-items': {
+      clientId: 'abc123', clientName: 'Test Client', status: 'draft',
+      items: [{ description: 'NAS Machine', qty: 1, estUnitCost: 608, sku: 'NAS' }],
+      purchaseItems: [
+        { item: 'NAS', description: 'UNAS 2', qty: 1, cost: 256.8, markupPct: 20, vendor: 'CDW', url: 'https://cdw.com/product/unas2', purchasingNotes: 'category/network-storage', received: false },
+        { item: 'Drive', description: '1TB HDD', qty: 2, cost: 156, markupPct: 30, vendor: 'CDW', url: 'https://cdw.com/product/hdd', purchasingNotes: '', received: true },
+      ],
+    },
+  };
+  await fetch(`${baseUrl}/api/purchase-requests`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prs),
+  });
+  const body = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
+  const pr = body['pr-purchase-items'];
+  assert.equal(pr.items.length, 1, 'Quote items list is untouched by purchaseItems');
+  assert.equal(pr.purchaseItems.length, 2);
+  const [nas, drive] = pr.purchaseItems;
+  assert.equal(nas.item, 'NAS');
+  assert.equal(nas.description, 'UNAS 2');
+  assert.equal(nas.qty, 1);
+  assert.equal(nas.cost, 256.8);
+  assert.equal(nas.markupPct, 20);
+  assert.equal(nas.vendor, 'CDW');
+  assert.equal(nas.url, 'https://cdw.com/product/unas2');
+  assert.equal(nas.purchasingNotes, 'category/network-storage');
+  assert.equal(nas.received, false);
+  assert.equal(drive.qty, 2);
+  assert.equal(drive.received, true);
 });
 
 test('internal_notes round-trips via PUT but never appears in the SA-Website payload', async () => {
@@ -454,7 +558,8 @@ test('generate-invoice creates a linked invoice and blocks a second conversion',
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ 'pr-convert': {
       clientId: 'abc123', clientName: 'Test Client', status: 'received',
-      items: [{ description: 'Server', qty: 1, estUnitCost: 2000, vendor: 'Ingram' }],
+      items: [{ description: 'Server', qty: 1, estUnitCost: 2000 }],
+      purchaseItems: [{ item: 'Server', description: 'Server', qty: 1, cost: 1500, markupPct: 33, vendor: 'Ingram-INTERNAL-ONLY' }],
     }}),
   });
 
@@ -470,8 +575,11 @@ test('generate-invoice creates a linked invoice and blocks a second conversion',
   assert.equal(inv.sourcePurchaseRequestId, 'pr-convert');
   assert.equal(inv.lineItems[0].description, 'Server');
   assert.equal(inv.lineItems[0].unitPrice, 2000);
-  // vendor is an internal-purchasing-only field and must not leak onto the invoice
+  // Items-for-Purchase (cost/markup/vendor) is internal-only and must never leak onto the invoice
+  assert.ok(!JSON.stringify(inv.lineItems).includes('Ingram-INTERNAL-ONLY'));
   assert.equal(inv.lineItems[0].vendor, undefined);
+  assert.equal(inv.lineItems[0].cost, undefined);
+  assert.equal(inv.lineItems[0].markupPct, undefined);
 
   const prs = await (await fetch(`${baseUrl}/api/purchase-requests`)).json();
   assert.equal(prs['pr-convert'].status, 'invoiced');

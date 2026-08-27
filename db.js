@@ -69,6 +69,28 @@ function createDb(dataDir) {
     );
     CREATE INDEX IF NOT EXISTS idx_pri_pr ON purchase_request_items(purchase_request_id);
 
+    -- "Items for Purchase" — an internal fulfillment tracker, independent from
+    -- purchase_request_items (the client-facing Quote). These don't need to
+    -- correspond 1:1: one bundled Quote line can be fulfilled by several real
+    -- purchase lines (e.g. one $608 "NAS" quote line = an enclosure + two
+    -- drives + shipping here). Must never be selected into the client PDF, the
+    -- SA-Website approval payload, or a generated invoice — see the comments
+    -- at buildEstimatePdf/send-approval/generate-invoice in server.js.
+    CREATE TABLE IF NOT EXISTS purchase_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      purchase_request_id TEXT NOT NULL REFERENCES purchase_requests(id) ON DELETE CASCADE,
+      item TEXT,
+      description TEXT,
+      qty REAL,
+      cost REAL,
+      markup_pct REAL DEFAULT 0,
+      vendor TEXT,
+      url TEXT,
+      purchasing_notes TEXT,
+      received INTEGER DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_pi_pr ON purchase_items(purchase_request_id);
+
     CREATE TABLE IF NOT EXISTS invoices (
       id TEXT PRIMARY KEY,
       number INTEGER UNIQUE,
@@ -129,7 +151,43 @@ function createDb(dataDir) {
   ]);
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_pr_number ON purchase_requests(number);`);
 
+  backfillPurchaseItems(db);
+
   return db;
+}
+
+// One-time backfill for the purchase_items split introduced after
+// vendor/url/notes/received had already been living directly on
+// purchase_request_items (the client-facing Quote table) — copies any
+// already-entered purchasing progress into the new internal-only table so it
+// isn't silently lost when the Quote editor stops exposing those fields.
+// Guarded by a kv_store marker rather than just "is purchase_items empty?",
+// since a tech could legitimately delete every purchase_items row later and
+// an empty-table check alone would silently re-run and duplicate rows.
+function backfillPurchaseItems(db) {
+  if (kvGet(db, 'purchase_items_backfilled_at', null)) return;
+  const legacyRows = db.prepare(`
+    SELECT purchase_request_id, description, qty, est_unit_cost, sku, vendor, url, notes, received
+    FROM purchase_request_items
+    WHERE (vendor IS NOT NULL AND vendor <> '')
+       OR (url IS NOT NULL AND url <> '')
+       OR (notes IS NOT NULL AND notes <> '')
+       OR received = 1
+  `).all();
+  if (legacyRows.length) {
+    const insertBackfill = db.prepare(`INSERT INTO purchase_items
+      (purchase_request_id, item, description, qty, cost, markup_pct, vendor, url, purchasing_notes, received)
+      VALUES (?,?,?,?,?,?,?,?,?,?)`);
+    db.transaction(() => {
+      for (const r of legacyRows) {
+        // markup_pct=0 so the computed price (cost*(1+markup/100)) exactly
+        // matches the historical est_unit_cost until a tech adjusts it.
+        insertBackfill.run(r.purchase_request_id, r.sku || null, r.description, r.qty,
+          r.est_unit_cost || 0, 0, r.vendor, r.url, r.notes || null, r.received);
+      }
+    })();
+  }
+  kvSet(db, 'purchase_items_backfilled_at', Date.now());
 }
 
 function ensureColumns(db, table, columns) {
