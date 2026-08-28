@@ -48,6 +48,53 @@ test('PUT /api/clients persists data for a subsequent GET', async () => {
   assert.deepEqual(await getRes.json(), clients);
 });
 
+test('GET /api/inventory returns an empty object initially', async () => {
+  const res = await fetch(`${baseUrl}/api/inventory`);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), {});
+});
+
+test('PUT /api/inventory round-trips an item and preserves createdAt across a later edit', async () => {
+  const items = { 'inv-1': {
+    name: '1TB SATA HDD', sku: 'HDD-1TB', category: 'Storage',
+    qtyOnHand: 5, reorderThreshold: 2, cost: 45.5, location: 'Shelf A3', notes: 'Bulk buy from CDW',
+  }};
+  const putRes = await fetch(`${baseUrl}/api/inventory`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(items),
+  });
+  assert.equal(putRes.status, 200);
+  let body = await (await fetch(`${baseUrl}/api/inventory`)).json();
+  assert.equal(body['inv-1'].name, '1TB SATA HDD');
+  assert.equal(body['inv-1'].sku, 'HDD-1TB');
+  assert.equal(body['inv-1'].category, 'Storage');
+  assert.equal(body['inv-1'].qtyOnHand, 5);
+  assert.equal(body['inv-1'].reorderThreshold, 2);
+  assert.equal(body['inv-1'].cost, 45.5);
+  assert.equal(body['inv-1'].location, 'Shelf A3');
+  assert.equal(body['inv-1'].notes, 'Bulk buy from CDW');
+  const firstCreatedAt = body['inv-1'].createdAt;
+  assert.ok(firstCreatedAt);
+
+  body['inv-1'].qtyOnHand = 3;
+  await fetch(`${baseUrl}/api/inventory`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  body = await (await fetch(`${baseUrl}/api/inventory`)).json();
+  assert.equal(body['inv-1'].qtyOnHand, 3);
+  assert.equal(body['inv-1'].createdAt, firstCreatedAt, 'createdAt should survive a whole-object re-save, like other full-object entities');
+});
+
+test('DELETE /api/inventory/:id removes the item', async () => {
+  await fetch(`${baseUrl}/api/inventory`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 'inv-delete-me': { name: 'Spare Cable', qtyOnHand: 1 } }),
+  });
+  const delRes = await fetch(`${baseUrl}/api/inventory/inv-delete-me`, { method: 'DELETE' });
+  assert.equal(delRes.status, 200);
+  const after = await (await fetch(`${baseUrl}/api/inventory`)).json();
+  assert.equal(after['inv-delete-me'], undefined);
+});
+
 test('GET /api/config returns 404 before any config exists', async () => {
   const res = await fetch(`${baseUrl}/api/config`);
   assert.equal(res.status, 404);

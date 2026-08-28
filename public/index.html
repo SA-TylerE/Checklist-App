@@ -17,6 +17,7 @@
       <button class="ah-nav-btn" id="ah-btn-onboarding" onclick="switchSection('onboarding')">Onboarding</button>
       <button class="ah-nav-btn" id="ah-btn-sales" onclick="switchSection('sales')">Contracts</button>
       <button class="ah-nav-btn" id="ah-btn-quotes" onclick="switchSection('quotes')">Quotes</button>
+      <button class="ah-nav-btn" id="ah-btn-inventory" onclick="switchSection('inventory')">Inventory</button>
       <button class="ah-nav-btn" id="ah-btn-backups" onclick="switchSection('backups')">Backups<span id="bk-nav-badge" style="display:none;background:#ef4444;color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 5px;line-height:1.4;"></span></button>
       <button class="ah-nav-btn" id="ah-btn-reference" onclick="switchSection('reference')">Reference</button>
     </nav>
@@ -71,6 +72,17 @@
           <div id="quotes-list"></div>
           <div class="sidebar-footer">
             <button class="btn-new" id="quotes-new-btn" onclick="newQuotesItemFromSidebar()">+ New</button>
+          </div>
+        </div>
+
+        <!-- Inventory section (shop stock — spare parts, loaner hardware, etc.) -->
+        <div class="sidebar-section" id="ss-inventory">
+          <div class="sidebar-search">
+            <input type="text" id="inventory-search" placeholder="Search inventory..." oninput="filterInventorySidebar(this.value)">
+          </div>
+          <div id="inventory-list"></div>
+          <div class="sidebar-footer">
+            <button class="btn-new" onclick="createInventoryItem()">+ New</button>
           </div>
         </div>
 
@@ -171,6 +183,11 @@
         <!-- Quotes page — Purchase Requests + Invoices -->
         <div id="view-quotes" class="view">
           <div id="quotes-content"></div>
+        </div>
+
+        <!-- Inventory view -->
+        <div id="view-inventory" class="view">
+          <div id="inventory-content"></div>
         </div>
 
         <!-- Backups view -->

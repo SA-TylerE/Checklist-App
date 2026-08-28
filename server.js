@@ -848,6 +848,65 @@ app.put('/api/clients', (req, res) => {
   } catch(e) { res.status(500).json({ error: 'Failed to write client data' }); }
 });
 
+// ── Stock/Inventory (shop parts, loaner hardware, etc.) ────────────────────────
+// Full-object read/replace, same convention as clients/contracts — a flat
+// single-entity list backed by real columns (not a JSON blob) since it
+// benefits from typed fields, but has no child/nested items table.
+function readInventoryItems() {
+  const rows = db.prepare('SELECT * FROM inventory_items').all();
+  const out = {};
+  for (const row of rows) {
+    out[row.id] = {
+      id: row.id, name: row.name, sku: row.sku, category: row.category,
+      qtyOnHand: row.qty_on_hand, reorderThreshold: row.reorder_threshold,
+      cost: row.cost, location: row.location, notes: row.notes,
+      createdAt: row.created_at, updatedAt: row.updated_at,
+    };
+  }
+  return out;
+}
+
+function replaceInventoryItems(obj) {
+  const now = Date.now();
+  db.transaction((data) => {
+    const existing = {};
+    for (const row of db.prepare('SELECT id, created_at FROM inventory_items').all()) existing[row.id] = row;
+    db.prepare('DELETE FROM inventory_items').run();
+    const insert = db.prepare(`INSERT INTO inventory_items
+      (id, name, sku, category, qty_on_hand, reorder_threshold, cost, location, notes, created_at, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)`);
+    for (const [id, item] of Object.entries(data)) {
+      const prev = existing[id];
+      insert.run(
+        id, item.name||null, item.sku||null, item.category||null,
+        item.qtyOnHand||0, item.reorderThreshold ?? null, item.cost||0,
+        item.location||null, item.notes||null,
+        prev?.created_at || now, now
+      );
+    }
+  })(obj);
+}
+
+app.get('/api/inventory', (req, res) => {
+  try { res.json(readInventoryItems()); }
+  catch(e) { res.status(500).json({ error: e.message }); }
+});
+app.put('/api/inventory', (req, res) => {
+  try {
+    if (!req.body || typeof req.body !== 'object') return res.status(400).json({ error: 'Invalid payload' });
+    replaceInventoryItems(req.body);
+    pushEvent('inventory-updated', {}, req.headers['x-session-id']);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+app.delete('/api/inventory/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM inventory_items WHERE id = ?').run(req.params.id);
+    pushEvent('inventory-updated', {}, req.headers['x-session-id']);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Purchase Requests (Quotes page) ────────────────────────────────────────────
 // Full-object read/replace like clients/contracts, except approval_* columns
 // are server-managed (set only by send-approval/poll-status below) so a normal

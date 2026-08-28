@@ -117,6 +117,24 @@ function createDb(dataDir) {
     );
     CREATE INDEX IF NOT EXISTS idx_ili_invoice ON invoice_line_items(invoice_id);
 
+    -- Shop stock/inventory (spare parts, loaner hardware, etc. kept on hand) —
+    -- a flat single-entity list, same full-object read/replace convention as
+    -- clients/contracts (no child items table needed).
+    CREATE TABLE IF NOT EXISTS inventory_items (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      sku TEXT,
+      category TEXT,
+      qty_on_hand REAL DEFAULT 0,
+      reorder_threshold REAL,
+      cost REAL,
+      location TEXT,
+      notes TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_inventory_name ON inventory_items(name);
+
     CREATE TABLE IF NOT EXISTS syncro_customers (
       id TEXT PRIMARY KEY,
       business_name TEXT,

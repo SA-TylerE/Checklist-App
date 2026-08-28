@@ -350,7 +350,7 @@ function switchSection(name){
   activeSection=name;
   document.getElementById('sidebar').classList.remove('hidden','collapsed');
   document.getElementById('settings-btn')?.classList.remove('active');
-  ['onboarding','sales','quotes','reference','backups'].forEach(s=>{
+  ['onboarding','sales','quotes','inventory','reference','backups'].forEach(s=>{
     document.getElementById('ah-btn-'+s)?.classList.toggle('active',s===name);
     document.getElementById('ss-'+s)?.classList.toggle('active',s===name);
   });
@@ -376,6 +376,12 @@ function switchSection(name){
     renderSalesSidebar();
     renderRefProductChips();
     renderReferenceView(null,null);
+  } else if(name==='inventory'){
+    activeClientId=null;
+    activeSalesQuoteId=null;
+    renderInventorySidebar();
+    showView('inventory');
+    renderInventoryDashboard();
   } else if(name==='backups'){
     activeClientId=null;
     activeSalesQuoteId=null;
@@ -2600,6 +2606,158 @@ function renderSalesView(){
       <button class="btn-primary" onclick="newQuoteFromSidebar()">+ New Quote</button>
     </div>`}
   </div>`;
+}
+
+// ─── Inventory (shop stock — spare parts, loaner hardware, etc.) ──────────────
+let inventoryItems={};
+let activeInventoryItemId=null;
+
+async function loadInventoryItems(){
+  try{const r=await fetch('/api/inventory');if(r.ok)inventoryItems=await r.json();}
+  catch(_){inventoryItems={};}
+}
+async function saveInventoryItems(){
+  try{await fetch('/api/inventory',{method:'PUT',headers:{'Content-Type':'application/json','X-Session-Id':SESSION_ID},body:JSON.stringify(inventoryItems)});}
+  catch(e){console.error(e);}
+}
+
+// { label, className } for the sidebar/detail low-stock badge — only shown
+// once a reorder threshold is actually set (an item with no threshold has no
+// notion of "low").
+function inventoryStockStatus(item){
+  const qty=item.qtyOnHand||0;
+  if(qty<=0) return {label:'Out of Stock', className:'denied'};
+  if(item.reorderThreshold!=null && qty<=item.reorderThreshold) return {label:'Low Stock', className:'pending'};
+  return null;
+}
+
+function filterInventorySidebar(val){ renderInventorySidebar(val); }
+
+function renderInventorySidebar(filter){
+  const list=document.getElementById('inventory-list');
+  if(!list) return;
+  const f=(filter||'').toLowerCase();
+  let items=Object.values(inventoryItems);
+  if(f) items=items.filter(it=>(it.name||'').toLowerCase().includes(f)||(it.sku||'').toLowerCase().includes(f)||(it.category||'').toLowerCase().includes(f));
+  items.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  list.innerHTML=items.map(it=>{
+    const status=inventoryStockStatus(it);
+    return `
+    <div class="client-item ${it.id===activeInventoryItemId?'active':''}" title="${escHtml(it.name||'')}">
+      <div style="padding:7px 14px;cursor:pointer;" onclick="selectInventoryItem('${it.id}')">
+        <div class="cn"><span>${escHtml(it.name||'(unnamed item)')}</span>${status?`<span class="quote-status ${status.className}">${status.label}</span>`:''}</div>
+        <div class="cm">${it.qtyOnHand||0} on hand${it.sku?' · '+escHtml(it.sku):''}</div>
+      </div>
+    </div>`;
+  }).join('') || `<div style="padding:20px 12px;text-align:center;font-size:12px;color:var(--text3);">${f?'No matches.':'No inventory items yet.'}</div>`;
+}
+
+function renderInventoryDashboard(){
+  if(activeInventoryItemId&&inventoryItems[activeInventoryItemId]){ renderInventoryItemDetail(activeInventoryItemId); return; }
+  const el=document.getElementById('inventory-content');
+  if(el) el.innerHTML=`<div style="padding:30px;color:var(--text3);">Select an inventory item from the sidebar, or create a new one.</div>`;
+}
+
+function backToInventoryDashboard(){
+  activeInventoryItemId=null;
+  renderInventorySidebar();
+  renderInventoryDashboard();
+}
+
+function selectInventoryItem(id){
+  activeInventoryItemId=id;
+  renderInventorySidebar();
+  showView('inventory');
+  renderInventoryItemDetail(id);
+}
+
+async function createInventoryItem(){
+  const id=newRecordId('inv-item');
+  inventoryItems[id]={
+    id, name:'', sku:'', category:'', qtyOnHand:0, reorderThreshold:null, cost:0, location:'', notes:'',
+    createdAt:Date.now(), updatedAt:Date.now(),
+  };
+  await saveInventoryItems();
+  renderInventorySidebar();
+  selectInventoryItem(id);
+}
+
+function updateInventoryField(id,field,value){
+  const it=inventoryItems[id]; if(!it) return;
+  const numericFields=new Set(['qtyOnHand','reorderThreshold','cost']);
+  it[field]=numericFields.has(field)?(value===''?null:parseFloat(value)||0):value;
+  it.updatedAt=Date.now();
+  saveInventoryItems();
+  renderInventorySidebar();
+}
+
+// Quick +/- stock adjustment — the most common inventory action (received a
+// part, used one on a job) shouldn't require opening the Qty field to retype it.
+function adjustInventoryQty(id,delta){
+  const it=inventoryItems[id]; if(!it) return;
+  it.qtyOnHand=Math.max(0,(it.qtyOnHand||0)+delta);
+  it.updatedAt=Date.now();
+  saveInventoryItems();
+  renderInventorySidebar();
+  renderInventoryItemDetail(id);
+}
+
+function deleteInventoryItem(id){
+  const it=inventoryItems[id]; if(!it) return;
+  styledConfirm(`Delete inventory item "${it.name||'this item'}"?`,async()=>{
+    await fetch(`/api/inventory/${id}`,{method:'DELETE',headers:{'X-Session-Id':SESSION_ID}});
+    delete inventoryItems[id];
+    if(activeInventoryItemId===id){ activeInventoryItemId=null; renderInventoryDashboard(); }
+    renderInventorySidebar();
+  });
+}
+
+function renderInventoryItemDetail(id){
+  const it=inventoryItems[id];
+  const el=document.getElementById('inventory-content');
+  if(!it||!el) return;
+  const status=inventoryStockStatus(it);
+  el.innerHTML=`
+    <div class="wizard-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <h2 style="margin:0;">Inventory Item</h2>
+        ${status?`<span class="quote-status ${status.className}">${status.label}</span>`:''}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+        <div class="field-group" style="margin:0;grid-column:1/-1;"><label>Name</label>
+          <input value="${escHtml(it.name||'')}" onchange="updateInventoryField('${id}','name',this.value)" placeholder="e.g. 1TB SATA HDD">
+        </div>
+        <div class="field-group" style="margin:0;"><label>SKU</label>
+          <input value="${escHtml(it.sku||'')}" onchange="updateInventoryField('${id}','sku',this.value)">
+        </div>
+        <div class="field-group" style="margin:0;"><label>Category</label>
+          <input value="${escHtml(it.category||'')}" onchange="updateInventoryField('${id}','category',this.value)" placeholder="e.g. Storage, Cables, Loaner">
+        </div>
+        <div class="field-group" style="margin:0;"><label>Cost (each)</label>
+          <input type="number" min="0" step="0.01" value="${it.cost||0}" onchange="updateInventoryField('${id}','cost',this.value)">
+        </div>
+        <div class="field-group" style="margin:0;"><label>Location</label>
+          <input value="${escHtml(it.location||'')}" onchange="updateInventoryField('${id}','location',this.value)" placeholder="e.g. Shelf A3">
+        </div>
+        <div class="field-group" style="margin:0;"><label>Qty On Hand</label>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button class="btn-secondary" style="padding:5px 10px;" onclick="adjustInventoryQty('${id}',-1)">−</button>
+            <input type="number" min="0" step="1" style="text-align:center;" value="${it.qtyOnHand||0}" onchange="updateInventoryField('${id}','qtyOnHand',this.value)">
+            <button class="btn-secondary" style="padding:5px 10px;" onclick="adjustInventoryQty('${id}',1)">+</button>
+          </div>
+        </div>
+        <div class="field-group" style="margin:0;"><label>Reorder Threshold <span style="font-weight:400;color:var(--text3);">(optional)</span></label>
+          <input type="number" min="0" step="1" value="${it.reorderThreshold??''}" placeholder="e.g. 2" onchange="updateInventoryField('${id}','reorderThreshold',this.value)">
+        </div>
+        <div class="field-group" style="grid-column:1/-1;margin:0;"><label>Notes</label>
+          <textarea rows="2" onchange="updateInventoryField('${id}','notes',this.value)">${escHtml(it.notes||'')}</textarea>
+        </div>
+      </div>
+      <div class="wizard-actions">
+        <button class="btn-secondary" onclick="backToInventoryDashboard()">Back</button>
+        <button class="btn-secondary" style="color:var(--danger);" onclick="deleteInventoryItem('${id}')">Delete</button>
+      </div>
+    </div>`;
 }
 
 // ─── Backup tracker ───────────────────────────────────────────────────────────
@@ -6533,6 +6691,12 @@ function connectSSE(){
     await loadInvoices();
     if(activeSection==='quotes'){ renderQuotesSidebar(); renderQuotesDashboard(); }
   });
+  sseSource.addEventListener('inventory-updated',async(e)=>{
+    const payload=JSON.parse(e.data);
+    if(payload.src===SESSION_ID) return;
+    await loadInventoryItems();
+    if(activeSection==='inventory'){ renderInventorySidebar(); renderInventoryDashboard(); }
+  });
   sseSource.addEventListener('app-updated',()=>{
     const banner=document.getElementById('update-banner');
     if(banner) banner.style.display='block';
@@ -6557,7 +6721,7 @@ async function loadConfig(){
     else console.warn('steps.json not found');
     const settingsRes=await fetch('/api/settings').catch(()=>null);
     if(settingsRes&&settingsRes.ok){const sd=await settingsRes.json();appSettings={...appSettings,...sd};if(!sd.products) appSettings.products=DEFAULT_PRODUCTS;}
-    await loadClients();await loadSalesQuotes();await loadPurchaseRequests();await loadInvoices();renderSidebar();buildProductsGrid();document.getElementById('sidebar').classList.add('hidden');showView('home');
+    await loadClients();await loadSalesQuotes();await loadPurchaseRequests();await loadInvoices();await loadInventoryItems();renderSidebar();buildProductsGrid();document.getElementById('sidebar').classList.add('hidden');showView('home');
   }catch(e){showAlert('config-alert','error',`Failed to load: ${e.message}`);}
 }
 async function loadClients(){try{const r=await fetch('/api/clients');if(!r.ok)throw new Error();clients=await r.json();}catch(e){clients={};}}
@@ -6704,7 +6868,7 @@ function showView(name){
   const map={home:'view-home',config:'view-config','new-client':'view-new-client',empty:'view-empty',
              checklist:'view-checklist',reference:'view-reference',settings:'view-settings',
              sales:'view-sales','new-quote':'view-new-quote',quote:'view-quote',backups:'view-backups',
-             quotes:'view-quotes'};
+             quotes:'view-quotes',inventory:'view-inventory'};
   document.getElementById(map[name]||'view-home')?.classList.add('active');
   if(name==='home') renderHomeView();
   if(name==='new-client'){
