@@ -859,7 +859,7 @@ function readInventoryItems() {
     out[row.id] = {
       id: row.id, name: row.name, sku: row.sku, category: row.category,
       qtyOnHand: row.qty_on_hand, reorderThreshold: row.reorder_threshold,
-      cost: row.cost, location: row.location, notes: row.notes,
+      cost: row.cost, location: row.location, notes: row.notes, purchaseLink: row.purchase_link,
       createdAt: row.created_at, updatedAt: row.updated_at,
     };
   }
@@ -873,14 +873,14 @@ function replaceInventoryItems(obj) {
     for (const row of db.prepare('SELECT id, created_at FROM inventory_items').all()) existing[row.id] = row;
     db.prepare('DELETE FROM inventory_items').run();
     const insert = db.prepare(`INSERT INTO inventory_items
-      (id, name, sku, category, qty_on_hand, reorder_threshold, cost, location, notes, created_at, updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?)`);
+      (id, name, sku, category, qty_on_hand, reorder_threshold, cost, location, notes, purchase_link, created_at, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`);
     for (const [id, item] of Object.entries(data)) {
       const prev = existing[id];
       insert.run(
         id, item.name||null, item.sku||null, item.category||null,
         item.qtyOnHand||0, item.reorderThreshold ?? null, item.cost||0,
-        item.location||null, item.notes||null,
+        item.location||null, item.notes||null, item.purchaseLink||null,
         prev?.created_at || now, now
       );
     }

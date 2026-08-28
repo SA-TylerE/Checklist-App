@@ -105,8 +105,10 @@ async function showClientLog(clientId){
   }catch(e){document.getElementById('log-modal-body').innerHTML=`<div style="color:#fca5a5;font-size:11px;">Failed to load logs: ${e.message}</div>`;}
 }
 function closeLogModal(){document.getElementById('log-modal').style.display='none';}
+function closeInventoryReorderModal(){document.getElementById('inventory-reorder-modal').style.display='none';}
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('log-modal')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeLogModal();});
+  document.getElementById('inventory-reorder-modal')?.addEventListener('click',e=>{if(e.target===e.currentTarget)closeInventoryReorderModal();});
 });
 
 function actionLabel(action){
@@ -2646,10 +2648,11 @@ function renderInventorySidebar(filter){
     <div class="client-item ${it.id===activeInventoryItemId?'active':''}" title="${escHtml(it.name||'')}">
       <div style="padding:7px 14px;cursor:pointer;" onclick="selectInventoryItem('${it.id}')">
         <div class="cn"><span>${escHtml(it.name||'(unnamed item)')}</span>${status?`<span class="quote-status ${status.className}">${status.label}</span>`:''}</div>
-        <div class="cm">${it.qtyOnHand||0} on hand${it.sku?' · '+escHtml(it.sku):''}</div>
+        <div class="cm">${it.qtyOnHand||0} on hand${it.location?' · '+escHtml(it.location):''}</div>
       </div>
     </div>`;
   }).join('') || `<div style="padding:20px 12px;text-align:center;font-size:12px;color:var(--text3);">${f?'No matches.':'No inventory items yet.'}</div>`;
+  invUpdateNavBadge();
 }
 
 function renderInventoryDashboard(){
@@ -2674,7 +2677,7 @@ function selectInventoryItem(id){
 async function createInventoryItem(){
   const id=newRecordId('inv-item');
   inventoryItems[id]={
-    id, name:'', sku:'', category:'', qtyOnHand:0, reorderThreshold:null, cost:0, location:'', notes:'',
+    id, name:'', sku:'', category:'', qtyOnHand:0, reorderThreshold:null, cost:0, location:'', notes:'', purchaseLink:'',
     createdAt:Date.now(), updatedAt:Date.now(),
   };
   await saveInventoryItems();
@@ -2749,6 +2752,12 @@ function renderInventoryItemDetail(id){
         <div class="field-group" style="margin:0;"><label>Reorder Threshold <span style="font-weight:400;color:var(--text3);">(optional)</span></label>
           <input type="number" min="0" step="1" value="${it.reorderThreshold??''}" placeholder="e.g. 2" onchange="updateInventoryField('${id}','reorderThreshold',this.value)">
         </div>
+        <div class="field-group" style="grid-column:1/-1;margin:0;"><label>Purchasing Link <span style="font-weight:400;color:var(--text3);">(for quick reordering)</span></label>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input type="url" style="flex:1;" value="${escHtml(it.purchaseLink||'')}" placeholder="https://..." onchange="updateInventoryField('${id}','purchaseLink',this.value)">
+            ${it.purchaseLink?`<a href="${escHtml(it.purchaseLink)}" target="_blank" rel="noopener" title="Open purchase link">🔗</a>`:''}
+          </div>
+        </div>
         <div class="field-group" style="grid-column:1/-1;margin:0;"><label>Notes</label>
           <textarea rows="2" onchange="updateInventoryField('${id}','notes',this.value)">${escHtml(it.notes||'')}</textarea>
         </div>
@@ -2758,6 +2767,61 @@ function renderInventoryItemDetail(id){
         <button class="btn-secondary" style="color:var(--danger);" onclick="deleteInventoryItem('${id}')">Delete</button>
       </div>
     </div>`;
+}
+
+function invLowStockItems(){
+  return Object.values(inventoryItems).filter(it=>inventoryStockStatus(it)).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+}
+
+function invUpdateNavBadge(){
+  const badge=document.getElementById('inv-nav-badge');
+  if(!badge) return;
+  const count=invLowStockItems().length;
+  badge.textContent=count;
+  badge.style.display=count>0?'':'none';
+}
+
+function openInventoryReorderModal(){
+  renderInventoryReorderBody();
+  document.getElementById('inventory-reorder-modal').style.display='flex';
+}
+
+function renderInventoryReorderBody(){
+  const body=document.getElementById('inventory-reorder-body');
+  if(!body) return;
+  const items=invLowStockItems();
+  if(!items.length){
+    body.innerHTML=`<div style="padding:20px 0;text-align:center;font-size:12px;color:var(--text3);">Nothing is low or out of stock right now.</div>`;
+    return;
+  }
+  body.innerHTML=items.map(it=>{
+    const status=inventoryStockStatus(it);
+    return `
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);">
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:6px;"><span style="font-weight:600;">${escHtml(it.name||'(unnamed item)')}</span><span class="quote-status ${status.className}">${status.label}</span></div>
+        <div style="font-size:11px;color:var(--text3);">${it.qtyOnHand||0} on hand${it.reorderThreshold!=null?` · reorder at ${it.reorderThreshold}`:''}${it.location?' · '+escHtml(it.location):''}</div>
+      </div>
+      ${it.purchaseLink?`<a class="btn-secondary" style="padding:5px 10px;font-size:11px;white-space:nowrap;" href="${escHtml(it.purchaseLink)}" target="_blank" rel="noopener">Reorder ↗</a>`:`<span style="font-size:11px;color:var(--text3);white-space:nowrap;">No link set</span>`}
+    </div>`;
+  }).join('');
+}
+
+function copyInventoryReorderList(btn){
+  const items=invLowStockItems();
+  if(!items.length){ showToast('Nothing to copy — list is empty','error'); return; }
+  const text=items.map(it=>{
+    const status=inventoryStockStatus(it);
+    return `${it.name||'(unnamed item)'} — ${it.qtyOnHand||0} on hand (${status.label}${it.reorderThreshold!=null?`, reorder at ${it.reorderThreshold}`:''})${it.purchaseLink?`\n  ${it.purchaseLink}`:''}`;
+  }).join('\n');
+  const done=()=>{
+    if(!btn) return;
+    const orig=btn.textContent;
+    btn.textContent='Copied!';
+    setTimeout(()=>{btn.textContent=orig;},1500);
+  };
+  if(navigator.clipboard?.writeText){ navigator.clipboard.writeText(text).then(done).catch(()=>{legacyCopy(text);done();}); }
+  else { legacyCopy(text); done(); }
 }
 
 // ─── Backup tracker ───────────────────────────────────────────────────────────
@@ -6330,6 +6394,7 @@ document.addEventListener('keydown',e=>{
   if(document.getElementById('editor-preview-modal')?.classList.contains('show')){document.getElementById('editor-preview-modal').classList.remove('show');return;}
   if(document.getElementById('qr-modal')?.classList.contains('show')){closeQrModal();return;}
   if(document.getElementById('log-modal')?.style.display==='flex'){closeLogModal();return;}
+  if(document.getElementById('inventory-reorder-modal')?.style.display==='flex'){closeInventoryReorderModal();return;}
   if(document.getElementById('edit-client-modal')?.classList.contains('show')){closeEditClientModal();return;}
   if(document.getElementById('edit-quote-modal')?.style.display==='flex'){closeEditQuoteModal();return;}
   if(document.getElementById('syncro-link-modal')?.classList.contains('show')){closeSyncroLinkModal();return;}
@@ -6695,6 +6760,7 @@ function connectSSE(){
     const payload=JSON.parse(e.data);
     if(payload.src===SESSION_ID) return;
     await loadInventoryItems();
+    invUpdateNavBadge();
     if(activeSection==='inventory'){ renderInventorySidebar(); renderInventoryDashboard(); }
   });
   sseSource.addEventListener('app-updated',()=>{
@@ -6721,7 +6787,7 @@ async function loadConfig(){
     else console.warn('steps.json not found');
     const settingsRes=await fetch('/api/settings').catch(()=>null);
     if(settingsRes&&settingsRes.ok){const sd=await settingsRes.json();appSettings={...appSettings,...sd};if(!sd.products) appSettings.products=DEFAULT_PRODUCTS;}
-    await loadClients();await loadSalesQuotes();await loadPurchaseRequests();await loadInvoices();await loadInventoryItems();renderSidebar();buildProductsGrid();document.getElementById('sidebar').classList.add('hidden');showView('home');
+    await loadClients();await loadSalesQuotes();await loadPurchaseRequests();await loadInvoices();await loadInventoryItems();invUpdateNavBadge();renderSidebar();buildProductsGrid();document.getElementById('sidebar').classList.add('hidden');showView('home');
   }catch(e){showAlert('config-alert','error',`Failed to load: ${e.message}`);}
 }
 async function loadClients(){try{const r=await fetch('/api/clients');if(!r.ok)throw new Error();clients=await r.json();}catch(e){clients={};}}

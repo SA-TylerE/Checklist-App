@@ -167,6 +167,9 @@ function createDb(dataDir) {
     ['sku', 'TEXT'],
     ['received', 'INTEGER DEFAULT 0'],
   ]);
+  ensureColumns(db, 'inventory_items', [
+    ['purchase_link', 'TEXT'], // quick-reorder URL for this item
+  ]);
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_pr_number ON purchase_requests(number);`);
 
   backfillPurchaseItems(db);

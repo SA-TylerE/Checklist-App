@@ -58,6 +58,7 @@ test('PUT /api/inventory round-trips an item and preserves createdAt across a la
   const items = { 'inv-1': {
     name: '1TB SATA HDD', sku: 'HDD-1TB', category: 'Storage',
     qtyOnHand: 5, reorderThreshold: 2, cost: 45.5, location: 'Shelf A3', notes: 'Bulk buy from CDW',
+    purchaseLink: 'https://cdw.com/product/1tb-hdd',
   }};
   const putRes = await fetch(`${baseUrl}/api/inventory`, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(items),
@@ -72,6 +73,7 @@ test('PUT /api/inventory round-trips an item and preserves createdAt across a la
   assert.equal(body['inv-1'].cost, 45.5);
   assert.equal(body['inv-1'].location, 'Shelf A3');
   assert.equal(body['inv-1'].notes, 'Bulk buy from CDW');
+  assert.equal(body['inv-1'].purchaseLink, 'https://cdw.com/product/1tb-hdd');
   const firstCreatedAt = body['inv-1'].createdAt;
   assert.ok(firstCreatedAt);
 
