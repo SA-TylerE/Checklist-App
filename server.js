@@ -441,22 +441,34 @@ async function fetchSyncrifyBackupData(host, user, pass) {
     r = await syncrifyHttpRequest(host, '/app?operation=manageUsers', { cookie });
   }
   const html = r.text;
+  if (looksLikeSyncrifyLoginPage(html)) throw new Error('Syncrify returned the login page for manageUsers even after re-login (check credentials / session limits).');
 
   const emailMatches = [...html.matchAll(SYNC_EMAIL_PATTERN)];
   const repoMatches  = [...html.matchAll(SYNC_REPO_PATTERN)];
+  if (emailMatches.length === 0) throw new Error(`manageUsers page (HTTP ${r.status}, ${html.length} bytes) contained no user entries - page layout may have changed.`);
 
   const rows = [];
+  const failures = [];
   for (let i = 0; i < emailMatches.length; i++) {
     const email = emailMatches[i][1].trim();
     if (!repoMatches[i]) {
       console.log(`[backup-data] No repo path for email #${i} (${email}) - skipping.`);
+      failures.push(`${email}: no repo path`);
       continue;
     }
     const clientId = repoMatches[i][1].trim().replace(/^D:\\/, '');
 
     try {
-      const profileR = await syncrifyHttpRequest(host, `/app?operation=manageUsers&st=viewProfile&email=${encodeURIComponent(email)}`, { cookie });
+      const profilePath = `/app?operation=manageUsers&st=viewProfile&email=${encodeURIComponent(email)}`;
+      let profileR = await syncrifyHttpRequest(host, profilePath, { cookie });
+      // Session can be invalidated mid-scrape (e.g. by a concurrent activity-poll re-login) - recover once.
+      if (looksLikeSyncrifyLoginPage(profileR.text)) {
+        cookie = await ensureSyncrifySession(host, user, pass, true);
+        profileR = await syncrifyHttpRequest(host, profilePath, { cookie });
+      }
+      if (looksLikeSyncrifyLoginPage(profileR.text)) throw new Error('got login page');
       const profileMatches = [...profileR.text.matchAll(SYNC_PROFILE_ROW_PATTERN)];
+      if (profileMatches.length === 0) failures.push(`${clientId}: no profile rows (HTTP ${profileR.status})`);
 
       // "Report By User" job history (newest-first) -> last run status + error-file ref per profile
       const lastRunStatus = {};
@@ -518,7 +530,12 @@ async function fetchSyncrifyBackupData(host, user, pass) {
       }
     } catch (e) {
       console.log(`[backup-data] Failed to fetch profile for ${clientId} (${email}): ${e.message}`);
+      failures.push(`${clientId}: ${e.message}`);
     }
+  }
+  if (rows.length === 0) {
+    const shown = failures.slice(0, 3).join('; ');
+    throw new Error(`Found ${emailMatches.length} users but 0 profile rows. ${shown}${failures.length > 3 ? ` (+${failures.length - 3} more)` : ''}`);
   }
   return rows;
 }
